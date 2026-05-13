@@ -39,7 +39,7 @@ function NavBar() {
   return (
     <nav className="navbar">
       <div className="navbar-left">
-        <div className="logo-icon">V</div>
+        <div className="logo-icon" style={{ background: '#000' }}>V</div>
         <span className="logo-text">Vigil</span>
         <span className="logo-tag">OPS</span>
       </div>
@@ -77,12 +77,19 @@ const WIDGETS = {
 }
 
 // ── App ──
+// Total grid units tall = 18 (row1 h:10 + row2 h:8), 17 gaps between them
+const calcRowH = (vh) => Math.floor((vh - 48 - 24 - 17 * 6) / 18)
+
 export default function App() {
   const [layout, setLayout] = useState(DEFAULT_LAYOUT)
   const [width,  setWidth]  = useState(window.innerWidth)
+  const [rowH,   setRowH]   = useState(() => calcRowH(window.innerHeight))
 
   useEffect(() => {
-    const onResize = () => setWidth(window.innerWidth)
+    const onResize = () => {
+      setWidth(window.innerWidth)
+      setRowH(calcRowH(window.innerHeight))
+    }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
@@ -94,7 +101,7 @@ export default function App() {
         <GridLayout
           layout={layout}
           cols={12}
-          rowHeight={40}
+          rowHeight={rowH}
           width={width - 24}
           margin={[6, 6]}
           containerPadding={[0, 0]}
