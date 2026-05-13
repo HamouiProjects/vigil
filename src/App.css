@@ -80,7 +80,7 @@
 
 /* ── Grid area ── */
 .grid-wrapper {
-  flex: 1; overflow: hidden; padding: 12px;
+  flex: 1; overflow: visible; padding: 12px;
 }
 
 /* ── react-grid-layout overrides ── */
