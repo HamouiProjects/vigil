@@ -3,8 +3,17 @@ import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import Widget from './Widget'
 
-// Carto Dark Matter — free tiles, no API key required
-const DARK_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+const DARK_STYLE = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+    },
+  },
+  layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+}
 
 export default function MapWidget() {
   const containerRef = useRef(null)
@@ -49,7 +58,7 @@ export default function MapWidget() {
 
   return (
     <Widget title="Global Map" icon="🌐" badge="LIVE" badgeActive>
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={containerRef} style={{ width: '100%', height: '100%', filter: 'invert(1) hue-rotate(180deg)' }} />
     </Widget>
   )
 }
