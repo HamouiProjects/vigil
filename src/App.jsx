@@ -58,16 +58,13 @@ function NavBar() {
   )
 }
 
-// ── Layout — clean 2-row grid filling 12 columns ──
-// Row 1 (y=0):  map(8) + keywords(4) = 12
-// Row 2 (y=10): rss(3) + prices(3) + stream(3) + weather(3) = 12
 const DEFAULT_LAYOUT = [
-  { i: 'map',      x: 0,  y: 0,  w: 8, h: 10, minW: 4, minH: 6 },
-  { i: 'keywords', x: 8,  y: 0,  w: 4, h: 10, minW: 3, minH: 5 },
-  { i: 'rss',      x: 0,  y: 10, w: 3, h: 10, minW: 2, minH: 5 },
-  { i: 'prices',   x: 3,  y: 10, w: 3, h: 10, minW: 2, minH: 5 },
-  { i: 'stream',   x: 6,  y: 10, w: 3, h: 10, minW: 2, minH: 4 },
-  { i: 'weather',  x: 9,  y: 10, w: 3, h: 10, minW: 2, minH: 4 },
+  { i: 'map',      x: 0, y: 0,  w: 8, h: 10, minW: 4, minH: 6 },
+  { i: 'keywords', x: 8, y: 0,  w: 4, h: 10, minW: 3, minH: 5 },
+  { i: 'rss',      x: 0, y: 10, w: 3, h: 8,  minW: 2, minH: 4 },
+  { i: 'prices',   x: 3, y: 10, w: 3, h: 8,  minW: 2, minH: 4 },
+  { i: 'stream',   x: 6, y: 10, w: 3, h: 8,  minW: 2, minH: 4 },
+  { i: 'weather',  x: 9, y: 10, w: 3, h: 8,  minW: 2, minH: 4 },
 ]
 
 const WIDGETS = {
@@ -90,9 +87,6 @@ export default function App() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  // rowHeight so that 20 rows = full available height (nav=48, grid padding=24)
-  const rowH = Math.max(24, Math.floor((window.innerHeight - 48 - 24) / 20))
-
   return (
     <div className="app">
       <NavBar />
@@ -100,7 +94,7 @@ export default function App() {
         <GridLayout
           layout={layout}
           cols={12}
-          rowHeight={rowH}
+          rowHeight={40}
           width={width - 24}
           margin={[6, 6]}
           containerPadding={[0, 0]}
