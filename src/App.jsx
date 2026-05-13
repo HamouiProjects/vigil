@@ -58,28 +58,29 @@ function NavBar() {
   )
 }
 
+// rowHeight=35, top h=12 → 486px, bottom h=8 → 322px, total 814px
+// fits 1080p at 125% scaling (864px effective) after navbar+padding
 const DEFAULT_LAYOUT = [
-  { i: 'map',      x: 0, y: 0,  w: 8, h: 14, minW: 4, minH: 4 },
-  { i: 'keywords', x: 8, y: 0,  w: 4, h: 14, minW: 3, minH: 4 },
-  { i: 'rss',      x: 0, y: 14, w: 3, h: 10, minW: 2, minH: 4 },
-  { i: 'prices',   x: 3, y: 14, w: 3, h: 10, minW: 2, minH: 4 },
-  { i: 'stream',   x: 6, y: 14, w: 3, h: 10, minW: 2, minH: 4 },
-  { i: 'weather',  x: 9, y: 14, w: 3, h: 10, minW: 2, minH: 4 },
+  { i: 'map',      x: 0, y: 0,  w: 8, h: 12, minW: 4, minH: 4 },
+  { i: 'keywords', x: 8, y: 0,  w: 4, h: 12, minW: 3, minH: 4 },
+  { i: 'rss',      x: 0, y: 12, w: 3, h: 8,  minW: 2, minH: 3 },
+  { i: 'prices',   x: 3, y: 12, w: 3, h: 8,  minW: 2, minH: 3 },
+  { i: 'stream',   x: 6, y: 12, w: 3, h: 8,  minW: 2, minH: 3 },
+  { i: 'weather',  x: 9, y: 12, w: 3, h: 8,  minW: 2, minH: 3 },
 ]
 
-const WIDGETS = {
-  map:      <MapWidget />,
-  keywords: <KeywordFeed />,
-  rss:      <RssFeed />,
-  prices:   <PriceTracker />,
-  stream:   <Livestream />,
-  weather:  <Weather />,
+const WIDGET_MAP = {
+  map:      MapWidget,
+  keywords: KeywordFeed,
+  rss:      RssFeed,
+  prices:   PriceTracker,
+  stream:   Livestream,
+  weather:  Weather,
 }
 
 // ── App ──
 export default function App() {
-  const [layout, setLayout] = useState(DEFAULT_LAYOUT)
-  const [width,  setWidth]  = useState(window.innerWidth)
+  const [width, setWidth] = useState(window.innerWidth)
 
   useEffect(() => {
     const onResize = () => setWidth(window.innerWidth)
@@ -92,13 +93,12 @@ export default function App() {
       <NavBar />
       <div className="grid-wrapper">
         <GridLayout
-          layout={layout}
+          layout={DEFAULT_LAYOUT}
           cols={12}
           rowHeight={35}
           width={width - 24}
           margin={[6, 6]}
           containerPadding={[0, 0]}
-          onLayoutChange={setLayout}
           draggableHandle=".widget-header"
           resizeHandles={['se', 's', 'e', 'sw', 'w', 'ne', 'n', 'nw']}
           compactType="vertical"
@@ -106,11 +106,10 @@ export default function App() {
           isResizable
           isDraggable
         >
-          {layout.map(item => (
-            <div key={item.i}>
-              {WIDGETS[item.i]}
-            </div>
-          ))}
+          {DEFAULT_LAYOUT.map(({ i }) => {
+            const Component = WIDGET_MAP[i]
+            return <div key={i}><Component /></div>
+          })}
         </GridLayout>
       </div>
     </div>
