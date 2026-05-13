@@ -39,7 +39,7 @@ function NavBar() {
   return (
     <nav className="navbar">
       <div className="navbar-left">
-        <div className="logo-icon" style={{ background: '#000' }}>V</div>
+        <div className="logo-icon" style={{ background: '#111' }}>V</div>
         <span className="logo-text">Vigil</span>
         <span className="logo-tag">OPS</span>
       </div>
@@ -59,12 +59,12 @@ function NavBar() {
 }
 
 const DEFAULT_LAYOUT = [
-  { i: 'map',      x: 0, y: 0,  w: 8, h: 10, minW: 4, minH: 6 },
-  { i: 'keywords', x: 8, y: 0,  w: 4, h: 10, minW: 3, minH: 5 },
-  { i: 'rss',      x: 0, y: 10, w: 3, h: 8,  minW: 2, minH: 4 },
-  { i: 'prices',   x: 3, y: 10, w: 3, h: 8,  minW: 2, minH: 4 },
-  { i: 'stream',   x: 6, y: 10, w: 3, h: 8,  minW: 2, minH: 4 },
-  { i: 'weather',  x: 9, y: 10, w: 3, h: 8,  minW: 2, minH: 4 },
+  { i: 'map',      x: 0, y: 0,  w: 8, h: 12, minW: 4, minH: 6 },
+  { i: 'keywords', x: 8, y: 0,  w: 4, h: 12, minW: 3, minH: 5 },
+  { i: 'rss',      x: 0, y: 12, w: 3, h: 8,  minW: 2, minH: 4 },
+  { i: 'prices',   x: 3, y: 12, w: 3, h: 8,  minW: 2, minH: 4 },
+  { i: 'stream',   x: 6, y: 12, w: 3, h: 8,  minW: 2, minH: 4 },
+  { i: 'weather',  x: 9, y: 12, w: 3, h: 8,  minW: 2, minH: 4 },
 ]
 
 const WIDGETS = {
@@ -77,19 +77,12 @@ const WIDGETS = {
 }
 
 // ── App ──
-// Total grid units tall = 18 (row1 h:10 + row2 h:8), 17 gaps between them
-const calcRowH = (vh) => Math.floor((vh - 48 - 24 - 17 * 6) / 18)
-
 export default function App() {
   const [layout, setLayout] = useState(DEFAULT_LAYOUT)
   const [width,  setWidth]  = useState(window.innerWidth)
-  const [rowH,   setRowH]   = useState(() => calcRowH(window.innerHeight))
 
   useEffect(() => {
-    const onResize = () => {
-      setWidth(window.innerWidth)
-      setRowH(calcRowH(window.innerHeight))
-    }
+    const onResize = () => setWidth(window.innerWidth)
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
@@ -101,7 +94,7 @@ export default function App() {
         <GridLayout
           layout={layout}
           cols={12}
-          rowHeight={rowH}
+          rowHeight={35}
           width={width - 24}
           margin={[6, 6]}
           containerPadding={[0, 0]}
