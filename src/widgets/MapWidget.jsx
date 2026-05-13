@@ -6,13 +6,14 @@ import Widget from './Widget'
 const DARK_STYLE = {
   version: 8,
   sources: {
-    osm: {
+    stadia: {
       type: 'raster',
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tiles: ['https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png'],
       tileSize: 256,
+      attribution: '© Stadia Maps © OpenMapTiles © OpenStreetMap',
     },
   },
-  layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+  layers: [{ id: 'stadia', type: 'raster', source: 'stadia' }],
 }
 
 export default function MapWidget() {
@@ -58,7 +59,11 @@ export default function MapWidget() {
 
   return (
     <Widget title="Global Map" icon="🌐" badge="LIVE" badgeActive>
-      <div ref={containerRef} style={{ width: '100%', height: '100%', filter: 'invert(1) hue-rotate(180deg)' }} />
+      <div
+        ref={containerRef}
+        style={{ width: '100%', height: '100%' }}
+        onMouseDown={e => e.stopPropagation()}
+      />
     </Widget>
   )
 }
