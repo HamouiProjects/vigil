@@ -39,7 +39,7 @@ function NavBar() {
   return (
     <nav className="navbar">
       <div className="navbar-left">
-        <div className="logo-icon" style={{ background: '#000000', color: '#fff' }}>V</div>
+        <div className="logo-icon" style={{ background: '#000', color: '#fff' }}>V</div>
         <span className="logo-text">Vigil</span>
         <span className="logo-tag">OPS</span>
       </div>
@@ -58,8 +58,10 @@ function NavBar() {
   )
 }
 
-// rowHeight=35, top h=12 → 486px, bottom h=8 → 322px, total 814px
-// fits 1080p at 125% scaling (864px effective) after navbar+padding
+// rowHeight is calculated dynamically so both rows ALWAYS fit the viewport.
+// Total: 20 row-units (top h=12 + bottom h=8), 19 margins @ 6px, navbar 48px, padding 24px
+const calcRowH = (vh) => Math.max(20, Math.floor((vh - 186) / 20))
+
 const DEFAULT_LAYOUT = [
   { i: 'map',      x: 0, y: 0,  w: 8, h: 12, minW: 4, minH: 4 },
   { i: 'keywords', x: 8, y: 0,  w: 4, h: 12, minW: 3, minH: 4 },
@@ -80,10 +82,15 @@ const WIDGET_MAP = {
 
 // ── App ──
 export default function App() {
-  const [width, setWidth] = useState(window.innerWidth)
+  const [layout, setLayout] = useState(DEFAULT_LAYOUT)
+  const [width,  setWidth]  = useState(window.innerWidth)
+  const [rowH,   setRowH]   = useState(() => calcRowH(window.innerHeight))
 
   useEffect(() => {
-    const onResize = () => setWidth(window.innerWidth)
+    const onResize = () => {
+      setWidth(window.innerWidth)
+      setRowH(calcRowH(window.innerHeight))
+    }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
@@ -93,12 +100,13 @@ export default function App() {
       <NavBar />
       <div className="grid-wrapper">
         <GridLayout
-          layout={DEFAULT_LAYOUT}
+          layout={layout}
           cols={12}
-          rowHeight={35}
+          rowHeight={rowH}
           width={width - 24}
           margin={[6, 6]}
           containerPadding={[0, 0]}
+          onLayoutChange={setLayout}
           draggableHandle=".widget-header"
           resizeHandles={['se', 's', 'e', 'sw', 'w', 'ne', 'n', 'nw']}
           compactType="vertical"

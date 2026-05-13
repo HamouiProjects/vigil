@@ -85,7 +85,10 @@ export default function RssFeed() {
                 rel="noopener noreferrer"
               >
                 <div className="feed-dot blue" />
-                <span className="feed-text">{item.title}</span>
+                <span className="feed-text">
+                  <span className="feed-source">{item.author || feed?.title || ''}</span>
+                  {item.title}
+                </span>
                 <span className="feed-time">{relTime(item.pubDate)}</span>
               </a>
             ))}

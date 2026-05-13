@@ -6,11 +6,8 @@ const REFRESH_MS = 30_000
 // CoinGecko free public API — no key needed
 const COINGECKO_URL =
   'https://api.coingecko.com/api/v3/simple/price' +
-  '?ids=bitcoin,ethereum,solana,pax-gold' +
+  '?ids=bitcoin,ethereum,pax-gold' +
   '&vs_currencies=usd&include_24hr_change=true'
-
-// Frankfurter — free, no key, maintained by ECB data
-const FRANKFURTER_URL = 'https://api.frankfurter.app/latest?from=EUR&to=USD,GBP'
 
 function fmt(n, decimals = 2) {
   if (n == null) return '—'
@@ -22,24 +19,20 @@ function fmt(n, decimals = 2) {
 
 function fmtChange(n) {
   if (n == null) return { text: '—', dir: '' }
-  const text = `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
-  return { text, dir: n >= 0 ? 'up' : 'down' }
+  return { text: `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`, dir: n >= 0 ? 'up' : 'down' }
 }
 
 export default function PriceTracker() {
-  const [prices, setPrices] = useState([])
+  const [prices,  setPrices]  = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState(null)
+  const [error,   setError]   = useState(null)
 
   const fetch_ = useCallback(async () => {
     try {
-      const [cgRes, fxRes] = await Promise.all([
-        fetch(COINGECKO_URL),
-        fetch(FRANKFURTER_URL),
-      ])
-      const [cg, fx] = await Promise.all([cgRes.json(), fxRes.json()])
+      const res  = await fetch(COINGECKO_URL)
+      const cg   = await res.json()
 
-      const rows = [
+      setPrices([
         {
           ticker: 'BTC/USD',
           value:  fmt(cg.bitcoin?.usd, 0),
@@ -51,29 +44,19 @@ export default function PriceTracker() {
           ...fmtChange(cg.ethereum?.usd_24h_change),
         },
         {
-          ticker: 'SOL/USD',
-          value:  fmt(cg.solana?.usd, 2),
-          ...fmtChange(cg.solana?.usd_24h_change),
-        },
-        {
           ticker: 'XAU/USD',
           value:  fmt(cg['pax-gold']?.usd, 0),
           ...fmtChange(cg['pax-gold']?.usd_24h_change),
         },
         {
-          ticker: 'EUR/USD',
-          value:  fmt(fx.rates?.USD, 4),
-          text: '—', dir: '',
+          ticker: 'WTI/USD',
+          value:  '—',
+          text:   'DELAYED',
+          dir:    '',
         },
-        {
-          ticker: 'EUR/GBP',
-          value:  fmt(fx.rates?.GBP, 4),
-          text: '—', dir: '',
-        },
-      ]
-      setPrices(rows)
+      ])
       setError(null)
-    } catch (e) {
+    } catch {
       setError('Fetch failed')
     } finally {
       setLoading(false)
@@ -86,10 +69,8 @@ export default function PriceTracker() {
     return () => clearInterval(id)
   }, [fetch_])
 
-  const badge = loading ? 'LOADING…' : error ? 'ERROR' : 'LIVE'
-
   return (
-    <Widget title="Price Tracker" icon="📈" badge={badge} badgeActive={!error && !loading} onRefresh={fetch_}>
+    <Widget title="Price Tracker" icon="📈" badge={loading ? 'LOADING…' : error ? 'ERROR' : 'LIVE'} badgeActive={!error && !loading} onRefresh={fetch_}>
       {error ? (
         <div className="feed-error">{error}</div>
       ) : loading ? (
