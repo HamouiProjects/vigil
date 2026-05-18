@@ -70,22 +70,23 @@ function WHeader({ title, badge, badgeActive, onRefresh }) {
 // ─── Map (Windy iframe) ───────────────────────────────────────────────────────
 const WINDY_URL =
   'https://embed.windy.com/embed2.html' +
-  '?lat=20&lon=15&zoom=3&level=surface&overlay=wind' +
-  '&menu=&message=&marker=&forecast=12&calendar=now' +
-  '&pressure=&type=map&location=coordinates' +
-  '&detail=&detailLat=20&detailLon=15' +
+  '?lat=20&lon=10&detailLat=20&detailLon=10' +
+  '&width=650&height=450&zoom=3&level=surface&overlay=wind&product=ecmwf' +
+  '&menu=&message=true&marker=&calendar=now&pressure=' +
+  '&type=map&location=coordinates&detail=' +
   '&metricWind=default&metricTemp=default&radarRange=-1'
 
 function MapWidget() {
   return (
     <div className="widget">
       <WHeader title="Live Weather Map" badge="LIVE" badgeActive />
-      <div className="widget-body">
+      <div className="widget-body" style={{ background: '#1a1f2e' }}>
         <iframe
           src={WINDY_URL}
           width="100%"
           height="100%"
           frameBorder="0"
+          loading="lazy"
           style={{ display: 'block', border: 'none' }}
           onMouseDown={e => e.stopPropagation()}
           title="Windy Map"
@@ -95,8 +96,8 @@ function MapWidget() {
   )
 }
 
-// ─── Keyword Feed (Reuters RSS via rss2json) ──────────────────────────────────
-const REUTERS_RSS = 'https://feeds.reuters.com/reuters/topNews'
+// ─── Keyword Feed (RSS via rss2json) ──────────────────────────────────────────
+const DEFAULT_FEED_URL = 'https://feeds.bbci.co.uk/news/world/rss.xml'
 
 function dotColor(title = '') {
   if (/war|attack|kill|bomb|shoot|explo|missil|airst/i.test(title)) return 'red'
@@ -116,8 +117,8 @@ function feedRelTime(pubDate) {
 }
 
 function KeywordFeed() {
-  const [url,     setUrl]     = useState(REUTERS_RSS)
-  const [input,   setInput]   = useState(REUTERS_RSS)
+  const [url,     setUrl]     = useState(DEFAULT_FEED_URL)
+  const [input,   setInput]   = useState(DEFAULT_FEED_URL)
   const [feed,    setFeed]    = useState(null)
   const [items,   setItems]   = useState([])
   const [loading, setLoading] = useState(true)
@@ -149,7 +150,7 @@ function KeywordFeed() {
 
   return (
     <div className="widget">
-      <WHeader title="News Feed" badge={badge} badgeActive={!error && !loading} onRefresh={() => load(url)} />
+      <WHeader title="Keyword Feed" badge={badge} badgeActive={!error && !loading} onRefresh={() => load(url)} />
       <div className="widget-body">
         <div className="rss-container">
           <form
