@@ -312,35 +312,30 @@
   background: #ff4d4f; animation: pulse 1s infinite;
 }
 
-/* ── MapLibre marker ── */
-.map-marker {
-  width: 10px; height: 10px; border-radius: 50%;
-  background: var(--mc, #00c6ff);
-  box-shadow: 0 0 0 3px rgba(0,0,0,0.4), 0 0 8px var(--mc, #00c6ff);
-  cursor: pointer; position: relative;
+/* ── Leaflet conflict pin pulse ── */
+@keyframes conflictPulse {
+  0%, 100% { opacity: 1;   stroke-width: 2; }
+  50%       { opacity: 0.4; stroke-width: 4; }
 }
-.map-marker::after {
-  content: ''; position: absolute;
-  inset: -5px; border-radius: 50%;
-  border: 1.5px solid var(--mc, #00c6ff);
-  opacity: 0.5; animation: ripple 2.5s infinite;
-}
-@keyframes ripple {
-  0%   { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(2.8); opacity: 0; }
+.conflict-pin {
+  animation: conflictPulse 1.8s ease-in-out infinite;
 }
 
-/* Override MapLibre popup / controls for dark theme */
-.maplibregl-ctrl-group {
-  background: #111d2c !important;
-  border: 1px solid #1e2d3d !important;
+/* ── Leaflet dark-theme overrides ── */
+.leaflet-container { background: #0d1520; }
+.leaflet-control-zoom a {
+  background: #111d2c !important; color: #8b949e !important;
+  border-color: #1e2d3d !important;
 }
-.maplibregl-ctrl-group button {
-  background: transparent !important; color: #6e8098 !important;
-}
-.maplibregl-ctrl-group button:hover { color: #c9d1d9 !important; }
-.maplibregl-ctrl-attrib {
-  background: rgba(13,24,37,0.8) !important;
+.leaflet-control-zoom a:hover { background: #1a2a3a !important; color: #c9d1d9 !important; }
+.leaflet-control-attribution {
+  background: rgba(13,21,32,0.75) !important;
   color: #3a4a5c !important; font-size: 9px !important;
 }
-.maplibregl-ctrl-attrib a { color: #3a5068 !important; }
+.leaflet-control-attribution a { color: #3a5068 !important; }
+.leaflet-popup-content-wrapper {
+  background: #111d2c; color: #e6edf3;
+  border: 1px solid #1e2d3d; border-radius: 4px;
+  font-size: 11px; font-weight: 600;
+}
+.leaflet-popup-tip { background: #111d2c; }

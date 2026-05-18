@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ReactGridLayout as GridLayout, WidthProvider } from 'react-grid-layout/legacy'
-import maplibregl from 'maplibre-gl'
-import 'maplibre-gl/dist/maplibre-gl.css'
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
@@ -69,93 +69,81 @@ function WHeader({ title, badge, badgeActive, onRefresh }) {
   )
 }
 
-// ─── Map (MapLibre GL + MapTiler) ────────────────────────────────────────────
-const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY ?? 'B0HrPBjlISKjRqSoCyc4'
-
-const MAP_STYLES = {
-  Terrain:   `https://api.maptiler.com/maps/topo-v2/style.json?key=${MAPTILER_KEY}`,
-  Dark:      `https://api.maptiler.com/maps/dataviz-dark/style.json?key=${MAPTILER_KEY}`,
-  Satellite: `https://api.maptiler.com/maps/satellite/style.json?key=${MAPTILER_KEY}`,
-  Minimal:   `https://api.maptiler.com/maps/dataviz/style.json?key=${MAPTILER_KEY}`,
+// ─── Map (Leaflet + OSM tiles) ───────────────────────────────────────────────
+const TILE_LAYERS = {
+  Terrain: {
+    url:         'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: '© <a href="https://opentopomap.org">OpenTopoMap</a> contributors',
+    maxZoom:     17,
+  },
+  Standard: {
+    url:         'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom:     19,
+  },
+  Dark: {
+    url:         'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
+    attribution: '© <a href="https://stadiamaps.com/">Stadia Maps</a> © OpenMapTiles © OpenStreetMap',
+    maxZoom:     20,
+  },
+  Satellite: {
+    url:         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: '© Esri, Maxar, Earthstar Geographics',
+    maxZoom:     19,
+  },
 }
 
-const CONFLICT_MARKERS = [
-  { coords: [31.0,  48.5], label: 'Ukraine', color: '#ff4d4f' },
-  { coords: [34.46, 31.5], label: 'Gaza',    color: '#ff4d4f' },
-  { coords: [32.5,  15.5], label: 'Sudan',   color: '#f5c518' },
-  { coords: [96.15, 19.7], label: 'Myanmar', color: '#f5c518' },
-  { coords: [44.2,  15.4], label: 'Yemen',   color: '#ff4d4f' },
+const CONFLICT_PINS = [
+  { pos: [48.3, 31.2], label: 'Ukraine' },
+  { pos: [31.4, 34.3], label: 'Gaza'    },
+  { pos: [15.5, 32.5], label: 'Sudan'   },
+  { pos: [19.7, 96.1], label: 'Myanmar' },
+  { pos: [15.5, 48.5], label: 'Yemen'   },
 ]
 
 function MapWidget() {
-  const containerRef = useRef(null)
-  const mapRef       = useRef(null)
-  const markersRef   = useRef([])
-  const [activeStyle, setActiveStyle] = useState('Terrain')
-
-  // Initialise map once
-  useEffect(() => {
-    if (!containerRef.current) return
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style:     MAP_STYLES.Terrain,
-      center:    [15, 20],
-      zoom:      2,
-      attributionControl: false,
-    })
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
-    map.addControl(new maplibregl.AttributionControl({ compact: true }),     'bottom-right')
-
-    map.on('error', e => console.error('Map error:', e))
-
-    map.on('load', () => {
-      map.resize()
-      markersRef.current = CONFLICT_MARKERS.map(({ coords, label, color }) => {
-        const el = document.createElement('div')
-        el.className = 'map-marker'
-        el.style.setProperty('--mc', color)
-        return new maplibregl.Marker({ element: el })
-          .setLngLat(coords)
-          .setPopup(new maplibregl.Popup({ offset: 12, closeButton: false })
-            .setHTML(`<span style="font-size:11px;font-weight:600;color:#e6edf3">${label}</span>`))
-          .addTo(map)
-      })
-    })
-
-    const resizeId = setTimeout(() => map.resize(), 500)
-
-    mapRef.current = map
-    return () => { clearTimeout(resizeId); map.remove(); mapRef.current = null }
-  }, [])
-
-  // Swap style without re-mounting
-  useEffect(() => {
-    if (mapRef.current) mapRef.current.setStyle(MAP_STYLES[activeStyle])
-  }, [activeStyle])
+  const [activeLayer, setActiveLayer] = useState('Terrain')
+  const layer = TILE_LAYERS[activeLayer]
 
   return (
     <div className="widget">
       <div className="widget-header">
         <span className="widget-title">Conflict Map</span>
         <div className="widget-actions">
-          {Object.keys(MAP_STYLES).map(s => (
+          {Object.keys(TILE_LAYERS).map(s => (
             <button
               key={s}
               className="widget-btn"
-              style={{ color: s === activeStyle ? '#00c6ff' : undefined, fontSize: '10px', padding: '0 4px' }}
-              onClick={() => setActiveStyle(s)}
+              style={{ color: s === activeLayer ? '#00c6ff' : undefined, fontSize: '10px', padding: '0 4px' }}
+              onClick={() => setActiveLayer(s)}
             >
               {s}
             </button>
           ))}
         </div>
       </div>
-      <div className="widget-body">
-        <div
-          ref={containerRef}
+      <div className="widget-body" style={{ overflow: 'hidden' }}>
+        <MapContainer
+          center={[20, 15]}
+          zoom={2}
           style={{ width: '100%', height: '100%' }}
-          onMouseDown={e => e.stopPropagation()}
-        />
+          zoomControl
+          scrollWheelZoom
+          attributionControl
+        >
+          <TileLayer key={activeLayer} url={layer.url} attribution={layer.attribution} maxZoom={layer.maxZoom} />
+          {CONFLICT_PINS.map(({ pos, label }) => (
+            <CircleMarker
+              key={label}
+              center={pos}
+              radius={7}
+              className="conflict-pin"
+              pathOptions={{ color: '#ff4d4f', fillColor: '#ff4d4f', fillOpacity: 0.85, weight: 2 }}
+            >
+              <Popup>{label}</Popup>
+            </CircleMarker>
+          ))}
+        </MapContainer>
       </div>
     </div>
   )
