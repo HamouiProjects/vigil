@@ -105,6 +105,7 @@ function MapWidget() {
       })
 
       mapRef.current = map
+      map.invalidateSize()
     }
 
     init()
@@ -124,7 +125,8 @@ function MapWidget() {
         <span className="widget-title">Conflict Map</span>
       </div>
       <div className="widget-body">
-        <div id="map-container" style={{ width: '100%', height: '100%' }} />
+        {/* absolute fill so Leaflet measures real pixel dimensions */}
+        <div id="map-container" style={{ position: 'absolute', inset: 0 }} />
       </div>
     </div>
   )
@@ -402,44 +404,60 @@ function parseYouTubeId(raw) {
 }
 
 function Livestream() {
-  const [input,   setInput]   = useState(AJ_VIDEO_ID)
   const [videoId, setVideoId] = useState(AJ_VIDEO_ID)
+  const [editing, setEditing] = useState(false)
+  const [input,   setInput]   = useState(AJ_VIDEO_ID)
   const [error,   setError]   = useState(null)
 
   function handleSubmit(e) {
     e.preventDefault()
     const id = parseYouTubeId(input)
-    if (id) { setVideoId(id); setError(null) }
+    if (id) { setVideoId(id); setError(null); setEditing(false) }
     else setError('Unrecognised YouTube URL or ID')
   }
 
-  const src = `https://www.youtube.com/embed/${videoId}?autoplay=0`
-
   return (
     <div className="widget">
-      <WHeader title="Livestream" badge={videoId ? 'LIVE' : 'STANDBY'} badgeActive={!!videoId} />
-      <div className="widget-body" style={{ flexDirection: 'column' }}>
-        <form className="stream-url-bar" onSubmit={handleSubmit}>
-          <input
-            className="rss-input"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            placeholder="YouTube URL or video ID…"
-            spellCheck={false}
-          />
-          <button className="rss-go-btn" type="submit">GO</button>
-        </form>
-        {error && (
-          <div className="feed-error" style={{ height: 'auto', padding: '6px 12px' }}>{error}</div>
-        )}
+      <div className="widget-header">
+        <span className="widget-title">Livestream</span>
+        <div className="widget-actions">
+          <span className={`widget-badge${videoId ? '' : ' inactive'}`}>{videoId ? 'LIVE' : 'STANDBY'}</span>
+          <button className="widget-btn" onClick={() => setEditing(v => !v)} title="Change stream">✎</button>
+        </div>
+      </div>
+      <div className="widget-body">
+        {/* iframe fills the full body */}
         <iframe
           src={`https://www.youtube.com/embed/${videoId}?autoplay=0`}
-          style={{ flex: 1, width: '100%', border: 'none', minHeight: 0, display: 'block' }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
           title="Livestream"
           allow="autoplay; encrypted-media; fullscreen"
           allowFullScreen
           frameBorder="0"
         />
+        {/* edit overlay — shown when pencil button is toggled */}
+        {editing && (
+          <form
+            className="stream-url-bar"
+            onSubmit={handleSubmit}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}
+          >
+            <input
+              className="rss-input"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder="YouTube URL or video ID…"
+              spellCheck={false}
+              autoFocus
+            />
+            <button className="rss-go-btn" type="submit">GO</button>
+          </form>
+        )}
+        {error && (
+          <div className="feed-error" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10, height: 'auto', padding: '6px 12px' }}>
+            {error}
+          </div>
+        )}
       </div>
     </div>
   )
