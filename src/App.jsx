@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ResponsiveGridLayout, useContainerWidth } from 'react-grid-layout'
+import { ResponsiveGridLayout } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
@@ -523,21 +523,27 @@ const LAYOUTS = {
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const { width, containerRef } = useContainerWidth({ initialWidth: 1280 })
+  const [width, setWidth] = useState(window.innerWidth)
+
+  useEffect(() => {
+    const h = () => setWidth(window.innerWidth)
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [])
 
   return (
     <div className="app">
       <NavBar />
       <div
-        ref={containerRef}
         className="grid-wrapper"
-        style={{ width: '100%', height: 'calc(100vh - 48px)', overflowY: 'auto' }}
+        style={{ height: 'calc(100vh - 48px)', overflowY: 'auto' }}
       >
+        <div style={{ width: '100%' }}>
         <ResponsiveGridLayout
           width={width}
           layouts={LAYOUTS}
           breakpoints={{ lg: 1200, md: 996, sm: 768 }}
-          cols={{ lg: 12, md: 12, sm: 6 }}
+          cols={{ lg: 12, md: 10, sm: 6 }}
           rowHeight={40}
           margin={[6, 6]}
           containerPadding={[0, 0]}
@@ -555,6 +561,7 @@ export default function App() {
           <div key="stream"  style={{ height: '100%' }}><Livestream /></div>
           <div key="weather" style={{ height: '100%' }}><Weather /></div>
         </ResponsiveGridLayout>
+        </div>
       </div>
     </div>
   )
