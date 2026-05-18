@@ -70,10 +70,10 @@ function WHeader({ title, badge, badgeActive, onRefresh }) {
 // ─── Map (Windy iframe) ───────────────────────────────────────────────────────
 const WINDY_URL =
   'https://embed.windy.com/embed2.html' +
-  '?lat=30&lon=10&zoom=3&level=surface&overlay=wind' +
+  '?lat=20&lon=15&zoom=3&level=surface&overlay=wind' +
   '&menu=&message=&marker=&forecast=12&calendar=now' +
   '&pressure=&type=map&location=coordinates' +
-  '&detail=&detailLat=30&detailLon=10' +
+  '&detail=&detailLat=20&detailLon=15' +
   '&metricWind=default&metricTemp=default&radarRange=-1'
 
 function MapWidget() {
@@ -95,15 +95,8 @@ function MapWidget() {
   )
 }
 
-// ─── Keyword Feed (GDELT via corsproxy.io) ────────────────────────────────────
-const DEFAULT_QUERY = 'conflict OR war OR crisis OR attack'
-
-function gdeltUrl(q) {
-  const base =
-    'https://api.gdeltproject.org/api/v2/doc/doc' +
-    `?query=${encodeURIComponent(q)}&mode=artlist&maxrecords=10&format=json&sourcelang=eng`
-  return `https://corsproxy.io/?url=${encodeURIComponent(base)}`
-}
+// ─── Keyword Feed (Reuters RSS via rss2json) ──────────────────────────────────
+const REUTERS_RSS = 'https://feeds.reuters.com/reuters/topNews'
 
 function dotColor(title = '') {
   if (/war|attack|kill|bomb|shoot|explo|missil|airst/i.test(title)) return 'red'
@@ -112,84 +105,84 @@ function dotColor(title = '') {
   return 'blue'
 }
 
-function gdeltRelTime(seendate) {
+function feedRelTime(pubDate) {
   try {
-    const s = seendate.replace(
-      /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/,
-      '$1-$2-$3T$4:$5:$6Z'
-    )
-    const diff = Math.floor((Date.now() - new Date(s).getTime()) / 60_000)
-    if (diff < 1)  return 'now'
-    if (diff < 60) return `${diff}m`
-    return `${Math.floor(diff / 60)}h`
+    const diff = Math.floor((Date.now() - new Date(pubDate).getTime()) / 60_000)
+    if (diff < 1)    return 'now'
+    if (diff < 60)   return `${diff}m`
+    if (diff < 1440) return `${Math.floor(diff / 60)}h`
+    return `${Math.floor(diff / 1440)}d`
   } catch { return '—' }
 }
 
 function KeywordFeed() {
-  const [query,    setQuery]    = useState(DEFAULT_QUERY)
-  const [input,    setInput]    = useState(DEFAULT_QUERY)
-  const [articles, setArticles] = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [error,    setError]    = useState(null)
+  const [url,     setUrl]     = useState(REUTERS_RSS)
+  const [input,   setInput]   = useState(REUTERS_RSS)
+  const [feed,    setFeed]    = useState(null)
+  const [items,   setItems]   = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState(null)
 
-  const load = useCallback(async (q) => {
+  const load = useCallback(async (targetUrl) => {
     setLoading(true); setError(null)
     try {
-      const res  = await fetch(gdeltUrl(q))
+      const res  = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(targetUrl)}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
-      setArticles(json.articles ?? [])
-    } catch {
-      setError('GDELT unreachable')
+      if (json.status !== 'ok') throw new Error(json.message || 'Feed error')
+      setFeed(json.feed)
+      setItems(json.items ?? [])
+    } catch (e) {
+      setError(e.message || 'Feed unreachable')
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    load(query)
-    const id = setInterval(() => load(query), 60_000)
+    load(url)
+    const id = setInterval(() => load(url), 120_000)
     return () => clearInterval(id)
-  }, [query, load])
+  }, [url, load])
 
-  const badge = loading ? 'LOADING…' : error ? 'ERROR' : `${articles.length} ENG`
+  const badge = loading ? 'LOADING…' : error ? 'ERROR' : feed ? feed.title?.slice(0, 14) : 'RSS'
 
   return (
     <div className="widget">
-      <WHeader title="Keyword Feed" badge={badge} badgeActive={!error && !loading} onRefresh={() => load(query)} />
+      <WHeader title="News Feed" badge={badge} badgeActive={!error && !loading} onRefresh={() => load(url)} />
       <div className="widget-body">
         <div className="rss-container">
           <form
             className="rss-url-bar"
-            onSubmit={e => { e.preventDefault(); const q = input.trim(); if (q) setQuery(q) }}
+            onSubmit={e => { e.preventDefault(); const t = input.trim(); if (t) setUrl(t) }}
           >
             <input
               className="rss-input"
               value={input}
               onChange={e => setInput(e.target.value)}
-              placeholder="Search keywords…"
+              placeholder="RSS URL…"
               spellCheck={false}
             />
             <button className="rss-go-btn" type="submit">GO</button>
           </form>
           {error   ? <div className="feed-error">{error}</div>
-         : loading ? <div className="feed-loading">Fetching GDELT…</div>
+         : loading ? <div className="feed-loading">Fetching feed…</div>
          : (
             <div className="feed-list">
-              {articles.map((a, i) => (
+              {items.map((item, i) => (
                 <a
                   key={i}
                   className="feed-item feed-item-link"
-                  href={a.url}
+                  href={item.link}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  <div className={`feed-dot ${dotColor(a.title)}`} />
+                  <div className={`feed-dot ${dotColor(item.title)}`} />
                   <span className="feed-text">
-                    <span className="feed-source">{a.domain}</span>
-                    {a.title}
+                    <span className="feed-source">{feed?.title || 'Reuters'}</span>
+                    {item.title}
                   </span>
-                  <span className="feed-time">{gdeltRelTime(a.seendate)}</span>
+                  <span className="feed-time">{feedRelTime(item.pubDate)}</span>
                 </a>
               ))}
             </div>
