@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { ReactGridLayout as GridLayout, WidthProvider } from 'react-grid-layout/legacy'
+import maplibregl from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
@@ -67,45 +69,88 @@ function WHeader({ title, badge, badgeActive, onRefresh }) {
   )
 }
 
-// ─── Map (Windy iframe) ───────────────────────────────────────────────────────
-const WINDY_URL =
-  'https://embed.windy.com/embed2.html' +
-  '?lat=20&lon=10&detailLat=20&detailLon=10' +
-  '&width=650&height=450&zoom=3&level=surface&overlay=wind&product=ecmwf' +
-  '&menu=&message=true&marker=&calendar=now&pressure=' +
-  '&type=map&location=coordinates&detail=' +
-  '&metricWind=default&metricTemp=default&radarRange=-1'
+// ─── Map (MapLibre GL + MapTiler) ────────────────────────────────────────────
+const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY ?? 'B0HrPBjlISKjRqSoCyc4'
+
+const MAP_STYLES = {
+  Terrain:   `https://api.maptiler.com/maps/outdoor-v2/style.json?key=${MAPTILER_KEY}`,
+  Dark:      `https://api.maptiler.com/maps/dataviz-dark/style.json?key=${MAPTILER_KEY}`,
+  Satellite: `https://api.maptiler.com/maps/satellite/style.json?key=${MAPTILER_KEY}`,
+  Minimal:   `https://api.maptiler.com/maps/basic-v2/style.json?key=${MAPTILER_KEY}`,
+}
+
+const CONFLICT_MARKERS = [
+  { coords: [31.0,  48.5], label: 'Ukraine', color: '#ff4d4f' },
+  { coords: [34.46, 31.5], label: 'Gaza',    color: '#ff4d4f' },
+  { coords: [32.5,  15.5], label: 'Sudan',   color: '#f5c518' },
+  { coords: [96.15, 19.7], label: 'Myanmar', color: '#f5c518' },
+  { coords: [44.2,  15.4], label: 'Yemen',   color: '#ff4d4f' },
+]
 
 function MapWidget() {
-  const [ready, setReady] = useState(false)
+  const containerRef = useRef(null)
+  const mapRef       = useRef(null)
+  const markersRef   = useRef([])
+  const [activeStyle, setActiveStyle] = useState('Terrain')
+
+  // Initialise map once
   useEffect(() => {
-    const id = setTimeout(() => setReady(true), 3000)
-    return () => clearTimeout(id)
+    if (!containerRef.current) return
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style:     MAP_STYLES.Terrain,
+      center:    [15, 20],
+      zoom:      2,
+      attributionControl: false,
+    })
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
+    map.addControl(new maplibregl.AttributionControl({ compact: true }),     'bottom-right')
+
+    map.on('load', () => {
+      markersRef.current = CONFLICT_MARKERS.map(({ coords, label, color }) => {
+        const el = document.createElement('div')
+        el.className = 'map-marker'
+        el.style.setProperty('--mc', color)
+        return new maplibregl.Marker({ element: el })
+          .setLngLat(coords)
+          .setPopup(new maplibregl.Popup({ offset: 12, closeButton: false })
+            .setHTML(`<span style="font-size:11px;font-weight:600;color:#e6edf3">${label}</span>`))
+          .addTo(map)
+      })
+    })
+
+    mapRef.current = map
+    return () => { map.remove(); mapRef.current = null }
   }, [])
+
+  // Swap style without re-mounting
+  useEffect(() => {
+    if (mapRef.current) mapRef.current.setStyle(MAP_STYLES[activeStyle])
+  }, [activeStyle])
 
   return (
     <div className="widget">
-      <WHeader title="Live Weather Map" badge="LIVE" badgeActive />
-      <div className="widget-body" style={{ background: '#0d1520' }}>
-        {!ready ? (
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: '100%', height: '100%',
-            color: '#3a4a5c', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase',
-          }}>
-            Loading map…
-          </div>
-        ) : (
-          <iframe
-            src={WINDY_URL}
-            width="100%"
-            height="100%"
-            frameBorder="0"
-            style={{ display: 'block', border: 'none' }}
-            onMouseDown={e => e.stopPropagation()}
-            title="Windy Map"
-          />
-        )}
+      <div className="widget-header">
+        <span className="widget-title">Conflict Map</span>
+        <div className="widget-actions">
+          {Object.keys(MAP_STYLES).map(s => (
+            <button
+              key={s}
+              className="widget-btn"
+              style={{ color: s === activeStyle ? '#00c6ff' : undefined, fontSize: '10px', padding: '0 4px' }}
+              onClick={() => setActiveStyle(s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="widget-body">
+        <div
+          ref={containerRef}
+          style={{ width: '100%', height: '100%' }}
+          onMouseDown={e => e.stopPropagation()}
+        />
       </div>
     </div>
   )
