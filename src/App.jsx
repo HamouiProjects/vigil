@@ -1,20 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import GridLayout from 'react-grid-layout'
+import { ReactGridLayout as GridLayout, WidthProvider } from 'react-grid-layout/legacy'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
-
-function WidthProvider(Component) {
-  return function WidthProvided(props) {
-    const [width, setWidth] = useState(window.innerWidth)
-    useEffect(() => {
-      const h = () => setWidth(window.innerWidth)
-      window.addEventListener('resize', h)
-      return () => window.removeEventListener('resize', h)
-    }, [])
-    return <Component {...props} width={width} />
-  }
-}
 
 const SizedGridLayout = WidthProvider(GridLayout)
 
@@ -552,12 +540,12 @@ export default function App() {
           isResizable
           isDraggable
         >
-          <div key="map"     style={{ height: '100%' }}><MapWidget /></div>
-          <div key="feed"    style={{ height: '100%' }}><KeywordFeed /></div>
-          <div key="rss"     style={{ height: '100%' }}><RssFeed /></div>
-          <div key="prices"  style={{ height: '100%' }}><PriceTracker /></div>
-          <div key="stream"  style={{ height: '100%' }}><Livestream /></div>
-          <div key="weather" style={{ height: '100%' }}><Weather /></div>
+          <div key="map"     style={{ height: '100%', overflow: 'hidden' }}><MapWidget /></div>
+          <div key="feed"    style={{ height: '100%', overflow: 'hidden' }}><KeywordFeed /></div>
+          <div key="rss"     style={{ height: '100%', overflow: 'hidden' }}><RssFeed /></div>
+          <div key="prices"  style={{ height: '100%', overflow: 'hidden' }}><PriceTracker /></div>
+          <div key="stream"  style={{ height: '100%', overflow: 'hidden' }}><Livestream /></div>
+          <div key="weather" style={{ height: '100%', overflow: 'hidden' }}><Weather /></div>
         </SizedGridLayout>
       </div>
     </div>
