@@ -73,10 +73,10 @@ function WHeader({ title, badge, badgeActive, onRefresh }) {
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY ?? 'B0HrPBjlISKjRqSoCyc4'
 
 const MAP_STYLES = {
-  Terrain:   `https://api.maptiler.com/maps/outdoor-v2/style.json?key=${MAPTILER_KEY}`,
+  Terrain:   `https://api.maptiler.com/maps/topo-v2/style.json?key=${MAPTILER_KEY}`,
   Dark:      `https://api.maptiler.com/maps/dataviz-dark/style.json?key=${MAPTILER_KEY}`,
   Satellite: `https://api.maptiler.com/maps/satellite/style.json?key=${MAPTILER_KEY}`,
-  Minimal:   `https://api.maptiler.com/maps/basic-v2/style.json?key=${MAPTILER_KEY}`,
+  Minimal:   `https://api.maptiler.com/maps/dataviz/style.json?key=${MAPTILER_KEY}`,
 }
 
 const CONFLICT_MARKERS = [
@@ -106,7 +106,10 @@ function MapWidget() {
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
     map.addControl(new maplibregl.AttributionControl({ compact: true }),     'bottom-right')
 
+    map.on('error', e => console.error('Map error:', e))
+
     map.on('load', () => {
+      map.resize()
       markersRef.current = CONFLICT_MARKERS.map(({ coords, label, color }) => {
         const el = document.createElement('div')
         el.className = 'map-marker'
@@ -119,8 +122,10 @@ function MapWidget() {
       })
     })
 
+    const resizeId = setTimeout(() => map.resize(), 500)
+
     mapRef.current = map
-    return () => { map.remove(); mapRef.current = null }
+    return () => { clearTimeout(resizeId); map.remove(); mapRef.current = null }
   }, [])
 
   // Swap style without re-mounting
