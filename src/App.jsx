@@ -58,10 +58,6 @@ function NavBar() {
   )
 }
 
-// rowHeight is calculated dynamically so both rows ALWAYS fit the viewport.
-// Total: 20 row-units (top h=12 + bottom h=8), 19 margins @ 6px, navbar 48px, padding 24px
-const calcRowH = (vh) => Math.max(20, Math.floor((vh - 186) / 20))
-
 const DEFAULT_LAYOUT = [
   { i: 'map',      x: 0, y: 0,  w: 8, h: 12, minW: 4, minH: 4 },
   { i: 'keywords', x: 8, y: 0,  w: 4, h: 12, minW: 3, minH: 4 },
@@ -83,14 +79,10 @@ const WIDGET_MAP = {
 // ── App ──
 export default function App() {
   const [layout, setLayout] = useState(DEFAULT_LAYOUT)
-  const [width,  setWidth]  = useState(window.innerWidth)
-  const [rowH,   setRowH]   = useState(() => calcRowH(window.innerHeight))
+  const [width, setWidth] = useState(window.innerWidth)
 
   useEffect(() => {
-    const onResize = () => {
-      setWidth(window.innerWidth)
-      setRowH(calcRowH(window.innerHeight))
-    }
+    const onResize = () => setWidth(window.innerWidth)
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
@@ -102,7 +94,7 @@ export default function App() {
         <GridLayout
           layout={layout}
           cols={12}
-          rowHeight={rowH}
+          rowHeight={36}
           width={width - 24}
           margin={[6, 6]}
           containerPadding={[0, 0]}
