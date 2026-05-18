@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Responsive, WidthProvider } from 'react-grid-layout'
+import { ResponsiveGridLayout } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
-
-const ResponsiveGridLayout = WidthProvider(Responsive)
 
 // ─── UTC Clock ────────────────────────────────────────────────────────────────
 function UtcClock() {
