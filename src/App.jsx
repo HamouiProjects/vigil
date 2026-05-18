@@ -77,20 +77,35 @@ const WINDY_URL =
   '&metricWind=default&metricTemp=default&radarRange=-1'
 
 function MapWidget() {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    const id = setTimeout(() => setReady(true), 3000)
+    return () => clearTimeout(id)
+  }, [])
+
   return (
     <div className="widget">
       <WHeader title="Live Weather Map" badge="LIVE" badgeActive />
-      <div className="widget-body" style={{ background: '#1a1f2e' }}>
-        <iframe
-          src={WINDY_URL}
-          width="100%"
-          height="100%"
-          frameBorder="0"
-          loading="lazy"
-          style={{ display: 'block', border: 'none' }}
-          onMouseDown={e => e.stopPropagation()}
-          title="Windy Map"
-        />
+      <div className="widget-body" style={{ background: '#0d1520' }}>
+        {!ready ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: '100%', height: '100%',
+            color: '#3a4a5c', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase',
+          }}>
+            Loading map…
+          </div>
+        ) : (
+          <iframe
+            src={WINDY_URL}
+            width="100%"
+            height="100%"
+            frameBorder="0"
+            style={{ display: 'block', border: 'none' }}
+            onMouseDown={e => e.stopPropagation()}
+            title="Windy Map"
+          />
+        )}
       </div>
     </div>
   )
@@ -353,8 +368,7 @@ function PriceTracker() {
 }
 
 // ─── Livestream (Al Jazeera YouTube) ─────────────────────────────────────────
-const AJ_VIDEO_ID  = 'h3MuIUNCCLI'
-const AJ_WATCH_URL = `https://www.youtube.com/watch?v=${AJ_VIDEO_ID}`
+const AJ_VIDEO_ID = 'nGTNbhHjmUk'
 
 function parseYouTubeId(raw) {
   try {
@@ -369,7 +383,7 @@ function parseYouTubeId(raw) {
 }
 
 function Livestream() {
-  const [input,   setInput]   = useState(AJ_WATCH_URL)
+  const [input,   setInput]   = useState(AJ_VIDEO_ID)
   const [videoId, setVideoId] = useState(AJ_VIDEO_ID)
   const [error,   setError]   = useState(null)
 
@@ -380,7 +394,7 @@ function Livestream() {
     else setError('Unrecognised YouTube URL or ID')
   }
 
-  const src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&controls=1&rel=0&modestbranding=1`
+  const src = `https://www.youtube.com/embed/${videoId}?autoplay=0`
 
   return (
     <div className="widget">
@@ -477,21 +491,19 @@ function Weather() {
         {error        ? <div className="feed-error">{error}</div>
        : loading || !data ? <div className="feed-loading">Fetching weather…</div>
        : (
-          <div className="weather-body">
-            <div className="weather-main">
-              <span className="weather-wmo-icon">{wmo.icon}</span>
-              <span className="weather-temp">{Math.round(data.temperature_2m)}°C</span>
-              <span className="weather-desc">{wmo.label}</span>
-            </div>
-            <div className="weather-stats">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', gap: '6px', padding: '8px 12px' }}>
+            <span style={{ fontSize: '22px' }}>{wmo.icon}</span>
+            <span style={{ fontSize: '30px', fontWeight: 300, color: '#e6edf3', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{Math.round(data.temperature_2m)}°C</span>
+            <span style={{ fontSize: '11px', color: '#6e8098', letterSpacing: '0.06em' }}>{wmo.label}</span>
+            <div style={{ width: '100%', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {[
                 { label: 'Wind',     val: `${Math.round(data.wind_speed_10m)} km/h ${windDir(data.wind_direction_10m)}` },
                 { label: 'Humidity', val: `${data.relative_humidity_2m}%` },
                 { label: 'Pressure', val: `${Math.round(data.surface_pressure)} hPa` },
               ].map(s => (
-                <div key={s.label} className="weather-stat">
+                <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#6e8098', padding: '2px 0', borderTop: '1px solid #1e2d3d' }}>
                   <span>{s.label}</span>
-                  <span className="weather-stat-val">{s.val}</span>
+                  <span style={{ color: '#c9d1d9', fontWeight: 500 }}>{s.val}</span>
                 </div>
               ))}
             </div>
