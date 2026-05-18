@@ -19,8 +19,48 @@
 }
 
 .navbar-left  { display: flex; align-items: center; gap: 10px; }
-.navbar-right { display: flex; align-items: center; gap: 16px; }
+.navbar-right { display: flex; align-items: center; gap: 10px; }
 .navbar-center { display: flex; align-items: center; gap: 4px; }
+
+/* ── Workspace tabs ── */
+.ws-tabs { display: flex; align-items: center; gap: 2px; }
+.ws-tab {
+  font-size: 11px; font-weight: 500; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #6e8098;
+  padding: 5px 14px; border-radius: 4px; cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, background 0.15s;
+  user-select: none;
+}
+.ws-tab:hover { color: #c9d1d9; background: rgba(255,255,255,0.06); }
+.ws-tab.active {
+  color: #e6edf3; background: rgba(0,198,255,0.08);
+  border-bottom-color: #00c6ff;
+}
+.ws-name-input {
+  font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;
+  color: #e6edf3; background: rgba(0,198,255,0.08); border: 1px solid #00c6ff;
+  border-radius: 4px; padding: 4px 10px; outline: none; width: 120px; font-family: inherit;
+}
+
+/* ── Auth ── */
+.auth-btn {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: #e6edf3; background: rgba(255,255,255,0.05); border: 1px solid #1e2d3d;
+  border-radius: 4px; padding: 5px 12px; cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.auth-btn:hover { background: rgba(255,255,255,0.1); border-color: #2a3f55; }
+.user-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(0,198,255,0.12); border: 1.5px solid #00c6ff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #00c6ff;
+  cursor: pointer; overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.user-avatar:hover { border-color: #7fd9ff; box-shadow: 0 0 8px rgba(0,198,255,0.3); }
 
 .logo-icon {
   width: 28px; height: 28px;

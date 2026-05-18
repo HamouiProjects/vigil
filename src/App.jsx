@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { ReactGridLayout as GridLayout, WidthProvider } from 'react-grid-layout/legacy'
+import { supabase } from './lib/supabase'
 import 'leaflet/dist/leaflet.css'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
@@ -28,7 +29,22 @@ function UtcClock() {
 }
 
 // ─── NavBar ───────────────────────────────────────────────────────────────────
-function NavBar() {
+function NavBar({ user, onLogin, onLogout, workspaces, activeWs, onSwitchWs, onRenameWs }) {
+  const [editingId,  setEditingId]  = useState(null)
+  const [nameInput,  setNameInput]  = useState('')
+
+  function startRename(ws, e) {
+    e.stopPropagation()
+    setEditingId(ws.id)
+    setNameInput(ws.name)
+  }
+
+  function commitRename(ws) {
+    const name = nameInput.trim()
+    if (name && name !== ws.name) onRenameWs(ws.id, name)
+    setEditingId(null)
+  }
+
   return (
     <nav className="navbar">
       <div className="navbar-left">
@@ -37,13 +53,52 @@ function NavBar() {
         <span className="logo-tag">OPS</span>
       </div>
       <div className="navbar-center">
-        {['Dashboard', 'Feeds', 'Alerts', 'Config'].map(item => (
-          <div key={item} className={`nav-item${item === 'Dashboard' ? ' active' : ''}`}>{item}</div>
-        ))}
+        <div className="ws-tabs">
+          {workspaces.map(ws =>
+            editingId === ws.id ? (
+              <input
+                key={ws.id}
+                className="ws-name-input"
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                onBlur={() => commitRename(ws)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter')  commitRename(ws)
+                  if (e.key === 'Escape') setEditingId(null)
+                }}
+                autoFocus
+              />
+            ) : (
+              <div
+                key={ws.id}
+                className={`ws-tab${ws.id === activeWs ? ' active' : ''}`}
+                onClick={() => onSwitchWs(ws.id)}
+                onDoubleClick={e => startRename(ws, e)}
+                title="Double-click to rename"
+              >
+                {ws.name}
+              </div>
+            )
+          )}
+        </div>
       </div>
       <div className="navbar-right">
         <div className="status-dot">LIVE</div>
         <UtcClock />
+        {user ? (
+          <div
+            className="user-avatar"
+            onClick={onLogout}
+            title={`Sign out (${user.user_metadata?.user_name || user.email})`}
+          >
+            {user.user_metadata?.avatar_url
+              ? <img src={user.user_metadata.avatar_url} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              : (user.email?.[0] || 'U').toUpperCase()
+            }
+          </div>
+        ) : (
+          <button className="auth-btn" onClick={onLogin}>GitHub Login</button>
+        )}
       </div>
     </nav>
   )
@@ -549,8 +604,8 @@ function Weather() {
   )
 }
 
-// ─── Layout ───────────────────────────────────────────────────────────────────
-const LAYOUT = [
+// ─── Default layout ───────────────────────────────────────────────────────────
+const DEFAULT_LAYOUT = [
   { i: 'map',     x: 0, y: 0,  w: 8, h: 11 },
   { i: 'feed',    x: 8, y: 0,  w: 4, h: 11 },
   { i: 'rss',     x: 0, y: 11, w: 3, h: 8  },
@@ -561,12 +616,133 @@ const LAYOUT = [
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
+  const [user,       setUser]       = useState(null)
+  const [layout,     setLayout]     = useState(DEFAULT_LAYOUT)
+  const [workspaces, setWorkspaces] = useState([
+    { id: 'ws-1', name: 'Workspace 1', dbId: null },
+    { id: 'ws-2', name: 'Workspace 2', dbId: null },
+    { id: 'ws-3', name: 'Workspace 3', dbId: null },
+  ])
+  const [activeWs, setActiveWs] = useState('ws-1')
+  const saveTimer = useRef(null)
+  // always-current snapshot for setTimeout callbacks
+  const snap = useRef(null)
+  snap.current = { user, workspaces, activeWs }
+
+  // ── Auth init ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user ?? null
+      setUser(u)
+      u ? loadUserWorkspaces(u) : loadLocalLayout('ws-1')
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const u = session?.user ?? null
+      setUser(u)
+      if (event === 'SIGNED_IN'  && u) loadUserWorkspaces(u)
+      if (event === 'SIGNED_OUT')      loadLocalLayout(snap.current.activeWs)
+    })
+
+    return () => subscription.unsubscribe()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadUserWorkspaces(u) {
+    const { data } = await supabase
+      .from('workspaces')
+      .select('*')
+      .eq('user_id', u.id)
+      .order('name')
+
+    if (data?.length) {
+      setWorkspaces(prev => prev.map(w => {
+        const row = data.find(d => d.name === w.name)
+        return row ? { ...w, dbId: row.id } : w
+      }))
+      const first = data.find(d => d.name === 'Workspace 1')
+      if (first?.layout_json) setLayout(first.layout_json)
+    }
+  }
+
+  function loadLocalLayout(wsId) {
+    try {
+      const raw = localStorage.getItem(`vigil_ws_${wsId}`)
+      setLayout(raw ? JSON.parse(raw) : DEFAULT_LAYOUT)
+    } catch {
+      setLayout(DEFAULT_LAYOUT)
+    }
+  }
+
+  // ── Layout save (debounced 1.5s) ───────────────────────────────────────────
+  function handleLayoutChange(newLayout) {
+    setLayout(newLayout)
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      const { user: u, workspaces: wss, activeWs: wsId } = snap.current
+      const ws = wss.find(w => w.id === wsId)
+      if (!ws) return
+
+      if (u) {
+        const payload = {
+          user_id: u.id,
+          name: ws.name,
+          layout_json: newLayout,
+          updated_at: new Date().toISOString(),
+        }
+        if (ws.dbId) payload.id = ws.dbId
+        supabase.from('workspaces').upsert(payload).select('id').then(({ data }) => {
+          if (data?.[0]?.id && !ws.dbId) {
+            setWorkspaces(prev => prev.map(w =>
+              w.id === wsId ? { ...w, dbId: data[0].id } : w
+            ))
+          }
+        })
+      } else {
+        localStorage.setItem(`vigil_ws_${wsId}`, JSON.stringify(newLayout))
+      }
+    }, 1500)
+  }
+
+  // ── Workspace switching ────────────────────────────────────────────────────
+  async function switchWorkspace(wsId) {
+    if (wsId === activeWs) return
+    setActiveWs(wsId)
+    const ws = workspaces.find(w => w.id === wsId)
+    if (user && ws?.dbId) {
+      const { data } = await supabase
+        .from('workspaces').select('layout_json').eq('id', ws.dbId).single()
+      setLayout(data?.layout_json ?? DEFAULT_LAYOUT)
+    } else {
+      loadLocalLayout(wsId)
+    }
+  }
+
+  // ── Workspace rename ───────────────────────────────────────────────────────
+  async function renameWorkspace(wsId, newName) {
+    setWorkspaces(prev => prev.map(w => w.id === wsId ? { ...w, name: newName } : w))
+    const ws = workspaces.find(w => w.id === wsId)
+    if (user && ws?.dbId) {
+      await supabase.from('workspaces')
+        .update({ name: newName, updated_at: new Date().toISOString() })
+        .eq('id', ws.dbId)
+    }
+  }
+
   return (
     <div className="app">
-      <NavBar />
+      <NavBar
+        user={user}
+        onLogin={() => supabase.auth.signInWithOAuth({ provider: 'github' })}
+        onLogout={() => supabase.auth.signOut()}
+        workspaces={workspaces}
+        activeWs={activeWs}
+        onSwitchWs={switchWorkspace}
+        onRenameWs={renameWorkspace}
+      />
       <div style={{ width: '100%', height: 'calc(100vh - 48px)', overflowY: 'auto' }}>
         <SizedGridLayout
-          layout={LAYOUT}
+          layout={layout}
+          onLayoutChange={handleLayoutChange}
           cols={12}
           rowHeight={40}
           margin={[6, 6]}
