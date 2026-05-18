@@ -1,10 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ReactGridLayout as GridLayout, WidthProvider } from 'react-grid-layout/legacy'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
+import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png'
+import iconUrl       from 'leaflet/dist/images/marker-icon.png'
+import shadowUrl     from 'leaflet/dist/images/marker-shadow.png'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
+
+// Fix Leaflet default icon paths broken by Vite's asset pipeline
+delete L.Icon.Default.prototype._getIconUrl
+L.Icon.Default.mergeOptions({ iconRetinaUrl, iconUrl, shadowUrl })
 
 const SizedGridLayout = WidthProvider(GridLayout)
 
