@@ -1,8 +1,22 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ResponsiveGridLayout } from 'react-grid-layout'
+import GridLayout from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
+
+function WidthProvider(Component) {
+  return function WidthProvided(props) {
+    const [width, setWidth] = useState(window.innerWidth)
+    useEffect(() => {
+      const h = () => setWidth(window.innerWidth)
+      window.addEventListener('resize', h)
+      return () => window.removeEventListener('resize', h)
+    }, [])
+    return <Component {...props} width={width} />
+  }
+}
+
+const SizedGridLayout = WidthProvider(GridLayout)
 
 // ─── UTC Clock ────────────────────────────────────────────────────────────────
 function UtcClock() {
@@ -510,40 +524,24 @@ function Weather() {
 }
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
-const LAYOUTS = {
-  lg: [
-    { i: 'map',     x: 0, y: 0,  w: 8, h: 13 },
-    { i: 'feed',    x: 8, y: 0,  w: 4, h: 13 },
-    { i: 'rss',     x: 0, y: 13, w: 3, h: 9  },
-    { i: 'prices',  x: 3, y: 13, w: 3, h: 9  },
-    { i: 'stream',  x: 6, y: 13, w: 3, h: 9  },
-    { i: 'weather', x: 9, y: 13, w: 3, h: 9  },
-  ],
-}
+const LAYOUT = [
+  { i: 'map',     x: 0, y: 0,  w: 8, h: 13 },
+  { i: 'feed',    x: 8, y: 0,  w: 4, h: 13 },
+  { i: 'rss',     x: 0, y: 13, w: 3, h: 9  },
+  { i: 'prices',  x: 3, y: 13, w: 3, h: 9  },
+  { i: 'stream',  x: 6, y: 13, w: 3, h: 9  },
+  { i: 'weather', x: 9, y: 13, w: 3, h: 9  },
+]
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [width, setWidth] = useState(window.innerWidth)
-
-  useEffect(() => {
-    const h = () => setWidth(window.innerWidth)
-    window.addEventListener('resize', h)
-    return () => window.removeEventListener('resize', h)
-  }, [])
-
   return (
     <div className="app">
       <NavBar />
-      <div
-        className="grid-wrapper"
-        style={{ height: 'calc(100vh - 48px)', overflowY: 'auto' }}
-      >
-        <div style={{ width: '100%' }}>
-        <ResponsiveGridLayout
-          width={width}
-          layouts={LAYOUTS}
-          breakpoints={{ lg: 1200, md: 996, sm: 768 }}
-          cols={{ lg: 12, md: 10, sm: 6 }}
+      <div style={{ width: '100%', height: 'calc(100vh - 48px)', overflowY: 'auto' }}>
+        <SizedGridLayout
+          layout={LAYOUT}
+          cols={12}
           rowHeight={40}
           margin={[6, 6]}
           containerPadding={[0, 0]}
@@ -560,8 +558,7 @@ export default function App() {
           <div key="prices"  style={{ height: '100%' }}><PriceTracker /></div>
           <div key="stream"  style={{ height: '100%' }}><Livestream /></div>
           <div key="weather" style={{ height: '100%' }}><Weather /></div>
-        </ResponsiveGridLayout>
-        </div>
+        </SizedGridLayout>
       </div>
     </div>
   )
