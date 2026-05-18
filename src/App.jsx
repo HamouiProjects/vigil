@@ -95,15 +95,14 @@ function MapWidget() {
   )
 }
 
-// ─── Keyword Feed (GDELT via allorigins) ──────────────────────────────────────
+// ─── Keyword Feed (GDELT via corsproxy.io) ────────────────────────────────────
 const DEFAULT_QUERY = 'conflict OR war OR crisis OR attack'
 
 function gdeltUrl(q) {
-  return (
+  const base =
     'https://api.gdeltproject.org/api/v2/doc/doc' +
-    `?query=${encodeURIComponent(q + ' sourcelang:english')}` +
-    '&mode=artlist&maxrecords=20&format=json'
-  )
+    `?query=${encodeURIComponent(q)}&mode=artlist&maxrecords=10&format=json&sourcelang=eng`
+  return `https://corsproxy.io/?url=${encodeURIComponent(base)}`
 }
 
 function dotColor(title = '') {
@@ -136,11 +135,9 @@ function KeywordFeed() {
   const load = useCallback(async (q) => {
     setLoading(true); setError(null)
     try {
-      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(gdeltUrl(q))}`
-      const res   = await fetch(proxy)
+      const res  = await fetch(gdeltUrl(q))
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const { contents } = await res.json()
-      const json = JSON.parse(contents)
+      const json = await res.json()
       setArticles(json.articles ?? [])
     } catch {
       setError('GDELT unreachable')
@@ -513,12 +510,12 @@ function Weather() {
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 const LAYOUT = [
-  { i: 'map',     x: 0, y: 0,  w: 8, h: 13 },
-  { i: 'feed',    x: 8, y: 0,  w: 4, h: 13 },
-  { i: 'rss',     x: 0, y: 13, w: 3, h: 9  },
-  { i: 'prices',  x: 3, y: 13, w: 3, h: 9  },
-  { i: 'stream',  x: 6, y: 13, w: 3, h: 9  },
-  { i: 'weather', x: 9, y: 13, w: 3, h: 9  },
+  { i: 'map',     x: 0, y: 0,  w: 8, h: 11 },
+  { i: 'feed',    x: 8, y: 0,  w: 4, h: 11 },
+  { i: 'rss',     x: 0, y: 11, w: 3, h: 8  },
+  { i: 'prices',  x: 3, y: 11, w: 3, h: 8  },
+  { i: 'stream',  x: 6, y: 11, w: 3, h: 8  },
+  { i: 'weather', x: 9, y: 11, w: 3, h: 8  },
 ]
 
 // ─── App ──────────────────────────────────────────────────────────────────────
