@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ResponsiveGridLayout } from 'react-grid-layout'
+import { ResponsiveGridLayout, useContainerWidth } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
@@ -523,11 +523,18 @@ const LAYOUTS = {
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
+  const { width, containerRef } = useContainerWidth({ initialWidth: 1280 })
+
   return (
     <div className="app">
       <NavBar />
-      <div className="grid-wrapper" style={{ height: 'calc(100vh - 48px)', overflowY: 'auto' }}>
+      <div
+        ref={containerRef}
+        className="grid-wrapper"
+        style={{ width: '100%', height: 'calc(100vh - 48px)', overflowY: 'auto' }}
+      >
         <ResponsiveGridLayout
+          width={width}
           layouts={LAYOUTS}
           breakpoints={{ lg: 1200, md: 996, sm: 768 }}
           cols={{ lg: 12, md: 12, sm: 6 }}
