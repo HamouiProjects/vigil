@@ -70,11 +70,11 @@ function WHeader({ title, badge, badgeActive, onRefresh }) {
 
 // ─── Map (plain Leaflet JS in useEffect) ─────────────────────────────────────
 const CONFLICT_PINS = [
-  { pos: [48.3, 31.2], label: 'Ukraine' },
-  { pos: [31.5, 34.4], label: 'Gaza'    },
-  { pos: [15.5, 32.5], label: 'Sudan'   },
-  { pos: [19.7, 96.1], label: 'Myanmar' },
-  { pos: [15.5, 48.5], label: 'Yemen'   },
+  { pos: [48.3, 31.2], label: 'Ukraine', desc: 'Russo-Ukrainian War · ongoing since Feb 2022' },
+  { pos: [31.5, 34.4], label: 'Gaza',    desc: 'Israel–Hamas conflict · ongoing since Oct 2023' },
+  { pos: [15.5, 32.5], label: 'Sudan',   desc: 'Sudanese civil war · ongoing since Apr 2023' },
+  { pos: [19.7, 96.1], label: 'Myanmar', desc: 'Myanmar civil war · ongoing since Feb 2021' },
+  { pos: [15.5, 48.5], label: 'Yemen',   desc: 'Yemeni civil war · ongoing since 2014' },
 ]
 
 function MapWidget() {
@@ -94,14 +94,14 @@ function MapWidget() {
         maxZoom: 17,
       }).addTo(map)
 
-      CONFLICT_PINS.forEach(({ pos, label }) => {
+      CONFLICT_PINS.forEach(({ pos, label, desc }) => {
         L.circleMarker(pos, {
           radius: 8,
           fillColor: '#ff4d4f',
           color: '#fff',
           weight: 1.5,
           fillOpacity: 0.85,
-        }).bindPopup(label).addTo(map)
+        }).bindPopup(`<strong>${label}</strong><br/><span style="font-size:10px;color:#8b949e">${desc}</span>`).addTo(map)
       })
 
       mapRef.current = map
@@ -418,30 +418,28 @@ function Livestream() {
   return (
     <div className="widget">
       <WHeader title="Livestream" badge={videoId ? 'LIVE' : 'STANDBY'} badgeActive={!!videoId} />
-      <div className="widget-body">
-        <div className="stream-container">
-          <form className="stream-url-bar" onSubmit={handleSubmit}>
-            <input
-              className="rss-input"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              placeholder="YouTube URL or video ID…"
-              spellCheck={false}
-            />
-            <button className="rss-go-btn" type="submit">GO</button>
-          </form>
-          {error && (
-            <div className="feed-error" style={{ height: 'auto', padding: '6px 12px' }}>{error}</div>
-          )}
-          <iframe
-            className="stream-iframe"
-            src={src}
-            title="Livestream"
-            allow="autoplay; encrypted-media; fullscreen"
-            allowFullScreen
-            frameBorder="0"
+      <div className="widget-body" style={{ flexDirection: 'column' }}>
+        <form className="stream-url-bar" onSubmit={handleSubmit}>
+          <input
+            className="rss-input"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="YouTube URL or video ID…"
+            spellCheck={false}
           />
-        </div>
+          <button className="rss-go-btn" type="submit">GO</button>
+        </form>
+        {error && (
+          <div className="feed-error" style={{ height: 'auto', padding: '6px 12px' }}>{error}</div>
+        )}
+        <iframe
+          src={`https://www.youtube.com/embed/${videoId}?autoplay=0`}
+          style={{ flex: 1, width: '100%', border: 'none', minHeight: 0, display: 'block' }}
+          title="Livestream"
+          allow="autoplay; encrypted-media; fullscreen"
+          allowFullScreen
+          frameBorder="0"
+        />
       </div>
     </div>
   )
