@@ -1,18 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ReactGridLayout as GridLayout, WidthProvider } from 'react-grid-layout/legacy'
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png'
-import iconUrl       from 'leaflet/dist/images/marker-icon.png'
-import shadowUrl     from 'leaflet/dist/images/marker-shadow.png'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
-
-// Fix Leaflet default icon paths broken by Vite's asset pipeline
-delete L.Icon.Default.prototype._getIconUrl
-L.Icon.Default.mergeOptions({ iconRetinaUrl, iconUrl, shadowUrl })
 
 const SizedGridLayout = WidthProvider(GridLayout)
 
@@ -77,81 +67,71 @@ function WHeader({ title, badge, badgeActive, onRefresh }) {
   )
 }
 
-// ─── Map (Leaflet + OSM tiles) ───────────────────────────────────────────────
-const TILE_LAYERS = {
-  Terrain: {
-    url:         'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    attribution: '© <a href="https://opentopomap.org">OpenTopoMap</a> contributors',
-    maxZoom:     17,
-  },
-  Standard: {
-    url:         'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom:     19,
-  },
-  Dark: {
-    url:         'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
-    attribution: '© <a href="https://stadiamaps.com/">Stadia Maps</a> © OpenMapTiles © OpenStreetMap',
-    maxZoom:     20,
-  },
-  Satellite: {
-    url:         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: '© Esri, Maxar, Earthstar Geographics',
-    maxZoom:     19,
-  },
-}
+// ─── Map (Windy iframe + SVG conflict markers) ────────────────────────────────
+const WINDY_BASE =
+  'https://embed.windy.com/embed2.html?lat=20&lon=15&detailLat=20&detailLon=15' +
+  '&zoom=3&level=surface&product=ecmwf&menu=&message=true&marker=&calendar=now' +
+  '&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1'
 
-const CONFLICT_PINS = [
-  { pos: [48.3, 31.2], label: 'Ukraine' },
-  { pos: [31.4, 34.3], label: 'Gaza'    },
-  { pos: [15.5, 32.5], label: 'Sudan'   },
-  { pos: [19.7, 96.1], label: 'Myanmar' },
-  { pos: [15.5, 48.5], label: 'Yemen'   },
+const WINDY_OVERLAYS = ['wind', 'rain', 'temp', 'clouds']
+
+// Approximate % positions for a ~1000×460 viewport centered at 20°N 15°E zoom=3
+const CONFLICT_MARKERS = [
+  { label: 'Ukraine', left: '60%', top: '12%' },
+  { label: 'Gaza',    left: '61%', top: '33%' },
+  { label: 'Sudan',   left: '60%', top: '48%' },
+  { label: 'Myanmar', left: '88%', top: '47%' },
+  { label: 'Yemen',   left: '66%', top: '50%' },
 ]
 
 function MapWidget() {
-  const [activeLayer, setActiveLayer] = useState('Terrain')
-  const layer = TILE_LAYERS[activeLayer]
+  const [overlay, setOverlay] = useState('wind')
 
   return (
     <div className="widget">
       <div className="widget-header">
         <span className="widget-title">Conflict Map</span>
         <div className="widget-actions">
-          {Object.keys(TILE_LAYERS).map(s => (
+          {WINDY_OVERLAYS.map(o => (
             <button
-              key={s}
+              key={o}
               className="widget-btn"
-              style={{ color: s === activeLayer ? '#00c6ff' : undefined, fontSize: '10px', padding: '0 4px' }}
-              onClick={() => setActiveLayer(s)}
+              style={{ color: o === overlay ? '#00c6ff' : undefined, fontSize: '10px', padding: '0 6px', width: 'auto' }}
+              onClick={() => setOverlay(o)}
             >
-              {s}
+              {o.charAt(0).toUpperCase() + o.slice(1)}
             </button>
           ))}
         </div>
       </div>
-      <div className="widget-body" style={{ overflow: 'hidden' }}>
-        <MapContainer
-          center={[20, 15]}
-          zoom={2}
-          style={{ width: '100%', height: '100%' }}
-          zoomControl
-          scrollWheelZoom
-          attributionControl
-        >
-          <TileLayer key={activeLayer} url={layer.url} attribution={layer.attribution} maxZoom={layer.maxZoom} />
-          {CONFLICT_PINS.map(({ pos, label }) => (
-            <CircleMarker
-              key={label}
-              center={pos}
-              radius={7}
-              className="conflict-pin"
-              pathOptions={{ color: '#ff4d4f', fillColor: '#ff4d4f', fillOpacity: 0.85, weight: 2 }}
-            >
-              <Popup>{label}</Popup>
-            </CircleMarker>
-          ))}
-        </MapContainer>
+      <div className="widget-body" style={{ position: 'relative' }}>
+        <iframe
+          key={overlay}
+          src={`${WINDY_BASE}&overlay=${overlay}`}
+          style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+          title="Windy Weather Map"
+          loading="lazy"
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+        />
+        {CONFLICT_MARKERS.map(({ label, left, top }) => (
+          <div
+            key={label}
+            style={{ position: 'absolute', left, top, transform: 'translate(-50%,-50%)', zIndex: 10, pointerEvents: 'none' }}
+          >
+            <svg width="22" height="22" viewBox="0 0 22 22" style={{ display: 'block' }}>
+              <circle cx="11" cy="11" r="8" fill="rgba(255,77,79,0.25)" className="conflict-pulse-outer" />
+              <circle cx="11" cy="11" r="4" fill="#ff4d4f" stroke="#fff" strokeWidth="1.5" />
+            </svg>
+            <div style={{
+              position: 'absolute', left: '50%', top: '100%', transform: 'translateX(-50%)',
+              fontSize: '8px', fontWeight: 700, color: '#ff4d4f',
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+              textShadow: '0 1px 3px rgba(0,0,0,0.9)', whiteSpace: 'nowrap', marginTop: '1px',
+            }}>
+              {label}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
