@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { ReactGridLayout as GridLayout, WidthProvider } from 'react-grid-layout/legacy'
+import 'leaflet/dist/leaflet.css'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
@@ -67,71 +68,63 @@ function WHeader({ title, badge, badgeActive, onRefresh }) {
   )
 }
 
-// ─── Map (Windy iframe + SVG conflict markers) ────────────────────────────────
-const WINDY_BASE =
-  'https://embed.windy.com/embed2.html?lat=20&lon=15&detailLat=20&detailLon=15' +
-  '&zoom=3&level=surface&product=ecmwf&menu=&message=true&marker=&calendar=now' +
-  '&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1'
-
-const WINDY_OVERLAYS = ['wind', 'rain', 'temp', 'clouds']
-
-// Approximate % positions for a ~1000×460 viewport centered at 20°N 15°E zoom=3
-const CONFLICT_MARKERS = [
-  { label: 'Ukraine', left: '60%', top: '12%' },
-  { label: 'Gaza',    left: '61%', top: '33%' },
-  { label: 'Sudan',   left: '60%', top: '48%' },
-  { label: 'Myanmar', left: '88%', top: '47%' },
-  { label: 'Yemen',   left: '66%', top: '50%' },
+// ─── Map (plain Leaflet JS in useEffect) ─────────────────────────────────────
+const CONFLICT_PINS = [
+  { pos: [48.3, 31.2], label: 'Ukraine' },
+  { pos: [31.5, 34.4], label: 'Gaza'    },
+  { pos: [15.5, 32.5], label: 'Sudan'   },
+  { pos: [19.7, 96.1], label: 'Myanmar' },
+  { pos: [15.5, 48.5], label: 'Yemen'   },
 ]
 
 function MapWidget() {
-  const [overlay, setOverlay] = useState('wind')
+  const mapRef = useRef(null)
+
+  useEffect(() => {
+    let mounted = true
+
+    async function init() {
+      const L = (await import('leaflet')).default
+      if (!mounted) return
+
+      const map = L.map('map-container').setView([20, 15], 2)
+
+      L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenTopoMap contributors',
+        maxZoom: 17,
+      }).addTo(map)
+
+      CONFLICT_PINS.forEach(({ pos, label }) => {
+        L.circleMarker(pos, {
+          radius: 8,
+          fillColor: '#ff4d4f',
+          color: '#fff',
+          weight: 1.5,
+          fillOpacity: 0.85,
+        }).bindPopup(label).addTo(map)
+      })
+
+      mapRef.current = map
+    }
+
+    init()
+
+    return () => {
+      mounted = false
+      if (mapRef.current) {
+        mapRef.current.remove()
+        mapRef.current = null
+      }
+    }
+  }, [])
 
   return (
     <div className="widget">
       <div className="widget-header">
         <span className="widget-title">Conflict Map</span>
-        <div className="widget-actions">
-          {WINDY_OVERLAYS.map(o => (
-            <button
-              key={o}
-              className="widget-btn"
-              style={{ color: o === overlay ? '#00c6ff' : undefined, fontSize: '10px', padding: '0 6px', width: 'auto' }}
-              onClick={() => setOverlay(o)}
-            >
-              {o.charAt(0).toUpperCase() + o.slice(1)}
-            </button>
-          ))}
-        </div>
       </div>
-      <div className="widget-body" style={{ position: 'relative' }}>
-        <iframe
-          key={overlay}
-          src={`${WINDY_BASE}&overlay=${overlay}`}
-          style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-          title="Windy Weather Map"
-          loading="lazy"
-          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-        />
-        {CONFLICT_MARKERS.map(({ label, left, top }) => (
-          <div
-            key={label}
-            style={{ position: 'absolute', left, top, transform: 'translate(-50%,-50%)', zIndex: 10, pointerEvents: 'none' }}
-          >
-            <svg width="22" height="22" viewBox="0 0 22 22" style={{ display: 'block' }}>
-              <circle cx="11" cy="11" r="8" fill="rgba(255,77,79,0.25)" className="conflict-pulse-outer" />
-              <circle cx="11" cy="11" r="4" fill="#ff4d4f" stroke="#fff" strokeWidth="1.5" />
-            </svg>
-            <div style={{
-              position: 'absolute', left: '50%', top: '100%', transform: 'translateX(-50%)',
-              fontSize: '8px', fontWeight: 700, color: '#ff4d4f',
-              letterSpacing: '0.06em', textTransform: 'uppercase',
-              textShadow: '0 1px 3px rgba(0,0,0,0.9)', whiteSpace: 'nowrap', marginTop: '1px',
-            }}>
-              {label}
-            </div>
-          </div>
-        ))}
+      <div className="widget-body">
+        <div id="map-container" style={{ width: '100%', height: '100%' }} />
       </div>
     </div>
   )
