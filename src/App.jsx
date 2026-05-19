@@ -494,34 +494,45 @@ function PriceTracker() {
   )
 }
 
-// ─── Livestream (Al Jazeera YouTube) ─────────────────────────────────────────
-const AJ_VIDEO_ID = 'nGTNbhHjmUk'
+// ─── Livestream ───────────────────────────────────────────────────────────────
+const AJ_EMBED = 'https://www.youtube.com/embed/9Auq9mYxFEE?autoplay=0&mute=1'
 
-function parseYouTubeId(raw) {
+function toEmbedUrl(raw) {
+  const s = raw.trim()
   try {
-    const u = new URL(raw.trim())
-    if (u.searchParams.has('v')) return u.searchParams.get('v')
+    const u = new URL(s)
+    if (u.hostname.includes('youtube') && u.pathname.startsWith('/embed/')) {
+      u.searchParams.set('autoplay', '0')
+      u.searchParams.set('mute', '1')
+      return u.toString()
+    }
+    if (u.searchParams.has('v'))
+      return `https://www.youtube.com/embed/${u.searchParams.get('v')}?autoplay=0&mute=1`
+    if (u.hostname === 'youtu.be')
+      return `https://www.youtube.com/embed/${u.pathname.slice(1)}?autoplay=0&mute=1`
     const parts = u.pathname.split('/').filter(Boolean)
-    if (['live', 'embed', 'v'].includes(parts[0])) return parts[1]
-    if (u.hostname === 'youtu.be') return parts[0]
-  } catch { /* bare ID */ }
-  if (/^[a-zA-Z0-9_-]{11}$/.test(raw.trim())) return raw.trim()
-  return null
+    if (['live', 'v'].includes(parts[0]) && parts[1])
+      return `https://www.youtube.com/embed/${parts[1]}?autoplay=0&mute=1`
+    return s  // non-YouTube URL — use as-is
+  } catch {
+    if (/^[a-zA-Z0-9_-]{11}$/.test(s))
+      return `https://www.youtube.com/embed/${s}?autoplay=0&mute=1`
+    return null
+  }
 }
 
-function Livestream({ initialVideoId = AJ_VIDEO_ID, onVideoIdChange }) {
-  const [videoId, setVideoId] = useState(initialVideoId)
-  const [editing, setEditing] = useState(false)
-  const [input,   setInput]   = useState(initialVideoId)
-  const [error,   setError]   = useState(null)
+function Livestream({ initialUrl = AJ_EMBED, onUrlChange }) {
+  const [embedUrl, setEmbedUrl] = useState(initialUrl)
+  const [input,    setInput]    = useState(initialUrl)
+  const [error,    setError]    = useState(null)
 
-  useEffect(() => { setVideoId(initialVideoId); setInput(initialVideoId) }, [initialVideoId])
+  useEffect(() => { setEmbedUrl(initialUrl); setInput(initialUrl) }, [initialUrl])
 
   function handleSubmit(e) {
     e.preventDefault()
-    const id = parseYouTubeId(input)
-    if (id) { setVideoId(id); setError(null); setEditing(false); onVideoIdChange?.(id) }
-    else setError('Invalid video ID or URL')
+    const url = toEmbedUrl(input)
+    if (url) { setEmbedUrl(url); setInput(url); setError(null); onUrlChange?.(url) }
+    else setError('Invalid YouTube URL or video ID')
   }
 
   return (
@@ -529,26 +540,27 @@ function Livestream({ initialVideoId = AJ_VIDEO_ID, onVideoIdChange }) {
       <div className="widget-header">
         <span className="widget-title">Livestream</span>
         <div className="widget-actions">
-          <span className={`widget-badge${videoId ? '' : ' inactive'}`}>{videoId ? 'LIVE' : 'STANDBY'}</span>
-          <button className="widget-btn" onClick={() => { setEditing(v => !v); setError(null) }} title="Change stream">✎</button>
+          <span className={`widget-badge${embedUrl ? '' : ' inactive'}`}>{embedUrl ? 'LIVE' : 'STANDBY'}</span>
         </div>
       </div>
-      {editing && (
-        <form className="rss-url-bar" onSubmit={handleSubmit} style={{ flexShrink: 0 }}>
-          <input
-            className="rss-input"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            placeholder="YouTube URL or video ID…"
-            spellCheck={false}
-            autoFocus
-          />
-          <button className="rss-go-btn" type="submit">GO</button>
-        </form>
+      <form className="rss-url-bar" onSubmit={handleSubmit} style={{ flexShrink: 0 }}>
+        <input
+          className="rss-input"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          placeholder="YouTube URL, video ID, or embed URL…"
+          spellCheck={false}
+        />
+        <button className="rss-go-btn" type="submit">GO</button>
+      </form>
+      {error && (
+        <div className="feed-error" style={{ flexShrink: 0, height: 'auto', padding: '4px 12px' }}>
+          {error}
+        </div>
       )}
-      {error && <div className="feed-error" style={{ flexShrink: 0, height: 'auto', padding: '4px 12px' }}>{error}</div>}
       <iframe
-        src={`https://www.youtube.com/embed/${videoId}?autoplay=0`}
+        key={embedUrl}
+        src={embedUrl}
         style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
         title="Livestream"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -684,7 +696,7 @@ const DEFAULT_SETTINGS = {
   rssFeedUrl:     'https://feeds.bbci.co.uk/news/world/rss.xml',
   keywordFeedUrl: 'conflict',
   weatherCity:    'Berlin',
-  livestreamId:   'nGTNbhHjmUk',
+  livestreamUrl:  'https://www.youtube.com/embed/9Auq9mYxFEE?autoplay=0&mute=1',
 }
 const settingsKey = id => `vigil_ws${id.replace('ws-', '')}_settings`
 function readSettings(wsId) {
@@ -798,7 +810,7 @@ export default function App() {
           <div key="feed"    style={{ height: '100%', overflow: 'hidden' }}><KeywordFeed initialUrl={settings.keywordFeedUrl} onUrlChange={url => updateSetting('keywordFeedUrl', url)} /></div>
           <div key="rss"     style={{ height: '100%', overflow: 'hidden' }}><RssFeed initialUrl={settings.rssFeedUrl} onUrlChange={url => updateSetting('rssFeedUrl', url)} /></div>
           <div key="prices"  style={{ height: '100%', overflow: 'hidden' }}><PriceTracker /></div>
-          <div key="stream"  style={{ height: '100%', overflow: 'hidden' }}><Livestream initialVideoId={settings.livestreamId} onVideoIdChange={id => updateSetting('livestreamId', id)} /></div>
+          <div key="stream"  style={{ height: '100%', overflow: 'hidden' }}><Livestream initialUrl={settings.livestreamUrl} onUrlChange={url => updateSetting('livestreamUrl', url)} /></div>
           <div key="weather" style={{ height: '100%', overflow: 'hidden' }}><Weather initialCity={settings.weatherCity} onCityChange={city => updateSetting('weatherCity', city)} /></div>
         </SizedGridLayout>
       </div>
