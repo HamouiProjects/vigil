@@ -126,13 +126,17 @@ const MAP_TABS = [
 ]
 
 function MapWidget({ initialTab = 'conflict', onTabChange }) {
-  const [activeTab,  setActiveTab]  = useState(initialTab)
-  const [loadError,  setLoadError]  = useState(false)
+  const [activeTab,   setActiveTab]   = useState(initialTab)
+  const [loadError,   setLoadError]   = useState(false)
   const [useFallback, setUseFallback] = useState(false)
 
-  useEffect(() => { setActiveTab(initialTab) }, [initialTab])
+  useEffect(() => {
+    console.log('[MapWidget] activeTab:', initialTab)
+    setActiveTab(initialTab)
+  }, [initialTab])
 
   function switchTab(id) {
+    console.log('[MapWidget] switchTab:', id)
     setActiveTab(id)
     setLoadError(false)
     setUseFallback(false)
@@ -144,7 +148,7 @@ function MapWidget({ initialTab = 'conflict', onTabChange }) {
 
   function handleError() {
     if (!useFallback && tab.fallback) {
-      setUseFallback(true)  // silently retry with fallback URL
+      setUseFallback(true)
     } else {
       setLoadError(true)
     }
@@ -154,7 +158,12 @@ function MapWidget({ initialTab = 'conflict', onTabChange }) {
     <div className="widget">
       <div className="widget-header">
         <span className="widget-title">World Map</span>
-        <div className="map-tabs">
+        {/* stopPropagation prevents react-grid-layout's drag handler
+            (attached to .widget-header) from swallowing button clicks */}
+        <div
+          className="map-tabs"
+          onMouseDown={e => e.stopPropagation()}
+        >
           {MAP_TABS.map(t => (
             <button
               key={t.id}

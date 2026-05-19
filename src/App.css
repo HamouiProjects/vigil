@@ -168,7 +168,8 @@
 .map-tab-btn {
   font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
   color: #4a5568; background: transparent; border: 1px solid transparent;
-  border-radius: 3px; padding: 3px 8px; cursor: pointer;
+  border-radius: 3px; padding: 3px 8px; cursor: pointer !important;
+  pointer-events: all;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 .map-tab-btn:hover { color: #c9d1d9; background: rgba(255,255,255,0.06); }
