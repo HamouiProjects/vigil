@@ -183,29 +183,24 @@ function dotColor(title = '') {
   return 'blue'
 }
 
-const GN_RSS = q =>
-  `https://corsproxy.io/?url=${encodeURIComponent(
+const GN_RSS2JSON = q =>
+  `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(
     `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`
   )}`
 
 async function fetchNewsSearch(q) {
-  const res = await fetch(GN_RSS(q), { signal: AbortSignal.timeout(10000) })
+  const res  = await fetch(GN_RSS2JSON(q), { signal: AbortSignal.timeout(10000) })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const text = await res.text()
-  const doc  = new DOMParser().parseFromString(text, 'text/xml')
-  if (doc.querySelector('parsererror')) throw new Error('Parse error')
-  const items = Array.from(doc.querySelectorAll('item'))
+  const json = await res.json()
+  if (json.status !== 'ok') throw new Error(json.message || 'Feed error')
+  const items = json.items ?? []
   if (!items.length) throw new Error('No results')
-  return items.map(el => {
-    const link    = el.querySelector('link')?.textContent?.trim() ?? ''
-    const srcName = el.querySelector('source')?.textContent?.trim() ?? ''
-    return {
-      title:   el.querySelector('title')?.textContent?.trim() ?? '(no title)',
-      link,
-      pubDate: el.querySelector('pubDate')?.textContent?.trim() ?? '',
-      source:  srcName,
-    }
-  })
+  return items.map(item => ({
+    title:   item.title   ?? '(no title)',
+    link:    item.link    ?? '',
+    pubDate: item.pubDate ?? '',
+    source:  item.author  ?? '',
+  }))
 }
 
 function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
