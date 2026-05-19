@@ -193,13 +193,15 @@ function feedRelTime(pubDate) {
   } catch { return '—' }
 }
 
-function KeywordFeed() {
-  const [url,     setUrl]     = useState(DEFAULT_FEED_URL)
-  const [input,   setInput]   = useState(DEFAULT_FEED_URL)
+function KeywordFeed({ initialUrl = DEFAULT_FEED_URL, onUrlChange }) {
+  const [url,     setUrl]     = useState(initialUrl)
+  const [input,   setInput]   = useState(initialUrl)
   const [feed,    setFeed]    = useState(null)
   const [items,   setItems]   = useState([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
+
+  useEffect(() => { setUrl(initialUrl); setInput(initialUrl) }, [initialUrl])
 
   const load = useCallback(async (targetUrl) => {
     setLoading(true); setError(null)
@@ -232,7 +234,7 @@ function KeywordFeed() {
         <div className="rss-container">
           <form
             className="rss-url-bar"
-            onSubmit={e => { e.preventDefault(); const t = input.trim(); if (t) setUrl(t) }}
+            onSubmit={e => { e.preventDefault(); const t = input.trim(); if (t) { setUrl(t); onUrlChange?.(t) } }}
           >
             <input
               className="rss-input"
@@ -285,13 +287,15 @@ function rssRelTime(pubDate) {
   } catch { return '—' }
 }
 
-function RssFeed() {
-  const [url,     setUrl]     = useState(DEFAULT_RSS)
-  const [input,   setInput]   = useState(DEFAULT_RSS)
+function RssFeed({ initialUrl = DEFAULT_RSS, onUrlChange }) {
+  const [url,     setUrl]     = useState(initialUrl)
+  const [input,   setInput]   = useState(initialUrl)
   const [feed,    setFeed]    = useState(null)
   const [items,   setItems]   = useState([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
+
+  useEffect(() => { setUrl(initialUrl); setInput(initialUrl) }, [initialUrl])
 
   const load = useCallback(async (targetUrl) => {
     setLoading(true); setError(null)
@@ -319,7 +323,7 @@ function RssFeed() {
         <div className="rss-container">
           <form
             className="rss-url-bar"
-            onSubmit={e => { e.preventDefault(); const t = input.trim(); if (t) setUrl(t) }}
+            onSubmit={e => { e.preventDefault(); const t = input.trim(); if (t) { setUrl(t); onUrlChange?.(t) } }}
           >
             <input
               className="rss-input"
@@ -444,16 +448,18 @@ function parseYouTubeId(raw) {
   return null
 }
 
-function Livestream() {
-  const [videoId, setVideoId] = useState(AJ_VIDEO_ID)
+function Livestream({ initialVideoId = AJ_VIDEO_ID, onVideoIdChange }) {
+  const [videoId, setVideoId] = useState(initialVideoId)
   const [editing, setEditing] = useState(false)
-  const [input,   setInput]   = useState(AJ_VIDEO_ID)
+  const [input,   setInput]   = useState(initialVideoId)
   const [error,   setError]   = useState(null)
+
+  useEffect(() => { setVideoId(initialVideoId); setInput(initialVideoId) }, [initialVideoId])
 
   function handleSubmit(e) {
     e.preventDefault()
     const id = parseYouTubeId(input)
-    if (id) { setVideoId(id); setError(null); setEditing(false) }
+    if (id) { setVideoId(id); setError(null); setEditing(false); onVideoIdChange?.(id) }
     else setError('Invalid video ID or URL')
   }
 
@@ -491,12 +497,13 @@ function Livestream() {
   )
 }
 
-// ─── Weather (Open-Meteo Berlin) ──────────────────────────────────────────────
-const OM_URL =
-  'https://api.open-meteo.com/v1/forecast' +
-  '?latitude=52.52&longitude=13.41' +
-  '&current=temperature_2m,wind_speed_10m,wind_direction_10m,weather_code,relative_humidity_2m,surface_pressure' +
-  '&wind_speed_unit=kmh'
+// ─── Weather (Open-Meteo, geocoded city) ─────────────────────────────────────
+const GEO_URL = name =>
+  `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&format=json`
+const WX_URL  = (lat, lon) =>
+  `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+  `&current=temperature_2m,wind_speed_10m,wind_direction_10m,weather_code,relative_humidity_2m,surface_pressure` +
+  `&wind_speed_unit=kmh`
 
 function decodeWmo(code) {
   if (code === 0) return { label: 'Clear Sky',     icon: '☀️' }
@@ -516,44 +523,78 @@ function windDir(deg) {
   return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(deg / 45) % 8]
 }
 
-function Weather() {
-  const [data,    setData]    = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState(null)
+function Weather({ initialCity = 'Berlin', onCityChange }) {
+  const [city,      setCity]      = useState(initialCity)
+  const [cityInput, setCityInput] = useState(initialCity)
+  const [editing,   setEditing]   = useState(false)
+  const [locName,   setLocName]   = useState(initialCity)
+  const [data,      setData]      = useState(null)
+  const [loading,   setLoading]   = useState(true)
+  const [error,     setError]     = useState(null)
 
-  const load = useCallback(async () => {
-    try {
-      const res  = await fetch(OM_URL)
-      const json = await res.json()
-      setData(json.current)
-      setError(null)
-    } catch {
-      setError('Open-Meteo unreachable')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  useEffect(() => { setCity(initialCity); setCityInput(initialCity) }, [initialCity])
 
   useEffect(() => {
-    load()
-    const id = setInterval(load, 10 * 60_000)
-    return () => clearInterval(id)
-  }, [load])
+    let cancelled = false
+    async function run() {
+      setLoading(true); setError(null)
+      try {
+        const geo = await fetch(GEO_URL(city)).then(r => r.json())
+        const loc = geo.results?.[0]
+        if (!loc) throw new Error(`"${city}" not found`)
+        if (cancelled) return
+        setLocName(loc.name)
+        const wx = await fetch(WX_URL(loc.latitude, loc.longitude)).then(r => r.json())
+        if (cancelled) return
+        setData(wx.current)
+      } catch (e) {
+        if (!cancelled) setError(e.message || 'Fetch failed')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    run()
+    const id = setInterval(run, 10 * 60_000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [city])
+
+  function handleCitySubmit(e) {
+    e.preventDefault()
+    const c = cityInput.trim()
+    if (c && c !== city) { setCity(c); onCityChange?.(c) }
+    setEditing(false)
+  }
 
   const wmo = data ? decodeWmo(data.weather_code) : null
 
   return (
     <div className="widget">
-      <WHeader
-        title="Weather · Berlin"
-        badge={loading ? 'LOADING…' : error ? 'ERROR' : 'LIVE'}
-        badgeActive={!error && !loading}
-        onRefresh={load}
-      />
+      <div className="widget-header">
+        <span className="widget-title">Weather · {locName}</span>
+        <div className="widget-actions">
+          <span className={`widget-badge${!error && !loading ? '' : ' inactive'}`}>
+            {loading ? 'LOADING…' : error ? 'ERROR' : 'LIVE'}
+          </span>
+          <button className="widget-btn" onClick={() => setEditing(v => !v)} title="Change city">✎</button>
+        </div>
+      </div>
+      {editing && (
+        <form className="rss-url-bar" onSubmit={handleCitySubmit} style={{ flexShrink: 0 }}>
+          <input
+            className="rss-input"
+            value={cityInput}
+            onChange={e => setCityInput(e.target.value)}
+            placeholder="City name…"
+            spellCheck={false}
+            autoFocus
+          />
+          <button className="rss-go-btn" type="submit">GO</button>
+        </form>
+      )}
       <div className="widget-body">
-        {error        ? <div className="feed-error">{error}</div>
-       : loading || !data ? <div className="feed-loading">Fetching weather…</div>
-       : (
+        {error ? <div className="feed-error">{error}</div>
+        : loading || !data ? <div className="feed-loading">Fetching weather…</div>
+        : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', gap: '6px', padding: '8px 12px' }}>
             <span style={{ fontSize: '22px' }}>{wmo.icon}</span>
             <span style={{ fontSize: '30px', fontWeight: 300, color: '#e6edf3', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{Math.round(data.temperature_2m)}°C</span>
@@ -575,6 +616,21 @@ function Weather() {
       </div>
     </div>
   )
+}
+
+// ─── Settings persistence ─────────────────────────────────────────────────────
+const DEFAULT_SETTINGS = {
+  rssFeedUrl:     'https://feeds.bbci.co.uk/news/world/rss.xml',
+  keywordFeedUrl: 'https://feeds.bbci.co.uk/news/world/rss.xml',
+  weatherCity:    'Berlin',
+  livestreamId:   'nGTNbhHjmUk',
+}
+const settingsKey = id => `vigil_ws${id.replace('ws-', '')}_settings`
+function readSettings(wsId) {
+  try {
+    const raw = localStorage.getItem(settingsKey(wsId))
+    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : { ...DEFAULT_SETTINGS }
+  } catch { return { ...DEFAULT_SETTINGS } }
 }
 
 // ─── Default layout ───────────────────────────────────────────────────────────
@@ -601,6 +657,7 @@ function readLayout(wsId) {
 // ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const [layout,     setLayout]     = useState(() => readLayout('ws-1'))
+  const [settings,   setSettings]   = useState(() => readSettings('ws-1'))
   const [workspaces, setWorkspaces] = useState([
     { id: 'ws-1', name: 'Workspace 1' },
     { id: 'ws-2', name: 'Workspace 2' },
@@ -609,8 +666,16 @@ export default function App() {
   const [activeWs, setActiveWs] = useState('ws-1')
   const [saved,    setSaved]    = useState(false)
   const saveTimer   = useRef(null)
-  const activeWsRef = useRef('ws-1')  // always-current for setTimeout callbacks
+  const activeWsRef = useRef('ws-1')
   const savedTimer  = useRef(null)
+
+  function updateSetting(key, value) {
+    setSettings(prev => {
+      const next = { ...prev, [key]: value }
+      localStorage.setItem(settingsKey(activeWsRef.current), JSON.stringify(next))
+      return next
+    })
+  }
 
   // ── Layout save (debounced 1s) ─────────────────────────────────────────────
   function handleLayoutChange(newLayout) {
@@ -636,6 +701,7 @@ export default function App() {
     activeWsRef.current = wsId
     setActiveWs(wsId)
     setLayout(readLayout(wsId))
+    setSettings(readSettings(wsId))
   }
 
   // ── Workspace rename (local only) ─────────────────────────────────────────
@@ -668,11 +734,11 @@ export default function App() {
           isDraggable
         >
           <div key="map"     style={{ height: '100%', overflow: 'hidden' }}><MapWidget /></div>
-          <div key="feed"    style={{ height: '100%', overflow: 'hidden' }}><KeywordFeed /></div>
-          <div key="rss"     style={{ height: '100%', overflow: 'hidden' }}><RssFeed /></div>
+          <div key="feed"    style={{ height: '100%', overflow: 'hidden' }}><KeywordFeed initialUrl={settings.keywordFeedUrl} onUrlChange={url => updateSetting('keywordFeedUrl', url)} /></div>
+          <div key="rss"     style={{ height: '100%', overflow: 'hidden' }}><RssFeed initialUrl={settings.rssFeedUrl} onUrlChange={url => updateSetting('rssFeedUrl', url)} /></div>
           <div key="prices"  style={{ height: '100%', overflow: 'hidden' }}><PriceTracker /></div>
-          <div key="stream"  style={{ height: '100%', overflow: 'hidden' }}><Livestream /></div>
-          <div key="weather" style={{ height: '100%', overflow: 'hidden' }}><Weather /></div>
+          <div key="stream"  style={{ height: '100%', overflow: 'hidden' }}><Livestream initialVideoId={settings.livestreamId} onVideoIdChange={id => updateSetting('livestreamId', id)} /></div>
+          <div key="weather" style={{ height: '100%', overflow: 'hidden' }}><Weather initialCity={settings.weatherCity} onCityChange={city => updateSetting('weatherCity', city)} /></div>
         </SizedGridLayout>
       </div>
     </div>
