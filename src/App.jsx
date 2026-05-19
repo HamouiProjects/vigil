@@ -112,8 +112,7 @@ function WHeader({ title, badge, badgeActive, onRefresh }) {
 const MAP_TABS = [
   {
     id: 'conflict', label: 'Conflict',
-    src: 'https://umap.openstreetmap.fr/en/map/conflicts-and-crises_1062814?scaleControl=false&miniMap=false&scrollWheelZoom=true&zoomControl=true&allowEdit=false&moreControl=false&searchControl=false&tilelayersControl=false&embedControl=false&datalayersControl=false&onLoadPanel=undefined&captionBar=false',
-    fallback: 'https://www.openstreetmap.org/export/embed.html?bbox=-180,-85,180,85&layer=mapnik',
+    src: 'https://www.openstreetmap.org/export/embed.html?bbox=-180,-85,180,85&layer=mapnik',
   },
   {
     id: 'flights', label: 'Flights',
