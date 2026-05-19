@@ -197,43 +197,43 @@ function gdeltRelTime(seendate) {
   } catch { return '—' }
 }
 
-function gdeltAgeMin(seendate) {
-  try {
-    const s = String(seendate).replace(
-      /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/,
-      '$1-$2-$3T$4:$5:$6Z'
-    )
-    return Math.floor((Date.now() - new Date(s).getTime()) / 60_000)
-  } catch { return Infinity }
-}
 
 const GDELT_BASE = q =>
   `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=artlist&maxrecords=25&format=json`
 
+function isHtml(s) { return typeof s === 'string' && s.trimStart().startsWith('<') }
+
+async function gdeltFetchText(url) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(9000) })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const text = await res.text()
+  if (isHtml(text)) throw new Error('html')
+  return text
+}
+
 async function fetchGdelt(q) {
   const base = GDELT_BASE(q)
 
-  async function tryUrl(url, unwrap) {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const text = await res.text()
-    if (text.trimStart().startsWith('<')) throw new Error('html')
-    const json = JSON.parse(text)
-    return unwrap ? unwrap(json) : json
-  }
-
-  // 1) direct
-  try { return await tryUrl(base) } catch {}
-  // 2) corsproxy.io
+  // 1) direct (works if GDELT adds CORS headers for this origin)
   try {
-    return await tryUrl(`https://corsproxy.io/?url=${encodeURIComponent(base)}`)
+    return JSON.parse(await gdeltFetchText(base))
   } catch {}
-  // 3) allorigins
-  const ao = await tryUrl(
-    `https://api.allorigins.win/get?url=${encodeURIComponent(base)}`,
-    j => JSON.parse(j.contents)
-  )
-  return ao
+
+  // 2) corsproxy.io — proxied text should be the raw JSON
+  try {
+    return JSON.parse(await gdeltFetchText(`https://corsproxy.io/?url=${encodeURIComponent(base)}`))
+  } catch {}
+
+  // 3) allorigins — wraps response in {contents:"..."}; check contents for HTML too
+  try {
+    const text = await gdeltFetchText(`https://api.allorigins.win/get?url=${encodeURIComponent(base)}`)
+    const wrapper = JSON.parse(text)
+    const contents = wrapper?.contents ?? ''
+    if (isHtml(contents)) throw new Error('html')
+    return JSON.parse(contents)
+  } catch {}
+
+  throw new Error('unavailable')
 }
 
 function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
@@ -256,11 +256,10 @@ function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
       setFetchedAt(Date.now())
     } catch (e) {
       const msg = e.message || ''
-      setError(
-        msg === 'html' || msg.includes('JSON')
-          ? 'Feed unavailable – try a different keyword'
-          : (msg || 'GDELT unreachable')
-      )
+      const friendly = msg === 'unavailable' || msg === 'html' ||
+        msg.toLowerCase().includes('json') || msg.toLowerCase().includes('token') ||
+        msg.toLowerCase().includes('unexpected')
+      setError(friendly ? 'Feed unavailable – try a different keyword' : (msg || 'GDELT unreachable'))
     } finally {
       setLoading(false)
     }
@@ -273,7 +272,6 @@ function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
   }, [query, load])
 
   const isLive = fetchedAt && (Date.now() - fetchedAt) < 5 * 60_000
-  const freshest = articles[0]?.seendate
   const badge = loading ? 'LOADING…'
     : error   ? 'ERROR'
     : isLive  ? 'LIVE'
