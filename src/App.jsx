@@ -125,22 +125,15 @@ const MAP_TABS = [
   { id: 'marine', label: 'Marine', src: null },
 ]
 
-function MapWidget({ initialTab = 'conflict', onTabChange }) {
-  const [activeTab,   setActiveTab]   = useState(initialTab)
+function MapWidget() {
+  const [activeTab,   setActiveTab]   = useState('conflict')
   const [loadError,   setLoadError]   = useState(false)
   const [useFallback, setUseFallback] = useState(false)
 
-  useEffect(() => {
-    console.log('[MapWidget] activeTab:', initialTab)
-    setActiveTab(initialTab)
-  }, [initialTab])
-
   function switchTab(id) {
-    console.log('[MapWidget] switchTab:', id)
     setActiveTab(id)
     setLoadError(false)
     setUseFallback(false)
-    onTabChange?.(id)
   }
 
   const tab = MAP_TABS.find(t => t.id === activeTab) ?? MAP_TABS[0]
@@ -158,11 +151,9 @@ function MapWidget({ initialTab = 'conflict', onTabChange }) {
     <div className="widget">
       <div className="widget-header">
         <span className="widget-title">World Map</span>
-        {/* stopPropagation prevents react-grid-layout's drag handler
-            (attached to .widget-header) from swallowing button clicks */}
         <div
           className="map-tabs"
-          onMouseDown={e => e.stopPropagation()}
+          onPointerDownCapture={e => e.stopPropagation()}
         >
           {MAP_TABS.map(t => (
             <button
@@ -721,7 +712,6 @@ const DEFAULT_SETTINGS = {
   keywordFeedUrl: 'conflict',
   weatherCity:    'Berlin',
   livestreamUrl:  'https://www.youtube.com/embed/live_stream?channel=UCNye-wNBqNL5ZzHSJj3l8Bg&autoplay=0&mute=1',
-  mapTab:         'conflict',
 }
 const settingsKey = id => `vigil_ws${id.replace('ws-', '')}_settings`
 function readSettings(wsId) {
@@ -831,7 +821,7 @@ export default function App() {
           isResizable
           isDraggable
         >
-          <div key="map"     style={{ height: '100%', overflow: 'hidden' }}><MapWidget initialTab={settings.mapTab} onTabChange={tab => updateSetting('mapTab', tab)} /></div>
+          <div key="map"     style={{ height: '100%', overflow: 'hidden' }}><MapWidget /></div>
           <div key="feed"    style={{ height: '100%', overflow: 'hidden' }}><KeywordFeed initialUrl={settings.keywordFeedUrl} onUrlChange={url => updateSetting('keywordFeedUrl', url)} /></div>
           <div key="rss"     style={{ height: '100%', overflow: 'hidden' }}><RssFeed initialUrl={settings.rssFeedUrl} onUrlChange={url => updateSetting('rssFeedUrl', url)} /></div>
           <div key="prices"  style={{ height: '100%', overflow: 'hidden' }}><PriceTracker /></div>
