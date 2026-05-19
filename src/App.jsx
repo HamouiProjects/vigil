@@ -124,7 +124,7 @@ const MAP_TABS = [
   },
   { id: 'cyber',     label: 'Cyber',     src: 'https://threatmap.checkpoint.com/' },
   { id: 'wildfires', label: 'Wildfires', src: 'https://firms.modaps.eosdis.nasa.gov/map/' },
-  { id: 'marine',    label: 'Marine',    src: null },
+  { id: 'marine',    label: 'Marine',    src: 'https://www.myshiptracking.com/' },
 ]
 
 function MapWidget() {
@@ -169,65 +169,41 @@ function MapWidget() {
         </div>
       </div>
 
-      {tab.src ? (
-        <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
-          <iframe
-            key={`${tab.id}-${useFallback}`}
-            src={iframeSrc}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
-            title={tab.label}
-            allowFullScreen
-            onError={handleError}
-            onLoad={() => setLoadError(false)}
-          />
-          {loadError && (
-            <div style={{
-              position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center', gap: '10px',
-              background: '#080f18',
-            }}>
-              <div style={{ fontSize: '11px', color: '#6e8098', textAlign: 'center', padding: '0 20px' }}>
-                {tab.label} does not allow embedding.
-              </div>
-              <a
-                href={tab.src}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  fontSize: '11px', fontWeight: 600, color: '#00c6ff',
-                  background: 'rgba(0,198,255,0.1)', border: '1px solid rgba(0,198,255,0.3)',
-                  borderRadius: '4px', padding: '5px 14px', textDecoration: 'none',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                Open in new tab →
-              </a>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div style={{
-          flex: 1, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
-          background: '#080f18', position: 'relative',
-        }}>
+      <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+        <iframe
+          key={`${tab.id}-${useFallback}`}
+          src={iframeSrc}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+          title={tab.label}
+          allowFullScreen
+          onError={handleError}
+          onLoad={() => setLoadError(false)}
+        />
+        {loadError && (
           <div style={{
-            position: 'absolute', inset: 0,
-            background: 'repeating-linear-gradient(45deg,#0d1825 0,#0d1825 10px,#080f18 10px,#080f18 20px)',
-            opacity: 0.6,
-          }} />
-          <div style={{ position: 'relative', textAlign: 'center', zIndex: 1 }}>
-            <div style={{ fontSize: '22px', marginBottom: '8px' }}>🔒</div>
-            <div style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '0.1em', color: '#00c6ff' }}>PRO</div>
-            <div style={{ fontSize: '11px', color: '#6e8098', marginTop: '6px', letterSpacing: '0.05em' }}>
-              MarineTraffic integration
+            position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: '10px',
+            background: '#080f18',
+          }}>
+            <div style={{ fontSize: '11px', color: '#6e8098', textAlign: 'center', padding: '0 20px' }}>
+              {tab.label} does not allow embedding.
             </div>
-            <div style={{ fontSize: '10px', color: '#3a4a5c', marginTop: '3px' }}>
-              available on Pro plan
-            </div>
+            <a
+              href={tab.src}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                fontSize: '11px', fontWeight: 600, color: '#00c6ff',
+                background: 'rgba(0,198,255,0.1)', border: '1px solid rgba(0,198,255,0.3)',
+                borderRadius: '4px', padding: '5px 14px', textDecoration: 'none',
+                letterSpacing: '0.05em',
+              }}
+            >
+              Open in new tab →
+            </a>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
