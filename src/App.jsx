@@ -122,7 +122,9 @@ const MAP_TABS = [
     id: 'weather', label: 'Weather',
     src: 'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=wind&menu=&message=&marker=&calendar=&pressure=&type=map&location=coordinates&detail=&metricWind=kt&metricTemp=%C2%B0C&radarRange=-1',
   },
-  { id: 'marine', label: 'Marine', src: null },
+  { id: 'cyber',     label: 'Cyber',     src: 'https://threatmap.checkpoint.com/' },
+  { id: 'wildfires', label: 'Wildfires', src: 'https://firms.modaps.eosdis.nasa.gov/map/' },
+  { id: 'marine',    label: 'Marine',    src: null },
 ]
 
 function MapWidget() {
