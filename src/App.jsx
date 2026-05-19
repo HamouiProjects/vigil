@@ -173,7 +173,7 @@ function MapWidget() {
   )
 }
 
-// ─── Keyword Feed (GDELT DOC 2.0 with CORS fallback chain) ───────────────────
+// ─── Keyword Feed (GDELT RSS — no CORS issues) ───────────────────────────────
 const DEFAULT_KEYWORDS = 'conflict'
 
 function dotColor(title = '') {
@@ -183,13 +183,9 @@ function dotColor(title = '') {
   return 'blue'
 }
 
-function gdeltRelTime(seendate) {
+function rssRelTime(pubDate) {
   try {
-    const s = String(seendate).replace(
-      /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/,
-      '$1-$2-$3T$4:$5:$6Z'
-    )
-    const diff = Math.floor((Date.now() - new Date(s).getTime()) / 60_000)
+    const diff = Math.floor((Date.now() - new Date(pubDate).getTime()) / 60_000)
     if (diff < 1)    return 'now'
     if (diff < 60)   return `${diff}m`
     if (diff < 1440) return `${Math.floor(diff / 60)}h`
@@ -197,43 +193,28 @@ function gdeltRelTime(seendate) {
   } catch { return '—' }
 }
 
+const GDELT_RSS = q =>
+  `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=artlist&maxrecords=25&format=rss`
 
-const GDELT_BASE = q =>
-  `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=artlist&maxrecords=25&format=json`
-
-function isHtml(s) { return typeof s === 'string' && s.trimStart().startsWith('<') }
-
-async function gdeltFetchText(url) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(9000) })
+async function fetchGdeltRss(q) {
+  const res = await fetch(GDELT_RSS(q), { signal: AbortSignal.timeout(10000) })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const text = await res.text()
-  if (isHtml(text)) throw new Error('html')
-  return text
-}
-
-async function fetchGdelt(q) {
-  const base = GDELT_BASE(q)
-
-  // 1) direct (works if GDELT adds CORS headers for this origin)
-  try {
-    return JSON.parse(await gdeltFetchText(base))
-  } catch {}
-
-  // 2) corsproxy.io — proxied text should be the raw JSON
-  try {
-    return JSON.parse(await gdeltFetchText(`https://corsproxy.io/?url=${encodeURIComponent(base)}`))
-  } catch {}
-
-  // 3) allorigins — wraps response in {contents:"..."}; check contents for HTML too
-  try {
-    const text = await gdeltFetchText(`https://api.allorigins.win/get?url=${encodeURIComponent(base)}`)
-    const wrapper = JSON.parse(text)
-    const contents = wrapper?.contents ?? ''
-    if (isHtml(contents)) throw new Error('html')
-    return JSON.parse(contents)
-  } catch {}
-
-  throw new Error('unavailable')
+  const doc  = new DOMParser().parseFromString(text, 'text/xml')
+  const items = Array.from(doc.querySelectorAll('item'))
+  if (!items.length) throw new Error('No results')
+  return items.map(el => {
+    const link    = el.querySelector('link')?.textContent?.trim() ?? ''
+    const srcTag  = el.querySelector('source')?.textContent?.trim()
+    let domain = ''
+    try { domain = srcTag || new URL(link).hostname.replace(/^www\./, '') } catch {}
+    return {
+      title:   el.querySelector('title')?.textContent?.trim() ?? '(no title)',
+      link,
+      pubDate: el.querySelector('pubDate')?.textContent?.trim() ?? '',
+      domain,
+    }
+  })
 }
 
 function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
@@ -249,17 +230,13 @@ function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
   const load = useCallback(async (q) => {
     setLoading(true); setError(null)
     try {
-      const json = await fetchGdelt(q)
-      const arts = json.articles ?? []
-      if (!arts.length) throw new Error('No results — try a different keyword')
+      const arts = await fetchGdeltRss(q)
       setArticles(arts)
       setFetchedAt(Date.now())
     } catch (e) {
-      const msg = e.message || ''
-      const friendly = msg === 'unavailable' || msg === 'html' ||
-        msg.toLowerCase().includes('json') || msg.toLowerCase().includes('token') ||
-        msg.toLowerCase().includes('unexpected')
-      setError(friendly ? 'Feed unavailable – try a different keyword' : (msg || 'GDELT unreachable'))
+      setError(e.message === 'No results'
+        ? 'No results — try a different keyword'
+        : 'GDELT unavailable')
     } finally {
       setLoading(false)
     }
@@ -271,11 +248,8 @@ function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
     return () => clearInterval(id)
   }, [query, load])
 
-  const isLive = fetchedAt && (Date.now() - fetchedAt) < 5 * 60_000
-  const badge = loading ? 'LOADING…'
-    : error   ? 'ERROR'
-    : isLive  ? 'LIVE'
-    : 'CACHED'
+  const isLive  = fetchedAt && (Date.now() - fetchedAt) < 5 * 60_000
+  const badge   = loading ? 'LOADING…' : error ? 'ERROR' : isLive ? 'LIVE' : 'CACHED'
 
   return (
     <div className="widget">
@@ -312,7 +286,7 @@ function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
                 <a
                   key={i}
                   className="feed-item feed-item-link"
-                  href={art.url}
+                  href={art.link}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -321,7 +295,7 @@ function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
                     <span className="feed-source">{art.domain || '—'}</span>
                     {art.title}
                   </span>
-                  <span className="feed-time">{gdeltRelTime(art.seendate)}</span>
+                  <span className="feed-time">{rssRelTime(art.pubDate)}</span>
                 </a>
               ))}
             </div>
@@ -421,13 +395,11 @@ function RssFeed({ initialUrl = DEFAULT_RSS, onUrlChange }) {
   )
 }
 
-// ─── Price Tracker (CoinGecko BTC/ETH/XAU + WTI via Alpha Vantage) ───────────
+// ─── Price Tracker (CoinGecko BTC/ETH/XAU/SOL) ───────────────────────────────
 const CG_URL =
   'https://api.coingecko.com/api/v3/simple/price' +
-  '?ids=bitcoin,ethereum,pax-gold,silver' +
+  '?ids=bitcoin,ethereum,pax-gold,solana' +
   '&vs_currencies=usd&include_24hr_change=true'
-
-const AV_WTI = 'https://www.alphavantage.co/query?function=WTI&interval=daily&apikey=demo'
 
 function fmtPrice(n, dec = 2) {
   return n == null ? '—' : n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })
@@ -438,22 +410,6 @@ function fmtChg(n) {
     : { text: `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`, dir: n >= 0 ? 'up' : 'down' }
 }
 
-async function fetchWti() {
-  try {
-    const res  = await fetch(AV_WTI, { signal: AbortSignal.timeout(6000) })
-    const json = await res.json()
-    const data = json?.data
-    if (!Array.isArray(data) || data.length < 2) return null
-    const cur  = parseFloat(data[0].value)
-    const prev = parseFloat(data[1].value)
-    if (!isFinite(cur)) return null
-    const chgPct = isFinite(prev) && prev !== 0 ? ((cur - prev) / prev) * 100 : null
-    return { ticker: 'WTI/USD', value: fmtPrice(cur, 2), ...fmtChg(chgPct) }
-  } catch {
-    return null
-  }
-}
-
 function PriceTracker() {
   const [prices,  setPrices]  = useState([])
   const [loading, setLoading] = useState(true)
@@ -461,20 +417,13 @@ function PriceTracker() {
 
   const load = useCallback(async () => {
     try {
-      const [cgRes, wti] = await Promise.all([fetch(CG_URL), fetchWti()])
-      const cg = await cgRes.json()
-
-      const fourth = wti ?? {
-        ticker: 'XAG/USD',
-        value:  fmtPrice(cg.silver?.usd, 2),
-        ...fmtChg(cg.silver?.usd_24h_change),
-      }
-
+      const res = await fetch(CG_URL)
+      const cg  = await res.json()
       setPrices([
         { ticker: 'BTC/USD', value: fmtPrice(cg.bitcoin?.usd, 0),     ...fmtChg(cg.bitcoin?.usd_24h_change) },
         { ticker: 'ETH/USD', value: fmtPrice(cg.ethereum?.usd, 2),    ...fmtChg(cg.ethereum?.usd_24h_change) },
         { ticker: 'XAU/USD', value: fmtPrice(cg['pax-gold']?.usd, 0), ...fmtChg(cg['pax-gold']?.usd_24h_change) },
-        fourth,
+        { ticker: 'SOL/USD', value: fmtPrice(cg.solana?.usd, 2),      ...fmtChg(cg.solana?.usd_24h_change) },
       ])
       setError(null)
     } catch {
@@ -518,7 +467,7 @@ function PriceTracker() {
 }
 
 // ─── Livestream ───────────────────────────────────────────────────────────────
-const AJ_EMBED = 'https://www.youtube.com/embed/9Auq9mYxFEE?autoplay=0&mute=1'
+const AJ_EMBED = 'https://www.youtube.com/embed/live_stream?channel=UCNye-wNBqNL5ZzHSJj3l8Bg&autoplay=0&mute=1'
 
 function toEmbedUrl(raw) {
   const s = raw.trim()
@@ -571,7 +520,7 @@ function Livestream({ initialUrl = AJ_EMBED, onUrlChange }) {
           className="rss-input"
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder="YouTube URL, video ID, or embed URL…"
+          placeholder="Paste any YouTube URL or embed link…"
           spellCheck={false}
         />
         <button className="rss-go-btn" type="submit">GO</button>
@@ -719,7 +668,7 @@ const DEFAULT_SETTINGS = {
   rssFeedUrl:     'https://feeds.bbci.co.uk/news/world/rss.xml',
   keywordFeedUrl: 'conflict',
   weatherCity:    'Berlin',
-  livestreamUrl:  'https://www.youtube.com/embed/9Auq9mYxFEE?autoplay=0&mute=1',
+  livestreamUrl:  'https://www.youtube.com/embed/live_stream?channel=UCNye-wNBqNL5ZzHSJj3l8Bg&autoplay=0&mute=1',
 }
 const settingsKey = id => `vigil_ws${id.replace('ws-', '')}_settings`
 function readSettings(wsId) {
