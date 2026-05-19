@@ -112,7 +112,7 @@ function WHeader({ title, badge, badgeActive, onRefresh }) {
 const MAP_TABS = [
   {
     id: 'conflict', label: 'Conflict',
-    src: 'https://www.openstreetmap.org/export/embed.html?bbox=-180,-85,180,85&layer=mapnik',
+    src: 'https://liveuamap.com',
   },
   {
     id: 'flights', label: 'Flights',
