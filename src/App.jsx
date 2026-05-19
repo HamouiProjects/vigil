@@ -183,16 +183,6 @@ function dotColor(title = '') {
   return 'blue'
 }
 
-function rssRelTime(pubDate) {
-  try {
-    const diff = Math.floor((Date.now() - new Date(pubDate).getTime()) / 60_000)
-    if (diff < 1)    return 'now'
-    if (diff < 60)   return `${diff}m`
-    if (diff < 1440) return `${Math.floor(diff / 60)}h`
-    return `${Math.floor(diff / 1440)}d`
-  } catch { return '—' }
-}
-
 const GDELT_RSS = q =>
   `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=artlist&maxrecords=25&format=rss`
 
