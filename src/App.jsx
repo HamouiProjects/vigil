@@ -169,16 +169,17 @@ function MapWidget() {
         </div>
       </div>
 
-      <div style={{ flex: 1, position: 'relative', minHeight: 0, padding: 0, margin: 0, overflow: 'hidden', background: '#0a0e1a' }}>
-        <iframe
-          key={`${tab.id}-${useFallback}`}
-          src={iframeSrc}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', outline: 'none', display: 'block' }}
-          title={tab.label}
-          allowFullScreen
-          onError={handleError}
-          onLoad={() => setLoadError(false)}
-        />
+      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100% - 36px)', width: '100%' }}>
+        <div style={{ flex: 1, width: '100%', height: '100%', position: 'relative', padding: 0, margin: 0, overflow: 'hidden', background: '#0a0e1a' }}>
+          <iframe
+            key={`${tab.id}-${useFallback}`}
+            src={iframeSrc}
+            style={{ width: '100%', height: '100%', border: 'none', outline: 'none', display: 'block' }}
+            title={tab.label}
+            allowFullScreen
+            onError={handleError}
+            onLoad={() => setLoadError(false)}
+          />
         {loadError && (
           <div style={{
             position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
@@ -203,6 +204,7 @@ function MapWidget() {
             </a>
           </div>
         )}
+        </div>
       </div>
     </div>
   )
