@@ -110,8 +110,15 @@ function WHeader({ title, badge, badgeActive, onRefresh }) {
 
 // ─── World Map (iframe embed switcher) ───────────────────────────────────────
 const MAP_TABS = [
-  { id: 'conflict', label: 'Conflict', src: 'https://liveuamap.com/embed' },
-  { id: 'flights',  label: 'Flights',  src: 'https://globe.adsbexchange.com' },
+  {
+    id: 'conflict', label: 'Conflict',
+    src: 'https://umap.openstreetmap.fr/en/map/conflicts-and-crises_1062814?scaleControl=false&miniMap=false&scrollWheelZoom=true&zoomControl=true&allowEdit=false&moreControl=false&searchControl=false&tilelayersControl=false&embedControl=false&datalayersControl=false&onLoadPanel=undefined&captionBar=false',
+    fallback: 'https://www.openstreetmap.org/export/embed.html?bbox=-180,-85,180,85&layer=mapnik',
+  },
+  {
+    id: 'flights', label: 'Flights',
+    src: 'https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3',
+  },
   {
     id: 'weather', label: 'Weather',
     src: 'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=wind&menu=&message=&marker=&calendar=&pressure=&type=map&location=coordinates&detail=&metricWind=kt&metricTemp=%C2%B0C&radarRange=-1',
@@ -120,16 +127,29 @@ const MAP_TABS = [
 ]
 
 function MapWidget({ initialTab = 'conflict', onTabChange }) {
-  const [activeTab, setActiveTab] = useState(initialTab)
+  const [activeTab,  setActiveTab]  = useState(initialTab)
+  const [loadError,  setLoadError]  = useState(false)
+  const [useFallback, setUseFallback] = useState(false)
 
   useEffect(() => { setActiveTab(initialTab) }, [initialTab])
 
   function switchTab(id) {
     setActiveTab(id)
+    setLoadError(false)
+    setUseFallback(false)
     onTabChange?.(id)
   }
 
   const tab = MAP_TABS.find(t => t.id === activeTab) ?? MAP_TABS[0]
+  const iframeSrc = useFallback ? (tab.fallback ?? tab.src) : tab.src
+
+  function handleError() {
+    if (!useFallback && tab.fallback) {
+      setUseFallback(true)  // silently retry with fallback URL
+    } else {
+      setLoadError(true)
+    }
+  }
 
   return (
     <div className="widget">
@@ -147,20 +167,48 @@ function MapWidget({ initialTab = 'conflict', onTabChange }) {
           ))}
         </div>
       </div>
+
       {tab.src ? (
-        <iframe
-          key={tab.id}
-          src={tab.src}
-          style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
-          title={tab.label}
-          allowFullScreen
-        />
+        <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+          <iframe
+            key={`${tab.id}-${useFallback}`}
+            src={iframeSrc}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+            title={tab.label}
+            allowFullScreen
+            onError={handleError}
+            onLoad={() => setLoadError(false)}
+          />
+          {loadError && (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: '10px',
+              background: '#080f18',
+            }}>
+              <div style={{ fontSize: '11px', color: '#6e8098', textAlign: 'center', padding: '0 20px' }}>
+                {tab.label} does not allow embedding.
+              </div>
+              <a
+                href={tab.src}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontSize: '11px', fontWeight: 600, color: '#00c6ff',
+                  background: 'rgba(0,198,255,0.1)', border: '1px solid rgba(0,198,255,0.3)',
+                  borderRadius: '4px', padding: '5px 14px', textDecoration: 'none',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                Open in new tab →
+              </a>
+            </div>
+          )}
+        </div>
       ) : (
         <div style={{
           flex: 1, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
-          background: '#080f18', gap: '10px',
-          filter: 'blur(0)', position: 'relative',
+          background: '#080f18', position: 'relative',
         }}>
           <div style={{
             position: 'absolute', inset: 0,
