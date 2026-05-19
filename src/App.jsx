@@ -169,11 +169,11 @@ function MapWidget() {
         </div>
       </div>
 
-      <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+      <div style={{ flex: 1, position: 'relative', minHeight: 0, padding: 0, margin: 0, overflow: 'hidden', background: '#0a0e1a' }}>
         <iframe
           key={`${tab.id}-${useFallback}`}
           src={iframeSrc}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', outline: 'none', display: 'block' }}
           title={tab.label}
           allowFullScreen
           onError={handleError}
