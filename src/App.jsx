@@ -454,7 +454,7 @@ function Livestream() {
     e.preventDefault()
     const id = parseYouTubeId(input)
     if (id) { setVideoId(id); setError(null); setEditing(false) }
-    else setError('Unrecognised YouTube URL or ID')
+    else setError('Invalid video ID or URL')
   }
 
   return (
@@ -463,43 +463,30 @@ function Livestream() {
         <span className="widget-title">Livestream</span>
         <div className="widget-actions">
           <span className={`widget-badge${videoId ? '' : ' inactive'}`}>{videoId ? 'LIVE' : 'STANDBY'}</span>
-          <button className="widget-btn" onClick={() => setEditing(v => !v)} title="Change stream">✎</button>
+          <button className="widget-btn" onClick={() => { setEditing(v => !v); setError(null) }} title="Change stream">✎</button>
         </div>
       </div>
-      <div className="widget-body">
-        {/* iframe fills the full body */}
-        <iframe
-          src={`https://www.youtube.com/embed/${videoId}?autoplay=0`}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
-          title="Livestream"
-          allow="autoplay; encrypted-media; fullscreen"
-          allowFullScreen
-          frameBorder="0"
-        />
-        {/* edit overlay — shown when pencil button is toggled */}
-        {editing && (
-          <form
-            className="stream-url-bar"
-            onSubmit={handleSubmit}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}
-          >
-            <input
-              className="rss-input"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              placeholder="YouTube URL or video ID…"
-              spellCheck={false}
-              autoFocus
-            />
-            <button className="rss-go-btn" type="submit">GO</button>
-          </form>
-        )}
-        {error && (
-          <div className="feed-error" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10, height: 'auto', padding: '6px 12px' }}>
-            {error}
-          </div>
-        )}
-      </div>
+      {editing && (
+        <form className="rss-url-bar" onSubmit={handleSubmit} style={{ flexShrink: 0 }}>
+          <input
+            className="rss-input"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="YouTube URL or video ID…"
+            spellCheck={false}
+            autoFocus
+          />
+          <button className="rss-go-btn" type="submit">GO</button>
+        </form>
+      )}
+      {error && <div className="feed-error" style={{ flexShrink: 0, height: 'auto', padding: '4px 12px' }}>{error}</div>}
+      <iframe
+        src={`https://www.youtube.com/embed/${videoId}?autoplay=0`}
+        style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
+        title="Livestream"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+      />
     </div>
   )
 }
