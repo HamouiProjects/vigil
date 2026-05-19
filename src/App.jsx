@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { ReactGridLayout as GridLayout, WidthProvider } from 'react-grid-layout/legacy'
-import 'leaflet/dist/leaflet.css'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
@@ -109,66 +108,77 @@ function WHeader({ title, badge, badgeActive, onRefresh }) {
   )
 }
 
-// ─── Map (plain Leaflet JS in useEffect) ─────────────────────────────────────
-const CONFLICT_PINS = [
-  { pos: [48.3, 31.2], label: 'Ukraine', desc: 'Russo-Ukrainian War · ongoing since Feb 2022' },
-  { pos: [31.5, 34.4], label: 'Gaza',    desc: 'Israel–Hamas conflict · ongoing since Oct 2023' },
-  { pos: [15.5, 32.5], label: 'Sudan',   desc: 'Sudanese civil war · ongoing since Apr 2023' },
-  { pos: [19.7, 96.1], label: 'Myanmar', desc: 'Myanmar civil war · ongoing since Feb 2021' },
-  { pos: [15.5, 48.5], label: 'Yemen',   desc: 'Yemeni civil war · ongoing since 2014' },
+// ─── World Map (iframe embed switcher) ───────────────────────────────────────
+const MAP_TABS = [
+  { id: 'conflict', label: 'Conflict', src: 'https://liveuamap.com/embed' },
+  { id: 'flights',  label: 'Flights',  src: 'https://globe.adsbexchange.com' },
+  {
+    id: 'weather', label: 'Weather',
+    src: 'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=wind&menu=&message=&marker=&calendar=&pressure=&type=map&location=coordinates&detail=&metricWind=kt&metricTemp=%C2%B0C&radarRange=-1',
+  },
+  { id: 'marine', label: 'Marine', src: null },
 ]
 
-function MapWidget() {
-  const mapRef = useRef(null)
+function MapWidget({ initialTab = 'conflict', onTabChange }) {
+  const [activeTab, setActiveTab] = useState(initialTab)
 
-  useEffect(() => {
-    let mounted = true
+  useEffect(() => { setActiveTab(initialTab) }, [initialTab])
 
-    async function init() {
-      const L = (await import('leaflet')).default
-      if (!mounted) return
+  function switchTab(id) {
+    setActiveTab(id)
+    onTabChange?.(id)
+  }
 
-      const map = L.map('map-container').setView([20, 15], 2)
-
-      L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenTopoMap contributors',
-        maxZoom: 17,
-      }).addTo(map)
-
-      CONFLICT_PINS.forEach(({ pos, label, desc }) => {
-        L.circleMarker(pos, {
-          radius: 8,
-          fillColor: '#ff4d4f',
-          color: '#fff',
-          weight: 1.5,
-          fillOpacity: 0.85,
-        }).bindPopup(`<strong>${label}</strong><br/><span style="font-size:10px;color:#8b949e">${desc}</span>`).addTo(map)
-      })
-
-      mapRef.current = map
-      map.invalidateSize()
-    }
-
-    init()
-
-    return () => {
-      mounted = false
-      if (mapRef.current) {
-        mapRef.current.remove()
-        mapRef.current = null
-      }
-    }
-  }, [])
+  const tab = MAP_TABS.find(t => t.id === activeTab) ?? MAP_TABS[0]
 
   return (
     <div className="widget">
       <div className="widget-header">
-        <span className="widget-title">Conflict Map</span>
+        <span className="widget-title">World Map</span>
+        <div className="map-tabs">
+          {MAP_TABS.map(t => (
+            <button
+              key={t.id}
+              className={`map-tab-btn${activeTab === t.id ? ' active' : ''}`}
+              onClick={() => switchTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="widget-body">
-        {/* absolute fill so Leaflet measures real pixel dimensions */}
-        <div id="map-container" style={{ position: 'absolute', inset: 0 }} />
-      </div>
+      {tab.src ? (
+        <iframe
+          key={tab.id}
+          src={tab.src}
+          style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
+          title={tab.label}
+          allowFullScreen
+        />
+      ) : (
+        <div style={{
+          flex: 1, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          background: '#080f18', gap: '10px',
+          filter: 'blur(0)', position: 'relative',
+        }}>
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'repeating-linear-gradient(45deg,#0d1825 0,#0d1825 10px,#080f18 10px,#080f18 20px)',
+            opacity: 0.6,
+          }} />
+          <div style={{ position: 'relative', textAlign: 'center', zIndex: 1 }}>
+            <div style={{ fontSize: '22px', marginBottom: '8px' }}>🔒</div>
+            <div style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '0.1em', color: '#00c6ff' }}>PRO</div>
+            <div style={{ fontSize: '11px', color: '#6e8098', marginTop: '6px', letterSpacing: '0.05em' }}>
+              MarineTraffic integration
+            </div>
+            <div style={{ fontSize: '10px', color: '#3a4a5c', marginTop: '3px' }}>
+              available on Pro plan
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -655,6 +665,7 @@ const DEFAULT_SETTINGS = {
   keywordFeedUrl: 'conflict',
   weatherCity:    'Berlin',
   livestreamUrl:  'https://www.youtube.com/embed/live_stream?channel=UCNye-wNBqNL5ZzHSJj3l8Bg&autoplay=0&mute=1',
+  mapTab:         'conflict',
 }
 const settingsKey = id => `vigil_ws${id.replace('ws-', '')}_settings`
 function readSettings(wsId) {
@@ -764,7 +775,7 @@ export default function App() {
           isResizable
           isDraggable
         >
-          <div key="map"     style={{ height: '100%', overflow: 'hidden' }}><MapWidget /></div>
+          <div key="map"     style={{ height: '100%', overflow: 'hidden' }}><MapWidget initialTab={settings.mapTab} onTabChange={tab => updateSetting('mapTab', tab)} /></div>
           <div key="feed"    style={{ height: '100%', overflow: 'hidden' }}><KeywordFeed initialUrl={settings.keywordFeedUrl} onUrlChange={url => updateSetting('keywordFeedUrl', url)} /></div>
           <div key="rss"     style={{ height: '100%', overflow: 'hidden' }}><RssFeed initialUrl={settings.rssFeedUrl} onUrlChange={url => updateSetting('rssFeedUrl', url)} /></div>
           <div key="prices"  style={{ height: '100%', overflow: 'hidden' }}><PriceTracker /></div>
