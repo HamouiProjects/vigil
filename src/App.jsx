@@ -173,7 +173,7 @@ function MapWidget() {
   )
 }
 
-// ─── Keyword Feed (GDELT RSS — no CORS issues) ───────────────────────────────
+// ─── News Search (Google News RSS via corsproxy.io) ───────────────────────────
 const DEFAULT_KEYWORDS = 'conflict'
 
 function dotColor(title = '') {
@@ -183,50 +183,51 @@ function dotColor(title = '') {
   return 'blue'
 }
 
-const GDELT_RSS = q =>
-  `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=artlist&maxrecords=25&format=rss`
+const GN_RSS = q =>
+  `https://corsproxy.io/?url=${encodeURIComponent(
+    `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`
+  )}`
 
-async function fetchGdeltRss(q) {
-  const res = await fetch(GDELT_RSS(q), { signal: AbortSignal.timeout(10000) })
+async function fetchNewsSearch(q) {
+  const res = await fetch(GN_RSS(q), { signal: AbortSignal.timeout(10000) })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const text = await res.text()
   const doc  = new DOMParser().parseFromString(text, 'text/xml')
+  if (doc.querySelector('parsererror')) throw new Error('Parse error')
   const items = Array.from(doc.querySelectorAll('item'))
   if (!items.length) throw new Error('No results')
   return items.map(el => {
     const link    = el.querySelector('link')?.textContent?.trim() ?? ''
-    const srcTag  = el.querySelector('source')?.textContent?.trim()
-    let domain = ''
-    try { domain = srcTag || new URL(link).hostname.replace(/^www\./, '') } catch {}
+    const srcName = el.querySelector('source')?.textContent?.trim() ?? ''
     return {
       title:   el.querySelector('title')?.textContent?.trim() ?? '(no title)',
       link,
       pubDate: el.querySelector('pubDate')?.textContent?.trim() ?? '',
-      domain,
+      source:  srcName,
     }
   })
 }
 
 function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
-  const [query,    setQuery]    = useState(initialUrl)
-  const [input,    setInput]    = useState(initialUrl)
-  const [articles, setArticles] = useState([])
+  const [query,     setQuery]     = useState(initialUrl)
+  const [input,     setInput]     = useState(initialUrl)
+  const [articles,  setArticles]  = useState([])
   const [fetchedAt, setFetchedAt] = useState(null)
-  const [loading,  setLoading]  = useState(true)
-  const [error,    setError]    = useState(null)
+  const [loading,   setLoading]   = useState(true)
+  const [error,     setError]     = useState(null)
 
   useEffect(() => { setQuery(initialUrl); setInput(initialUrl) }, [initialUrl])
 
   const load = useCallback(async (q) => {
     setLoading(true); setError(null)
     try {
-      const arts = await fetchGdeltRss(q)
+      const arts = await fetchNewsSearch(q)
       setArticles(arts)
       setFetchedAt(Date.now())
     } catch (e) {
       setError(e.message === 'No results'
         ? 'No results — try a different keyword'
-        : 'GDELT unavailable')
+        : 'News search unavailable')
     } finally {
       setLoading(false)
     }
@@ -238,13 +239,13 @@ function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
     return () => clearInterval(id)
   }, [query, load])
 
-  const isLive  = fetchedAt && (Date.now() - fetchedAt) < 5 * 60_000
-  const badge   = loading ? 'LOADING…' : error ? 'ERROR' : isLive ? 'LIVE' : 'CACHED'
+  const isLive = fetchedAt && (Date.now() - fetchedAt) < 5 * 60_000
+  const badge  = loading ? 'LOADING…' : error ? 'ERROR' : isLive ? 'LIVE' : 'CACHED'
 
   return (
     <div className="widget">
       <WHeader
-        title="Keyword Feed"
+        title="News Search"
         badge={badge}
         badgeActive={!error && !loading}
         onRefresh={() => load(query)}
@@ -269,7 +270,7 @@ function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
             <button className="rss-go-btn" type="submit">GO</button>
           </form>
           {error   ? <div className="feed-error">{error}</div>
-         : loading ? <div className="feed-loading">Searching GDELT…</div>
+         : loading ? <div className="feed-loading">Searching news…</div>
          : (
             <div className="feed-list">
               {articles.map((art, i) => (
@@ -282,7 +283,7 @@ function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
                 >
                   <div className={`feed-dot ${dotColor(art.title)}`} />
                   <span className="feed-text">
-                    <span className="feed-source">{art.domain || '—'}</span>
+                    <span className="feed-source">{art.source || '—'}</span>
                     {art.title}
                   </span>
                   <span className="feed-time">{rssRelTime(art.pubDate)}</span>
