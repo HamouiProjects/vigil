@@ -423,11 +423,13 @@ function RssFeed({ initialUrl = DEFAULT_RSS, onUrlChange }) {
   )
 }
 
-// ─── Price Tracker (CoinGecko BTC/ETH/XAU + static oil) ──────────────────────
+// ─── Price Tracker (CoinGecko BTC/ETH/XAU + WTI via Alpha Vantage) ───────────
 const CG_URL =
   'https://api.coingecko.com/api/v3/simple/price' +
-  '?ids=bitcoin,ethereum,pax-gold' +
+  '?ids=bitcoin,ethereum,pax-gold,silver' +
   '&vs_currencies=usd&include_24hr_change=true'
+
+const AV_WTI = 'https://www.alphavantage.co/query?function=WTI&interval=daily&apikey=demo'
 
 function fmtPrice(n, dec = 2) {
   return n == null ? '—' : n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })
@@ -438,6 +440,22 @@ function fmtChg(n) {
     : { text: `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`, dir: n >= 0 ? 'up' : 'down' }
 }
 
+async function fetchWti() {
+  try {
+    const res  = await fetch(AV_WTI, { signal: AbortSignal.timeout(6000) })
+    const json = await res.json()
+    const data = json?.data
+    if (!Array.isArray(data) || data.length < 2) return null
+    const cur  = parseFloat(data[0].value)
+    const prev = parseFloat(data[1].value)
+    if (!isFinite(cur)) return null
+    const chgPct = isFinite(prev) && prev !== 0 ? ((cur - prev) / prev) * 100 : null
+    return { ticker: 'WTI/USD', value: fmtPrice(cur, 2), ...fmtChg(chgPct) }
+  } catch {
+    return null
+  }
+}
+
 function PriceTracker() {
   const [prices,  setPrices]  = useState([])
   const [loading, setLoading] = useState(true)
@@ -445,13 +463,20 @@ function PriceTracker() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(CG_URL)
-      const cg  = await res.json()
+      const [cgRes, wti] = await Promise.all([fetch(CG_URL), fetchWti()])
+      const cg = await cgRes.json()
+
+      const fourth = wti ?? {
+        ticker: 'XAG/USD',
+        value:  fmtPrice(cg.silver?.usd, 2),
+        ...fmtChg(cg.silver?.usd_24h_change),
+      }
+
       setPrices([
         { ticker: 'BTC/USD', value: fmtPrice(cg.bitcoin?.usd, 0),     ...fmtChg(cg.bitcoin?.usd_24h_change) },
         { ticker: 'ETH/USD', value: fmtPrice(cg.ethereum?.usd, 2),    ...fmtChg(cg.ethereum?.usd_24h_change) },
         { ticker: 'XAU/USD', value: fmtPrice(cg['pax-gold']?.usd, 0), ...fmtChg(cg['pax-gold']?.usd_24h_change) },
-        { ticker: 'WTI/USD', value: '—', text: 'DELAYED', dir: '' },
+        fourth,
       ])
       setError(null)
     } catch {
@@ -463,7 +488,7 @@ function PriceTracker() {
 
   useEffect(() => {
     load()
-    const id = setInterval(load, 30_000)
+    const id = setInterval(load, 60_000)
     return () => clearInterval(id)
   }, [load])
 
