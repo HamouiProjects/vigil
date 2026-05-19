@@ -173,8 +173,8 @@ function MapWidget() {
   )
 }
 
-// ─── Keyword Feed (RSS via rss2json) ──────────────────────────────────────────
-const DEFAULT_FEED_URL = 'https://feeds.bbci.co.uk/news/world/rss.xml'
+// ─── Keyword Feed (GDELT DOC 2.0) ────────────────────────────────────────────
+const DEFAULT_KEYWORDS = 'conflict war'
 
 function dotColor(title = '') {
   if (/war|attack|kill|bomb|shoot|explo|missil|airst/i.test(title)) return 'red'
@@ -183,9 +183,11 @@ function dotColor(title = '') {
   return 'blue'
 }
 
-function feedRelTime(pubDate) {
+function gdeltRelTime(seendate) {
+  // seendate format: "20241218T150000Z"
   try {
-    const diff = Math.floor((Date.now() - new Date(pubDate).getTime()) / 60_000)
+    const s = seendate.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/, '$1-$2-$3T$4:$5:$6Z')
+    const diff = Math.floor((Date.now() - new Date(s).getTime()) / 60_000)
     if (diff < 1)    return 'now'
     if (diff < 60)   return `${diff}m`
     if (diff < 1440) return `${Math.floor(diff / 60)}h`
@@ -193,76 +195,87 @@ function feedRelTime(pubDate) {
   } catch { return '—' }
 }
 
-function KeywordFeed({ initialUrl = DEFAULT_FEED_URL, onUrlChange }) {
-  const [url,     setUrl]     = useState(initialUrl)
+const GDELT_URL = q =>
+  `https://corsproxy.io/?url=${encodeURIComponent(
+    `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=artlist&maxrecords=15&format=json&sourcelang=eng`
+  )}`
+
+function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
+  const [query,   setQuery]   = useState(initialUrl)
   const [input,   setInput]   = useState(initialUrl)
-  const [feed,    setFeed]    = useState(null)
-  const [items,   setItems]   = useState([])
+  const [articles, setArticles] = useState([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
-  useEffect(() => { setUrl(initialUrl); setInput(initialUrl) }, [initialUrl])
+  useEffect(() => { setQuery(initialUrl); setInput(initialUrl) }, [initialUrl])
 
-  const load = useCallback(async (targetUrl) => {
+  const load = useCallback(async (q) => {
     setLoading(true); setError(null)
     try {
-      const res  = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(targetUrl)}`)
+      const res = await fetch(GDELT_URL(q))
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
-      if (json.status !== 'ok') throw new Error(json.message || 'Feed error')
-      setFeed(json.feed)
-      setItems(json.items ?? [])
+      const arts = json.articles ?? []
+      if (!arts.length) throw new Error('No results')
+      setArticles(arts)
     } catch (e) {
-      setError(e.message || 'Feed unreachable')
+      setError(e.message || 'GDELT unreachable')
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    load(url)
-    const id = setInterval(() => load(url), 120_000)
+    load(query)
+    const id = setInterval(() => load(query), 120_000)
     return () => clearInterval(id)
-  }, [url, load])
-
-  const badge = loading ? 'LOADING…' : error ? 'ERROR' : feed ? feed.title?.slice(0, 14) : 'RSS'
+  }, [query, load])
 
   return (
     <div className="widget">
-      <WHeader title="Keyword Feed" badge={badge} badgeActive={!error && !loading} onRefresh={() => load(url)} />
+      <WHeader
+        title="Keyword Feed"
+        badge={loading ? 'LOADING…' : error ? 'ERROR' : 'GDELT'}
+        badgeActive={!error && !loading}
+        onRefresh={() => load(query)}
+      />
       <div className="widget-body">
         <div className="rss-container">
           <form
             className="rss-url-bar"
-            onSubmit={e => { e.preventDefault(); const t = input.trim(); if (t) { setUrl(t); onUrlChange?.(t) } }}
+            onSubmit={e => {
+              e.preventDefault()
+              const q = input.trim()
+              if (q) { setQuery(q); onUrlChange?.(q) }
+            }}
           >
             <input
               className="rss-input"
               value={input}
               onChange={e => setInput(e.target.value)}
-              placeholder="RSS URL…"
+              placeholder="Keywords… (e.g. ukraine war)"
               spellCheck={false}
             />
             <button className="rss-go-btn" type="submit">GO</button>
           </form>
           {error   ? <div className="feed-error">{error}</div>
-         : loading ? <div className="feed-loading">Fetching feed…</div>
+         : loading ? <div className="feed-loading">Searching GDELT…</div>
          : (
             <div className="feed-list">
-              {items.map((item, i) => (
+              {articles.map((art, i) => (
                 <a
                   key={i}
                   className="feed-item feed-item-link"
-                  href={item.link}
+                  href={art.url}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  <div className={`feed-dot ${dotColor(item.title)}`} />
+                  <div className={`feed-dot ${dotColor(art.title)}`} />
                   <span className="feed-text">
-                    <span className="feed-source">{feed?.title || 'Reuters'}</span>
-                    {item.title}
+                    <span className="feed-source">{art.domain || '—'}</span>
+                    {art.title}
                   </span>
-                  <span className="feed-time">{feedRelTime(item.pubDate)}</span>
+                  <span className="feed-time">{gdeltRelTime(art.seendate)}</span>
                 </a>
               ))}
             </div>
@@ -621,7 +634,7 @@ function Weather({ initialCity = 'Berlin', onCityChange }) {
 // ─── Settings persistence ─────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
   rssFeedUrl:     'https://feeds.bbci.co.uk/news/world/rss.xml',
-  keywordFeedUrl: 'https://feeds.bbci.co.uk/news/world/rss.xml',
+  keywordFeedUrl: 'conflict war',
   weatherCity:    'Berlin',
   livestreamId:   'nGTNbhHjmUk',
 }
