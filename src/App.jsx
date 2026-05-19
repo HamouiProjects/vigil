@@ -173,8 +173,8 @@ function MapWidget() {
   )
 }
 
-// ─── Keyword Feed (GDELT DOC 2.0) ────────────────────────────────────────────
-const DEFAULT_KEYWORDS = 'conflict war'
+// ─── Keyword Feed (GDELT DOC 2.0 with CORS fallback chain) ───────────────────
+const DEFAULT_KEYWORDS = 'conflict'
 
 function dotColor(title = '') {
   if (/war|attack|kill|bomb|shoot|explo|missil|airst/i.test(title)) return 'red'
@@ -184,9 +184,11 @@ function dotColor(title = '') {
 }
 
 function gdeltRelTime(seendate) {
-  // seendate format: "20241218T150000Z"
   try {
-    const s = seendate.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/, '$1-$2-$3T$4:$5:$6Z')
+    const s = String(seendate).replace(
+      /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/,
+      '$1-$2-$3T$4:$5:$6Z'
+    )
     const diff = Math.floor((Date.now() - new Date(s).getTime()) / 60_000)
     if (diff < 1)    return 'now'
     if (diff < 60)   return `${diff}m`
@@ -195,31 +197,70 @@ function gdeltRelTime(seendate) {
   } catch { return '—' }
 }
 
-const GDELT_URL = q =>
-  `https://corsproxy.io/?url=${encodeURIComponent(
-    `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=artlist&maxrecords=15&format=json&sourcelang=eng`
-  )}`
+function gdeltAgeMin(seendate) {
+  try {
+    const s = String(seendate).replace(
+      /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/,
+      '$1-$2-$3T$4:$5:$6Z'
+    )
+    return Math.floor((Date.now() - new Date(s).getTime()) / 60_000)
+  } catch { return Infinity }
+}
+
+const GDELT_BASE = q =>
+  `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(q)}&mode=artlist&maxrecords=25&format=json`
+
+async function fetchGdelt(q) {
+  const base = GDELT_BASE(q)
+
+  async function tryUrl(url, unwrap) {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const text = await res.text()
+    if (text.trimStart().startsWith('<')) throw new Error('html')
+    const json = JSON.parse(text)
+    return unwrap ? unwrap(json) : json
+  }
+
+  // 1) direct
+  try { return await tryUrl(base) } catch {}
+  // 2) corsproxy.io
+  try {
+    return await tryUrl(`https://corsproxy.io/?url=${encodeURIComponent(base)}`)
+  } catch {}
+  // 3) allorigins
+  const ao = await tryUrl(
+    `https://api.allorigins.win/get?url=${encodeURIComponent(base)}`,
+    j => JSON.parse(j.contents)
+  )
+  return ao
+}
 
 function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
-  const [query,   setQuery]   = useState(initialUrl)
-  const [input,   setInput]   = useState(initialUrl)
+  const [query,    setQuery]    = useState(initialUrl)
+  const [input,    setInput]    = useState(initialUrl)
   const [articles, setArticles] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState(null)
+  const [fetchedAt, setFetchedAt] = useState(null)
+  const [loading,  setLoading]  = useState(true)
+  const [error,    setError]    = useState(null)
 
   useEffect(() => { setQuery(initialUrl); setInput(initialUrl) }, [initialUrl])
 
   const load = useCallback(async (q) => {
     setLoading(true); setError(null)
     try {
-      const res = await fetch(GDELT_URL(q))
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
+      const json = await fetchGdelt(q)
       const arts = json.articles ?? []
-      if (!arts.length) throw new Error('No results')
+      if (!arts.length) throw new Error('No results — try a different keyword')
       setArticles(arts)
+      setFetchedAt(Date.now())
     } catch (e) {
-      setError(e.message || 'GDELT unreachable')
+      const msg = e.message || ''
+      setError(
+        msg === 'html' || msg.includes('JSON')
+          ? 'Feed unavailable – try a different keyword'
+          : (msg || 'GDELT unreachable')
+      )
     } finally {
       setLoading(false)
     }
@@ -231,11 +272,18 @@ function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange }) {
     return () => clearInterval(id)
   }, [query, load])
 
+  const isLive = fetchedAt && (Date.now() - fetchedAt) < 5 * 60_000
+  const freshest = articles[0]?.seendate
+  const badge = loading ? 'LOADING…'
+    : error   ? 'ERROR'
+    : isLive  ? 'LIVE'
+    : 'CACHED'
+
   return (
     <div className="widget">
       <WHeader
         title="Keyword Feed"
-        badge={loading ? 'LOADING…' : error ? 'ERROR' : 'GDELT'}
+        badge={badge}
         badgeActive={!error && !loading}
         onRefresh={() => load(query)}
       />
@@ -634,7 +682,7 @@ function Weather({ initialCity = 'Berlin', onCityChange }) {
 // ─── Settings persistence ─────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
   rssFeedUrl:     'https://feeds.bbci.co.uk/news/world/rss.xml',
-  keywordFeedUrl: 'conflict war',
+  keywordFeedUrl: 'conflict',
   weatherCity:    'Berlin',
   livestreamId:   'nGTNbhHjmUk',
 }
