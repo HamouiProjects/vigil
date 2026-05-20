@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle, memo } from 'react'
 import { createPortal } from 'react-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ReactGridLayout as GridLayout, WidthProvider } from 'react-grid-layout/legacy'
-import { AdvancedRealTimeChart } from 'react-ts-tradingview-widgets'
+import { AdvancedRealTimeChart, TickerTape } from 'react-ts-tradingview-widgets'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
@@ -195,12 +195,46 @@ function WHeader({ title, badge, badgeActive, onRefresh, onCollapse, collapsed, 
         <span className="widget-title">{title}</span>
       </div>
       <div className="widget-actions">
-        {badge && <span className={`widget-badge${badgeActive ? '' : ' inactive'}`}>{badge}</span>}
+        {badge && (
+          <span className={`widget-badge${badgeActive ? '' : ' inactive'}`}>
+            {badgeActive && <span className="badge-dot" />}
+            {badge}
+          </span>
+        )}
         {onRefresh    && <button className="widget-btn" onClick={onRefresh} title="Refresh">↻</button>}
         {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
         {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
         {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
       </div>
+    </div>
+  )
+}
+
+// ─── Skeleton loader ──────────────────────────────────────────────────────────
+const SkeletonLine = memo(function SkeletonLine({ w = '100%', h = 11 }) {
+  return <div className="skel-line" style={{ width: w, height: h }} />
+})
+
+// ─── Page visibility hook ─────────────────────────────────────────────────────
+function usePageVisibility() {
+  const [visible, setVisible] = useState(!document.hidden)
+  useEffect(() => {
+    const handler = () => setVisible(!document.hidden)
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [])
+  return visible
+}
+
+function SkeletonFeedItems({ count = 6 }) {
+  return (
+    <div style={{ width: '100%' }}>
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="skel-item">
+          <SkeletonLine w={`${58 + (i % 3) * 12}%`} h={10} />
+          <SkeletonLine w="28%" h={8} />
+        </div>
+      ))}
     </div>
   )
 }
@@ -350,7 +384,7 @@ async function fetchUSGS() {
   return quakes
 }
 
-const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, showPiracy }, ref) {
+const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, showPiracy, onLoadingChange }, ref) {
   const containerRef  = useRef(null)
   const mapRef        = useRef(null)
   const layerConflict = useRef(null)
@@ -376,7 +410,7 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
 
   const refresh = useCallback(async () => {
     if (!mapRef.current) return
-    setLoading(true)
+    setLoading(true); onLoadingChange?.(true)
 
     // Earthquakes (USGS)
     try {
@@ -408,8 +442,8 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
       })
     } catch { /* no active storms or CORS */ }
 
-    setLoading(false)
-  }, [])
+    setLoading(false); onLoadingChange?.(false)
+  }, [onLoadingChange])
 
   useImperativeHandle(ref, () => ({
     refresh,
@@ -497,8 +531,9 @@ function AtlasWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapse
   const [showConflicts, setShowConflicts] = useState(true)
   const [showNatural,   setShowNatural]   = useState(true)
   const [showPiracy,    setShowPiracy]    = useState(true)
-  const [mapMode,   setMapMode]   = useState('leaflet')  // 'leaflet' | 'iframe'
-  const [iframeSrc, setIframeSrc] = useState('')
+  const [mapMode,     setMapMode]     = useState('leaflet')
+  const [iframeSrc,   setIframeSrc]   = useState('')
+  const [dataLoading, setDataLoading] = useState(false)
   const atlasRef = useRef(null)
 
   // Invalidate Leaflet tiles on fullscreen toggle
@@ -526,6 +561,10 @@ function AtlasWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapse
       <div className="widget-header">
         <span className="widget-title">ATLAS</span>
         <div className="widget-actions">
+          <span className={`widget-badge${dataLoading ? ' inactive' : ''}`}>
+            {!dataLoading && <span className="badge-dot" />}
+            LIVE
+          </span>
           {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
           {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
           {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
@@ -572,13 +611,20 @@ function AtlasWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapse
           <button className="cmap-update-btn" onClick={() => atlasRef.current?.refresh()} title="Re-fetch live data">⟳ Update</button>
         )}
       </div>
-      <div style={{ height: 'calc(100% - 36px - 32px)', width: '100%', position: 'relative', overflow: 'hidden' }}>
+      {dataLoading && (
+        <div className="atlas-loading-bar">
+          <span style={{ fontSize: '8px', color: '#2a3a4a', letterSpacing: '0.1em', whiteSpace: 'nowrap' }}>LOADING DATA LAYERS</span>
+          <div className="skel-line" />
+        </div>
+      )}
+      <div style={{ height: `calc(100% - 36px - 32px${dataLoading ? ' - 20px' : ''})`, width: '100%', position: 'relative', overflow: 'hidden' }}>
         {isLeaflet ? (
           <AtlasMap
             ref={atlasRef}
             showConflicts={showConflicts}
             showNatural={showNatural}
             showPiracy={showPiracy}
+            onLoadingChange={setDataLoading}
           />
         ) : (
           <iframe
@@ -695,17 +741,17 @@ function ConflictFeed({ onClose, onFullscreen, isFullscreen, onCollapse, collaps
 }
 
 
-// ─── News Search (Google News RSS via rss2json) ───────────────────────────────
-const DEFAULT_KEYWORDS = 'conflict'
-const LUA_RSS_URL = 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fliveuamap.com%2Fen%2Frss'
-
-function dotColor(title = '') {
-  if (/war|attack|kill|bomb|shoot|explo|missil|airst/i.test(title)) return 'red'
-  if (/crisis|sanction|tension|protest|riot|unrest/i.test(title))   return 'yellow'
-  if (/deal|agree|peace|ceasefire|accord/i.test(title))             return 'green'
-  return 'blue'
+// ─── Shared tooltip ───────────────────────────────────────────────────────────
+function InfoTooltip({ text }) {
+  return (
+    <span className="info-tip-wrap">
+      <span className="info-tip-btn">?</span>
+      <span className="info-tip-box">{text}</span>
+    </span>
+  )
 }
 
+// ─── News Search (Google News RSS via rss2json) ───────────────────────────────
 const GN_RSS2JSON = q =>
   `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(
     `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`
@@ -726,104 +772,190 @@ async function fetchNewsSearch(q) {
   }))
 }
 
-function KeywordFeed({ initialUrl = DEFAULT_KEYWORDS, onUrlChange, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
-  const [query,     setQuery]     = useState(initialUrl)
-  const [input,     setInput]     = useState(initialUrl)
-  const [articles,  setArticles]  = useState([])
-  const [fetchedAt, setFetchedAt] = useState(null)
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState(null)
+const KF_DEFAULT_TABS = [
+  { id: 'world',     keyword: 'World'     },
+  { id: 'conflicts', keyword: 'Conflicts' },
+  { id: 'economy',   keyword: 'Economy'   },
+]
+const KF_TABS_KEY = 'vigil_newssearch_tabs'
 
-  useEffect(() => { setQuery(initialUrl); setInput(initialUrl) }, [initialUrl])
+function KeywordFeed({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+  const [tabs, setTabs] = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(KF_TABS_KEY) || 'null')
+      return Array.isArray(s) && s.length ? s : KF_DEFAULT_TABS
+    } catch { return KF_DEFAULT_TABS }
+  })
+  const [activeId, setActiveId] = useState(() => tabs[0]?.id ?? 'world')
+  const [cache,    setCache]    = useState({}) // { tabId: { items, fetchedAt } }
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState(null)
+  const [adding,   setAdding]   = useState(false)
+  const [newKw,    setNewKw]    = useState('')
 
-  useEffect(() => {
-    function onSearch(e) {
-      const kw = e.detail?.keyword?.trim()
-      if (!kw) return
-      setInput(kw); setQuery(kw); onUrlChange?.(kw)
-    }
-    window.addEventListener('vigil:search', onSearch)
-    return () => window.removeEventListener('vigil:search', onSearch)
-  }, [onUrlChange])
+  const tabsRef  = useRef(tabs);  tabsRef.current  = tabs
+  const cacheRef = useRef(cache); cacheRef.current = cache
 
-  const load = useCallback(async (q) => {
+  function saveTabs(next) {
+    setTabs(next)
+    try { localStorage.setItem(KF_TABS_KEY, JSON.stringify(next)) } catch {}
+  }
+
+  const load = useCallback(async (tabId, keyword) => {
     setLoading(true); setError(null)
     try {
-      const [gnResult, luaResult] = await Promise.allSettled([
-        fetchNewsSearch(q),
-        fetch(LUA_RSS_URL, { signal: AbortSignal.timeout(10000) })
-          .then(r => r.json())
-          .then(json => {
-            if (json.status !== 'ok' || !json.items?.length) return []
-            return json.items.map(item => ({
-              title:   item.title   ?? '(no title)',
-              link:    item.link    ?? '',
-              pubDate: item.pubDate ?? '',
-              source:  'LiveUAMap',
-              isLua:   true,
-            }))
-          }),
-      ])
-      const gnArts  = gnResult.status  === 'fulfilled' ? gnResult.value  : []
-      const luaArts = luaResult.status === 'fulfilled' ? luaResult.value : []
-      const gnTitles = new Set(gnArts.map(a => a.title))
-      const merged = [...gnArts, ...luaArts.filter(a => !gnTitles.has(a.title))]
-      if (!merged.length) throw new Error('No results')
-      setArticles(merged)
-      setFetchedAt(Date.now())
+      const items = await fetchNewsSearch(keyword)
+      setCache(prev => ({ ...prev, [tabId]: { items: items.slice(0, 50), fetchedAt: Date.now() } }))
     } catch (e) {
-      setError(e.message === 'No results' ? 'No results — try a different keyword' : 'News search unavailable')
+      setError(e.message === 'No results' ? 'No results' : 'Search unavailable')
     } finally {
       setLoading(false)
     }
   }, [])
 
+  // Load on tab switch if stale (>5min) or uncached
   useEffect(() => {
-    load(query)
-    const id = setInterval(() => load(query), 120_000)
-    return () => clearInterval(id)
-  }, [query, load])
+    const tab = tabsRef.current.find(t => t.id === activeId)
+    if (!tab) return
+    const entry = cacheRef.current[activeId]
+    if (entry && Date.now() - entry.fetchedAt < 5 * 60_000) return
+    load(activeId, tab.keyword)
+  }, [activeId, load])
 
-  const isLive = fetchedAt && (Date.now() - fetchedAt) < 5 * 60_000
-  const badge  = loading ? 'LOADING…' : error ? 'ERROR' : isLive ? 'LIVE' : 'CACHED'
+  // Auto-refresh active tab every 2min (skip when tab hidden)
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.hidden) return
+      const tab = tabsRef.current.find(t => t.id === activeId)
+      if (tab) load(activeId, tab.keyword)
+    }, 120_000)
+    return () => clearInterval(id)
+  }, [activeId, load])
+
+  // Re-fetch on tab regain visibility
+  const isVisible = usePageVisibility()
+  useEffect(() => {
+    if (!isVisible) return
+    const tab = tabsRef.current.find(t => t.id === activeId)
+    const entry = cacheRef.current[activeId]
+    if (tab && (!entry || Date.now() - entry.fetchedAt > 5 * 60_000)) load(activeId, tab.keyword)
+  }, [isVisible, activeId, load])
+
+  // vigil:search cross-widget event
+  useEffect(() => {
+    function onSearch(e) {
+      const kw = e.detail?.keyword?.trim()
+      if (!kw) return
+      const existing = tabsRef.current.find(t => t.keyword.toLowerCase() === kw.toLowerCase())
+      if (existing) { setActiveId(existing.id); return }
+      const id = `tab-${Date.now()}`
+      const next = [...tabsRef.current, { id, keyword: kw }]
+      saveTabs(next)
+      setActiveId(id)
+    }
+    window.addEventListener('vigil:search', onSearch)
+    return () => window.removeEventListener('vigil:search', onSearch)
+  }, [])
+
+  function addTab() {
+    const kw = newKw.trim()
+    if (!kw) { setAdding(false); return }
+    const id = `tab-${Date.now()}`
+    saveTabs([...tabs, { id, keyword: kw }])
+    setActiveId(id)
+    setNewKw(''); setAdding(false)
+  }
+
+  function removeTab(id) {
+    if (tabs.length <= 1) return
+    const next = tabs.filter(t => t.id !== id)
+    saveTabs(next)
+    if (activeId === id) setActiveId(next[0].id)
+  }
+
+  const articles = cache[activeId]?.items ?? []
+  const badge    = loading ? 'LOADING' : error ? 'ERROR' : 'LIVE'
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <WHeader title="News Search" badge={badge} badgeActive={!error && !loading} onRefresh={() => load(query)} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
-      <div className="widget-body">
-        <div className="rss-container">
-          <form className="rss-url-bar" onSubmit={e => { e.preventDefault(); const q = input.trim(); if (q) { setQuery(q); onUrlChange?.(q) } }}>
-            <input className="rss-input" value={input} onChange={e => setInput(e.target.value)} placeholder="Keywords… (e.g. ukraine war)" spellCheck={false} />
-            <button className="rss-go-btn" type="submit">GO</button>
-          </form>
-          {error   ? <div className="feed-error">{error}</div>
-         : loading ? <div className="feed-loading">Searching news…</div>
-         : (
-            <div className="feed-list">
-              {articles.map((art, i) => (
-                <a key={i} className="feed-item feed-item-link" href={art.link} target="_blank" rel="noopener noreferrer">
-                  <div className={`feed-dot ${dotColor(art.title)}`} />
-                  <span className="feed-text">
-                    <span className="feed-source">
-                      {art.isLua && <span style={{ color: '#ff8c00', fontSize: '9px', fontWeight: 700, marginRight: '3px' }}>LUA</span>}
-                      {art.source || '—'}
-                    </span>
-                    {art.title}
-                  </span>
-                  <span className="feed-time">{rssRelTime(art.pubDate)}</span>
-                </a>
-              ))}
-            </div>
-          )}
+      <div className="widget-header">
+        <span className="widget-title">NEWS SEARCH</span>
+        <InfoTooltip text="Searches Google News worldwide. Save keyword watches as tabs to monitor multiple topics simultaneously." />
+        <div className="widget-actions">
+          <span className={`widget-badge${loading || error ? ' inactive' : ''}`}>{badge}</span>
+          <button className="widget-btn" onClick={() => { const t = tabs.find(t => t.id === activeId); if (t) load(activeId, t.keyword) }} title="Refresh">↻</button>
+          {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
+          {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
+          {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
         </div>
+      </div>
+
+      <div className="rss-tabs" onPointerDownCapture={e => e.stopPropagation()}>
+        {tabs.map(t => (
+          <button key={t.id}
+            className={`rss-tab kf-tab${activeId === t.id ? ' active' : ''}`}
+            onClick={() => setActiveId(t.id)}>
+            {t.keyword}
+            {tabs.length > 1 && (
+              <span className="kf-tab-close" onClick={ev => { ev.stopPropagation(); removeTab(t.id) }}>×</span>
+            )}
+          </button>
+        ))}
+        {adding ? (
+          <form className="kf-add-form" onSubmit={e => { e.preventDefault(); addTab() }}>
+            <input autoFocus className="kf-add-input" value={newKw}
+              onChange={e => setNewKw(e.target.value)}
+              placeholder="Keyword…"
+              onBlur={() => { if (!newKw.trim()) setAdding(false) }}
+            />
+          </form>
+        ) : (
+          <button className="rss-tab kf-tab-add" onClick={() => setAdding(true)} title="Add keyword">+</button>
+        )}
+      </div>
+
+      <div className="widget-body">
+        {loading && articles.length === 0 ? (
+          <SkeletonFeedItems count={8} />
+        ) : error && articles.length === 0 ? (
+          <div className="widget-error">
+            <span className="widget-error-icon">⚠</span>
+            {error}
+            <button className="widget-error-retry" onClick={() => { const t = tabs.find(t => t.id === activeId); if (t) { setError(null); load(activeId, t.keyword) } }}>Retry</button>
+          </div>
+        ) : articles.length === 0 ? (
+          <div className="empty-state">
+            <span className="empty-state-icon">📡</span>
+            No results for "{tabs.find(t => t.id === activeId)?.keyword}"
+          </div>
+        ) : (
+          <div className="feed-list">
+            {articles.map((art, i) => (
+              <a key={i} className="feed-item feed-item-link" href={art.link} target="_blank" rel="noopener noreferrer">
+                <div className="feed-dot blue" style={{ flexShrink: 0 }} />
+                <span className="feed-text">
+                  <span className="feed-source">{art.source || '—'}</span>
+                  {art.title}
+                </span>
+                <span className="feed-time">{rssRelTime(art.pubDate)}</span>
+              </a>
+            ))}
+            <div className="attr-line">via Google News · rss2json</div>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-// ─── RSS Feed (BBC via rss2json) ──────────────────────────────────────────────
-const DEFAULT_RSS = 'https://feeds.bbci.co.uk/news/world/rss.xml'
-const rss2json    = url => `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`
+// ─── RSS Feed (multi-feed with keyword filter) ────────────────────────────────
+const RSS_DEFAULT_FEEDS = [
+  { id: 'bbc',       name: 'BBC News',   url: 'https://feeds.bbci.co.uk/news/rss.xml',        enabled: true },
+  { id: 'reuters',   name: 'Reuters',    url: 'https://feeds.reuters.com/reuters/topNews',      enabled: true },
+  { id: 'aljazeera', name: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml',     enabled: true },
+  { id: 'france24',  name: 'France 24',  url: 'https://www.france24.com/en/rss',               enabled: true },
+]
+const RSS_COLORS = ['#00c6ff', '#23d160', '#f5c518', '#ff7f50', '#c678dd', '#e06c75']
 
 function rssRelTime(pubDate) {
   try {
@@ -835,118 +967,648 @@ function rssRelTime(pubDate) {
   } catch { return '—' }
 }
 
-function RssFeed({ initialUrl = DEFAULT_RSS, onUrlChange, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
-  const [url,     setUrl]     = useState(initialUrl)
-  const [input,   setInput]   = useState(initialUrl)
-  const [feed,    setFeed]    = useState(null)
-  const [items,   setItems]   = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState(null)
+function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+  const storageKey = `vigil_rss_feeds_${widgetId}`
 
-  useEffect(() => { setUrl(initialUrl); setInput(initialUrl) }, [initialUrl])
-
-  const load = useCallback(async (targetUrl) => {
-    setLoading(true); setError(null)
+  const [feeds, setFeeds] = useState(() => {
     try {
-      const res  = await fetch(rss2json(targetUrl))
-      const json = await res.json()
-      if (json.status !== 'ok') throw new Error(json.message || 'Bad response')
-      setFeed(json.feed)
-      setItems(json.items ?? [])
-    } catch (e) {
-      setError(e.message || 'Failed to fetch feed')
-    } finally {
-      setLoading(false)
-    }
+      const oldUrl = localStorage.getItem(`vigil_rss_url_${widgetId}`)
+      if (oldUrl) {
+        localStorage.removeItem(`vigil_rss_url_${widgetId}`)
+        const migrated = [...RSS_DEFAULT_FEEDS, { id: 'my-feed', name: 'My Feed', url: oldUrl, enabled: true }]
+        localStorage.setItem(storageKey, JSON.stringify(migrated))
+        return migrated
+      }
+      const saved = JSON.parse(localStorage.getItem(storageKey) || 'null')
+      return Array.isArray(saved) && saved.length ? saved : RSS_DEFAULT_FEEDS
+    } catch { return RSS_DEFAULT_FEEDS }
+  })
+
+  const [editMode,     setEditMode]     = useState(false)
+  const [itemsByFeed,  setItemsByFeed]  = useState({})
+  const [loading,      setLoading]      = useState(true)
+  const [error,        setError]        = useState(null)
+  const [lastRefresh,  setLastRefresh]  = useState(null)
+  const [timeAgo,      setTimeAgo]      = useState('')
+  const [filterInput,  setFilterInput]  = useState('')
+  const [filter,       setFilter]       = useState('')
+  const [newName,      setNewName]      = useState('')
+  const [newUrl,       setNewUrl]       = useState('')
+  const [addError,     setAddError]     = useState('')
+  const filterTimerRef = useRef(null)
+  const isVisibleRss   = usePageVisibility()
+
+  const feedsRef = useRef(feeds)
+  feedsRef.current = feeds
+
+  function saveFeeds(next) {
+    setFeeds(next)
+    try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch {}
+  }
+
+  const fetchAll = useCallback(async () => {
+    const enabled = feedsRef.current.filter(f => f.enabled)
+    if (!enabled.length) { setLoading(false); return }
+    setLoading(true)
+    const results = await Promise.allSettled(
+      enabled.map(f =>
+        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(f.url)}`,
+          { signal: AbortSignal.timeout(15000) }).then(r => r.json())
+      )
+    )
+    const anyOk = results.some(r => r.status === 'fulfilled' && r.value?.status === 'ok')
+    if (!anyOk) setError('Feed unavailable')
+    else setError(null)
+    setItemsByFeed(prev => {
+      const next = { ...prev }
+      enabled.forEach((f, i) => {
+        const r = results[i]
+        if (r.status === 'fulfilled' && r.value.status === 'ok') {
+          next[f.id] = (r.value.items ?? []).map(item => ({ ...item, _feedId: f.id, _feedName: f.name }))
+        }
+      })
+      return next
+    })
+    setLastRefresh(Date.now())
+    setLoading(false)
   }, [])
 
-  useEffect(() => { load(url) }, [url, load])
+  useEffect(() => {
+    fetchAll()
+    const id = setInterval(() => { if (!document.hidden) fetchAll() }, 5 * 60_000)
+    return () => clearInterval(id)
+  }, [fetchAll, feeds])
 
-  const badge = loading ? 'LOADING…' : error ? 'ERROR' : feed ? feed.title?.slice(0, 18) : 'RSS'
+  // Re-fetch when tab becomes visible again
+  useEffect(() => {
+    if (isVisibleRss) fetchAll()
+  }, [isVisibleRss]) // fetchAll is stable
+
+  // "Updated X ago" counter
+  useEffect(() => {
+    const tick = () => {
+      if (!lastRefresh) return
+      const s = Math.floor((Date.now() - lastRefresh) / 1000)
+      setTimeAgo(s < 10 ? 'just now' : s < 60 ? `${s}s ago` : `${Math.floor(s / 60)}m ago`)
+    }
+    tick()
+    const id = setInterval(tick, 10_000)
+    return () => clearInterval(id)
+  }, [lastRefresh])
+
+  function feedColor(feedId) {
+    const idx = feeds.findIndex(f => f.id === feedId)
+    return RSS_COLORS[Math.max(0, idx) % RSS_COLORS.length]
+  }
+
+  // Merge, dedup by title, sort by date
+  const allItems = (() => {
+    const seen = new Set()
+    return Object.values(itemsByFeed)
+      .flat()
+      .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate))
+      .filter(item => {
+        if (seen.has(item.title)) return false
+        seen.add(item.title); return true
+      })
+  })()
+
+  // Client-side keyword filter
+  const displayItems = filter.trim()
+    ? allItems.filter(item => {
+        const q    = filter.toLowerCase()
+        const text = (item.title ?? '') + ' ' + (item.description ?? '').replace(/<[^>]+>/g, '')
+        return text.toLowerCase().includes(q)
+      })
+    : allItems
+
+  const isFirstLoad = loading && Object.keys(itemsByFeed).length === 0
+
+  function addFeed() {
+    const name = newName.trim(), url = newUrl.trim()
+    if (!name || !url) { setAddError('Name and URL required'); return }
+    saveFeeds([...feeds, { id: `feed-${Date.now()}`, name, url, enabled: true }])
+    setNewName(''); setNewUrl(''); setAddError('')
+  }
+
+  function removeFeed(id) { saveFeeds(feeds.filter(f => f.id !== id)) }
+
+  function toggleFeed(id) {
+    saveFeeds(feeds.map(f => f.id === id ? { ...f, enabled: !f.enabled } : f))
+  }
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <WHeader title="RSS Feed" badge={badge} badgeActive={!error && !loading} onRefresh={() => load(url)} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
+      <div className="widget-header">
+        <span className="widget-title">RSS FEED</span>
+        <InfoTooltip text="Monitor your chosen news outlets. Add any RSS feed URL, then filter by keyword to track specific topics across all your sources." />
+        <div className="widget-actions">
+          <span className={`widget-badge${loading ? ' inactive' : ''}`}>LIVE</span>
+          <button className="widget-btn" onClick={fetchAll} title="Refresh">↻</button>
+          <button className={`widget-btn${editMode ? ' pt-mode-active' : ''}`} onClick={() => setEditMode(v => !v)} title="Manage feeds">✎</button>
+          {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
+          {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
+          {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
+        </div>
+      </div>
+
+      {/* Keyword filter bar — always visible */}
+      <div className="rss-filter-bar" onPointerDownCapture={e => e.stopPropagation()}>
+        <input className="rss-input rss-filter-input" value={filterInput}
+          onChange={e => {
+            const v = e.target.value
+            setFilterInput(v)
+            clearTimeout(filterTimerRef.current)
+            filterTimerRef.current = setTimeout(() => setFilter(v), 150)
+          }}
+          placeholder="Filter by keyword… (e.g. Iran, Federal Reserve)"
+        />
+        {filterInput && (
+          <button className="rss-filter-clear" onClick={() => { setFilterInput(''); setFilter('') }} title="Clear filter">×</button>
+        )}
+      </div>
+
+      {editMode && (
+        <div className="rss-edit-panel" onPointerDownCapture={e => e.stopPropagation()}>
+          {feeds.map((f, i) => (
+            <div key={f.id} className="rss-feed-row">
+              <span className="rss-feed-dot" style={{ background: RSS_COLORS[i % RSS_COLORS.length] }} />
+              <span className="rss-feed-name">{f.name}</span>
+              <span className="rss-feed-url" title={f.url}>{f.url}</span>
+              <button className={`rss-toggle${f.enabled ? ' on' : ''}`} onClick={() => toggleFeed(f.id)}>
+                {f.enabled ? 'ON' : 'OFF'}
+              </button>
+              <button className="rss-remove-btn" onClick={() => removeFeed(f.id)}>×</button>
+            </div>
+          ))}
+          <div className="rss-add-row">
+            <input className="rss-input" value={newName}
+              onChange={e => { setNewName(e.target.value); setAddError('') }}
+              placeholder="Feed name…" />
+            <input className="rss-input" value={newUrl}
+              onChange={e => { setNewUrl(e.target.value); setAddError('') }}
+              placeholder="RSS URL…" spellCheck={false} />
+            <button className="rss-go-btn" onClick={addFeed}>ADD</button>
+          </div>
+          {addError && <div className="pt-search-error" style={{ padding: '2px 6px 4px' }}>{addError}</div>}
+        </div>
+      )}
+
       <div className="widget-body">
-        <div className="rss-container">
-          <form className="rss-url-bar" onSubmit={e => { e.preventDefault(); const t = input.trim(); if (t) { setUrl(t); onUrlChange?.(t) } }}>
-            <input className="rss-input" value={input} onChange={e => setInput(e.target.value)} placeholder="Paste RSS URL…" spellCheck={false} />
-            <button className="rss-go-btn" type="submit">GO</button>
-          </form>
-          {error   ? <div className="feed-error">{error}</div>
-         : loading ? <div className="feed-loading">Fetching feed…</div>
-         : (
-            <div className="feed-list">
-              {items.map((item, i) => (
+        {isFirstLoad ? (
+          <SkeletonFeedItems count={6} />
+        ) : error && Object.keys(itemsByFeed).length === 0 ? (
+          <div className="widget-error">
+            <span className="widget-error-icon">⚠</span>
+            {error}
+            <button className="widget-error-retry" onClick={() => { setError(null); fetchAll() }}>Retry</button>
+          </div>
+        ) : displayItems.length === 0 ? (
+          filter ? (
+            <div className="empty-state">
+              <span className="empty-state-icon">🔍</span>
+              No articles matching "{filter}"
+            </div>
+          ) : (
+            <div className="empty-state">
+              <span className="empty-state-icon">📰</span>
+              No articles available
+            </div>
+          )
+        ) : (
+          <div className="feed-list">
+            {displayItems.map((item, i) => {
+              const color = feedColor(item._feedId)
+              const desc  = item.description
+                ? item.description.replace(/<[^>]+>/g, '').trim().slice(0, 120)
+                : null
+              return (
                 <a key={i} className="feed-item feed-item-link" href={item.link} target="_blank" rel="noopener noreferrer">
-                  <div className="feed-dot blue" />
+                  <div className="feed-dot" style={{ background: color, boxShadow: `0 0 4px ${color}`, flexShrink: 0 }} />
                   <span className="feed-text">
-                    <span className="feed-source">{item.author || feed?.title || ''}</span>
+                    <span className="feed-source">{item._feedName}</span>
                     {item.title}
+                    {desc && <span className="rss-desc">{desc}</span>}
                   </span>
                   <span className="feed-time">{rssRelTime(item.pubDate)}</span>
                 </a>
-              ))}
-            </div>
-          )}
-        </div>
+              )
+            })}
+            {lastRefresh && <div className="rss-updated">Updated {timeAgo}</div>}
+            <div className="attr-line">via rss2json · {feeds.filter(f => f.enabled).map(f => f.name).join(', ')}</div>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-// ─── Price Tracker (CoinGecko BTC/ETH/XAU/SOL) ───────────────────────────────
-const CG_URL =
-  'https://api.coingecko.com/api/v3/simple/price' +
-  '?ids=bitcoin,ethereum,pax-gold,solana' +
-  '&vs_currencies=usd&include_24hr_change=true'
+// ─── Price Tracker ────────────────────────────────────────────────────────────
+const PT_DEFAULT_ASSETS = [
+  { id: 'bitcoin',  ticker: 'BTC' },
+  { id: 'ethereum', ticker: 'ETH' },
+  { id: 'solana',   ticker: 'SOL' },
+  { id: 'pax-gold', ticker: 'XAU' },
+]
 
-function fmtPrice(n, dec = 2) {
-  return n == null ? '—' : n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })
+const PT_TAPE_SYMBOLS = [
+  { proName: 'COINBASE:BTCUSD',    title: 'BTC/USD' },
+  { proName: 'COINBASE:ETHUSD',    title: 'ETH/USD' },
+  { proName: 'COINBASE:SOLUSD',    title: 'SOL/USD' },
+  { proName: 'TVC:GOLD',           title: 'Gold' },
+  { proName: 'FX_IDC:EURUSD',      title: 'EUR/USD' },
+  { proName: 'FOREXCOM:SPXUSD',    title: 'S&P 500' },
+  { proName: 'NASDAQ:AAPL',        title: 'AAPL' },
+  { proName: 'TVC:USOIL',          title: 'Oil' },
+]
+
+const PT_TV_ASSETS = [
+  { id: 'gold',    ticker: 'XAU',    label: 'Gold',    proName: 'TVC:GOLD'         },
+  { id: 'oil',     ticker: 'OIL',    label: 'Oil',     proName: 'TVC:USOIL'        },
+  { id: 'sp500',   ticker: 'SPX',    label: 'S&P 500', proName: 'FOREXCOM:SPXUSD'  },
+  { id: 'eurusd',  ticker: 'EUR/USD',label: 'EUR/USD', proName: 'FX_IDC:EURUSD'    },
+  { id: 'aapl',    ticker: 'AAPL',   label: 'Apple',   proName: 'NASDAQ:AAPL'      },
+  { id: 'btc',     ticker: 'BTC',    label: 'Bitcoin', proName: 'COINBASE:BTCUSD'  },
+  { id: 'eth',     ticker: 'ETH',    label: 'Ethereum',proName: 'COINBASE:ETHUSD'  },
+]
+
+function ptFmtPrice(v) {
+  if (v == null) return '—'
+  if (v >= 10000) return v.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  if (v >= 100)   return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  if (v >= 1)     return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
+  return v.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 6 })
 }
-function fmtChg(n) {
-  return n == null
-    ? { text: '—', dir: '' }
-    : { text: `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`, dir: n >= 0 ? 'up' : 'down' }
+
+function Sparkline({ points, isUp }) {
+  if (!points?.length) return <div style={{ height: '40px' }} />
+  const vals = points.map(p => p[1])
+  const min = Math.min(...vals)
+  const max = Math.max(...vals)
+  const range = max - min || 1
+  const W = 100, H = 40, pad = 2
+  const pts = vals.map((v, i) => {
+    const x = pad + (i / (vals.length - 1)) * (W - pad * 2)
+    const y = pad + (1 - (v - min) / range) * (H - pad * 2)
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+  const color = isUp ? '#00c6ff' : '#ff4444'
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+      style={{ width: '100%', height: '40px', display: 'block', overflow: 'visible' }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  )
 }
 
-function PriceTracker({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
-  const [prices,  setPrices]  = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState(null)
+function AssetSearch({ existingIds, onAdd }) {
+  const [query,   setQuery]   = useState('')
+  const [results, setResults] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [open,    setOpen]    = useState(false)
+  const timerRef = useRef(null)
+  const wrapRef  = useRef(null)
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch(CG_URL)
-      const cg  = await res.json()
-      setPrices([
-        { ticker: 'BTC/USD', value: fmtPrice(cg.bitcoin?.usd, 0),     ...fmtChg(cg.bitcoin?.usd_24h_change) },
-        { ticker: 'ETH/USD', value: fmtPrice(cg.ethereum?.usd, 2),    ...fmtChg(cg.ethereum?.usd_24h_change) },
-        { ticker: 'XAU/USD', value: fmtPrice(cg['pax-gold']?.usd, 0), ...fmtChg(cg['pax-gold']?.usd_24h_change) },
-        { ticker: 'SOL/USD', value: fmtPrice(cg.solana?.usd, 2),      ...fmtChg(cg.solana?.usd_24h_change) },
-      ])
-      setError(null)
-    } catch { setError('Fetch failed') }
-    finally  { setLoading(false) }
+  function search(q) {
+    clearTimeout(timerRef.current)
+    if (!q.trim()) { setResults([]); setLoading(false); return }
+    setLoading(true)
+    timerRef.current = setTimeout(async () => {
+      try {
+        const r = await fetch(
+          `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(q)}`,
+          { signal: AbortSignal.timeout(6000) }
+        )
+        const j = await r.json()
+        setResults((j.coins ?? []).slice(0, 8).map(c => ({
+          id:     c.id,
+          ticker: c.symbol?.toUpperCase() ?? c.id.slice(0, 6).toUpperCase(),
+          label:  c.name,
+        })))
+      } catch {
+        setResults([])
+      } finally {
+        setLoading(false)
+      }
+    }, 300)
+  }
+
+  function pick(item) {
+    if (existingIds.includes(item.id)) return
+    onAdd(item)
+    setQuery('')
+    setResults([])
+    setOpen(false)
+  }
+
+  useEffect(() => {
+    function outside(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', outside)
+    return () => document.removeEventListener('mousedown', outside)
   }, [])
 
-  useEffect(() => { load(); const id = setInterval(load, 60_000); return () => clearInterval(id) }, [load])
+  return (
+    <div className="pt-asset-search" ref={wrapRef} onPointerDownCapture={e => e.stopPropagation()}>
+      <input
+        className="rss-input pt-search-input"
+        value={query}
+        onChange={e => { setQuery(e.target.value); search(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        placeholder="Search CoinGecko…"
+        spellCheck={false}
+      />
+      {open && query.trim() && (
+        <div className="pt-search-dropdown">
+          {loading && results.length === 0 && (
+            <div className="pt-search-item pt-search-loading">Searching…</div>
+          )}
+          {!loading && results.length === 0 && (
+            <div className="pt-search-item pt-search-empty">No results</div>
+          )}
+          {results.map(item => {
+            const already = existingIds.includes(item.id)
+            return (
+              <button key={item.id}
+                className={`pt-search-item${already ? ' pt-search-added' : ''}`}
+                onClick={() => pick(item)}
+                disabled={already}>
+                <span className="pt-search-ticker">{item.ticker}</span>
+                <span className="pt-search-label">{item.label} ({item.ticker})</span>
+                {already && <span className="pt-search-badge">✓</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AssetCard({ asset, priceData, editMode, onRemove }) {
+  const isNonCg = asset.source === 'tv' || asset.source === 'metals'
+  const sym    = asset.symbol ?? asset.ticker ?? asset.id.slice(0, 6).toUpperCase()
+  const d      = priceData[asset.id]
+  const loading = !isNonCg && !d
+  const price  = d?.price ?? null
+  const chg    = d?.change24h ?? null
+  const isUp   = (chg ?? 0) >= 0
+  const stale  = d?.stale ?? false
+  const [flash, setFlash] = useState(null)
+  const prevRef = useRef(null)
+
+  useEffect(() => {
+    if (price == null) return
+    if (prevRef.current != null && prevRef.current !== price) {
+      const dir = price > prevRef.current ? 'up' : 'down'
+      setFlash(dir)
+      const t = setTimeout(() => setFlash(null), 700)
+      prevRef.current = price
+      return () => clearTimeout(t)
+    }
+    prevRef.current = price
+  }, [price])
+
+  return (
+    <div className={`asset-card${stale && !isNonCg ? ' asset-stale' : ''}${flash ? ` asset-flash-${flash}` : ''}${loading ? ' asset-loading' : ''}`}>
+      {editMode && (
+        <button className="asset-remove-btn" onClick={() => onRemove(asset.id)} title="Remove">×</button>
+      )}
+      <div className="asset-symbol">{sym}</div>
+      {isNonCg ? (
+        <>
+          <div className="asset-price">—</div>
+          <div className="asset-change" style={{ color: '#2a3a4a' }}>—</div>
+          <div style={{ minHeight: '40px' }} />
+        </>
+      ) : loading ? (
+        <>
+          <div className="asset-price asset-skel">&nbsp;</div>
+          <div className="asset-change asset-skel" style={{ width: '60%' }}>&nbsp;</div>
+          <div style={{ height: '40px' }} />
+        </>
+      ) : (
+        <>
+          <div className="asset-price">${ptFmtPrice(price)}</div>
+          <div className={`asset-change ${isUp ? 'up' : 'down'}`}>
+            {chg == null ? '—' : `${isUp ? '▲' : '▼'} ${Math.abs(chg).toFixed(2)}%`}
+          </div>
+          {stale && <div className="asset-stale-label">stale</div>}
+          <Sparkline points={d?.sparkline ?? null} isUp={isUp} />
+        </>
+      )}
+    </div>
+  )
+}
+
+function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+  const assetsKey = `vigil_prices_assets_${widgetId ?? 'default'}`
+
+  const isVisiblePt = usePageVisibility()
+
+  const [assets,      setAssets]      = useState(() => {
+    const PT_ID_BLOCKLIST = ['sp500', 'gold', 'spx', 'pxspx']
+    try {
+      const saved = JSON.parse(localStorage.getItem(assetsKey) || 'null')
+      if (!Array.isArray(saved) || !saved.length) return PT_DEFAULT_ASSETS
+      const seenTickers = new Set()
+      const valid = saved
+        .filter(a => typeof a.id === 'string' && a.id && !a.source && !PT_ID_BLOCKLIST.includes(a.id))
+        .map(a => ({ id: a.id, ticker: a.ticker ?? a.symbol ?? a.id.slice(0, 6).toUpperCase() }))
+        .filter(a => { if (seenTickers.has(a.ticker)) return false; seenTickers.add(a.ticker); return true })
+      return valid.length > 0 ? valid : PT_DEFAULT_ASSETS
+    } catch { return PT_DEFAULT_ASSETS }
+  })
+  const [mode,        setMode]        = useState('grid')
+  const [editMode,    setEditMode]    = useState(false)
+  const [priceData,   setPriceData]   = useState({})
+  const [loading,     setLoading]     = useState(true)
+  const [fetchError,  setFetchError]  = useState(null)
+  const [lastRefresh, setLastRefresh] = useState(null)
+  const [timeAgo,     setTimeAgo]     = useState('')
+  const bodyRef  = useRef(null)
+  const assetsRef = useRef(assets)
+  assetsRef.current = assets
+
+  // Write back cleaned assets so stale source fields don't survive next reload
+  useEffect(() => {
+    try {
+      localStorage.setItem(assetsKey, JSON.stringify(assets))
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // "Updated X ago" counter
+  useEffect(() => {
+    const tick = () => {
+      if (!lastRefresh) return
+      const s = Math.floor((Date.now() - lastRefresh) / 1000)
+      setTimeAgo(s < 10 ? 'just now' : s < 60 ? `${s}s ago` : `${Math.floor(s / 60)}m ago`)
+    }
+    tick()
+    const id = setInterval(tick, 5000)
+    return () => clearInterval(id)
+  }, [lastRefresh])
+
+  async function fetchSparkline(id) {
+    try {
+      const r = await fetch(
+        `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=1&interval=hourly`,
+        { signal: AbortSignal.timeout(10000) }
+      )
+      const j = await r.json()
+      return j.prices ?? null
+    } catch { return null }
+  }
+
+  const fetchAll = useCallback(async (withSpark = false) => {
+    const list   = assetsRef.current
+    const cgList = list.filter(a => a.source !== 'tv' && a.source !== 'metals')
+    if (!cgList.length) { setLoading(false); return }
+    const ids = cgList.map(a => a.id).join(',')
+    let cg = null
+    try {
+      const r = await fetch(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=usd&include_24hr_change=true`,
+        { signal: AbortSignal.timeout(10000) }
+      )
+      cg = await r.json()
+    } catch {
+      setFetchError('CoinGecko unavailable')
+      setPriceData(prev => {
+        const next = { ...prev }
+        cgList.forEach(a => { if (next[a.id]) next[a.id] = { ...next[a.id], stale: true } })
+        return next
+      })
+      setLoading(false)
+      return
+    }
+    setFetchError(null)
+
+    const updates = {}
+    for (const a of cgList) {
+      const d = cg[a.id]
+      updates[a.id] = {
+        price:     d?.usd ?? null,
+        change24h: d?.usd_24h_change ?? null,
+        sparkline: withSpark ? null : null,
+        stale:     !d,
+        lastUpdated: Date.now(),
+      }
+    }
+
+    if (withSpark) {
+      const sparks = await Promise.allSettled(cgList.map(a => fetchSparkline(a.id)))
+      cgList.forEach((a, i) => {
+        if (sparks[i].status === 'fulfilled') updates[a.id].sparkline = sparks[i].value
+      })
+    } else {
+      setPriceData(prev => {
+        cgList.forEach(a => { updates[a.id].sparkline = prev[a.id]?.sparkline ?? null })
+        return { ...prev, ...updates }
+      })
+      setLastRefresh(Date.now())
+      setLoading(false)
+      return
+    }
+
+    setPriceData(prev => ({ ...prev, ...updates }))
+    setLastRefresh(Date.now())
+    setLoading(false)
+  }, [])
+
+  // Initial full load, then price-only every 60s, sparklines every 5min (skip when hidden)
+  useEffect(() => {
+    fetchAll(true)
+    const p = setInterval(() => { if (!document.hidden) fetchAll(false) }, 60_000)
+    const s = setInterval(() => { if (!document.hidden) fetchAll(true)  }, 5 * 60_000)
+    return () => { clearInterval(p); clearInterval(s) }
+  }, [fetchAll, assets])
+
+  // Re-fetch when tab becomes visible again
+  useEffect(() => {
+    if (isVisiblePt) fetchAll(false)
+  }, [isVisiblePt]) // fetchAll is stable
+
+  function saveAssets(list) {
+    const clean = list.map(a => ({ id: a.id, ticker: a.ticker ?? a.symbol ?? a.id.slice(0, 6).toUpperCase() }))
+    setAssets(clean)
+    try { localStorage.setItem(assetsKey, JSON.stringify(clean)) } catch {}
+  }
+
+  function removeAsset(id) {
+    saveAssets(assets.filter(a => a.id !== id))
+  }
+
+  function addAsset(item) {
+    if (assets.find(a => a.id === item.id)) return
+    saveAssets([...assets, { id: item.id, ticker: item.ticker ?? item.symbol ?? item.id.slice(0, 6).toUpperCase() }])
+  }
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <WHeader title="Price Tracker" badge={loading ? 'LOADING…' : error ? 'ERROR' : 'LIVE'} badgeActive={!error && !loading} onRefresh={load} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
-      <div className="widget-body">
-        {error   ? <div className="feed-error">{error}</div>
-       : loading ? <div className="feed-loading">Fetching prices…</div>
-       : (
-          <div className="price-grid">
-            {prices.map((p, i) => (
-              <div key={i} className="price-cell">
-                <span className="price-ticker">{p.ticker}</span>
-                <span className="price-value">{p.value}</span>
-                <span className={`price-change ${p.dir}`}>{p.text}</span>
-              </div>
-            ))}
+      <div className="widget-header">
+        <span className="widget-title">PRICE TRACKER</span>
+        <div className="widget-actions">
+          <span className={`widget-badge${loading ? ' inactive' : ''}`}>LIVE</span>
+          <button className={`widget-btn pt-mode-btn${mode === 'grid' ? ' pt-mode-active' : ''}`} onClick={() => setMode('grid')} title="Grid">⊞</button>
+          <button className={`widget-btn pt-mode-btn${mode === 'tape' ? ' pt-mode-active' : ''}`} onClick={() => setMode('tape')} title="Tape">≡</button>
+          <button className={`widget-btn${editMode ? ' pt-mode-active' : ''}`} onClick={() => setEditMode(v => !v)} title="Edit assets">✎</button>
+          {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
+          {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
+          {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
+        </div>
+      </div>
+
+      <div className="widget-body" ref={bodyRef} style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+        {mode === 'tape' ? (
+          <TickerTape
+            symbols={PT_TAPE_SYMBOLS}
+            colorTheme="dark"
+            isTransparent
+            displayMode="adaptive"
+            locale="en"
+          />
+        ) : loading && Object.keys(priceData).length === 0 ? (
+          <div className="pt-scroll">
+            <div className="pt-grid">
+              {PT_DEFAULT_ASSETS.map((_, i) => (
+                <div key={i} className="asset-card">
+                  <div className="skel-block" style={{ padding: 0, gap: 8 }}>
+                    <SkeletonLine w="40%" h={10} />
+                    <SkeletonLine w="70%" h={18} />
+                    <SkeletonLine w="50%" h={9} />
+                    <SkeletonLine w="100%" h={36} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : fetchError && Object.keys(priceData).length === 0 ? (
+          <div className="widget-error">
+            <span className="widget-error-icon">⚠</span>
+            {fetchError}
+            <button className="widget-error-retry" onClick={() => { setFetchError(null); fetchAll(true) }}>Retry</button>
+          </div>
+        ) : assets.length === 0 ? (
+          <div className="empty-state">
+            <span className="empty-state-icon">📈</span>
+            Add assets using the ✎ button above
+            {editMode && <AssetSearch existingIds={[]} onAdd={addAsset} />}
+          </div>
+        ) : (
+          <div className="pt-scroll">
+            <div className="pt-grid">
+              {assets.map(asset => (
+                <AssetCard key={asset.id} asset={asset} priceData={priceData} editMode={editMode} onRemove={removeAsset} />
+              ))}
+            </div>
+            {editMode && (
+              <AssetSearch existingIds={assets.map(a => a.id)} onAdd={addAsset} />
+            )}
+            {lastRefresh && <div className="pt-footer">Updated {timeAgo}</div>}
+            <div className="attr-line">via CoinGecko</div>
           </div>
         )}
       </div>
@@ -981,9 +1643,10 @@ function toEmbedUrl(raw) {
 }
 
 function Livestream({ initialUrl = AJ_EMBED, onUrlChange, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
-  const [embedUrl, setEmbedUrl] = useState(initialUrl)
-  const [input,    setInput]    = useState(initialUrl)
-  const [error,    setError]    = useState(null)
+  const [embedUrl,   setEmbedUrl]   = useState(initialUrl)
+  const [input,      setInput]      = useState(initialUrl)
+  const [error,      setError]      = useState(null)
+  const isVisibleLs = usePageVisibility()
 
   useEffect(() => { setEmbedUrl(initialUrl); setInput(initialUrl) }, [initialUrl])
 
@@ -997,9 +1660,12 @@ function Livestream({ initialUrl = AJ_EMBED, onUrlChange, onClose, onFullscreen,
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
       <div className="widget-header">
-        <span className="widget-title">Livestream</span>
+        <span className="widget-title">LIVESTREAM</span>
         <div className="widget-actions">
-          <span className={`widget-badge${embedUrl ? '' : ' inactive'}`}>{embedUrl ? 'LIVE' : 'STANDBY'}</span>
+          <span className={`widget-badge${embedUrl ? '' : ' inactive'}`}>
+            {embedUrl && <span className="badge-dot" />}
+            {embedUrl ? 'LIVE' : 'STANDBY'}
+          </span>
           {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
           {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
           {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
@@ -1012,7 +1678,7 @@ function Livestream({ initialUrl = AJ_EMBED, onUrlChange, onClose, onFullscreen,
       {error && <div className="feed-error" style={{ flexShrink: 0, height: 'auto', padding: '4px 12px' }}>{error}</div>}
       <iframe
         key={embedUrl}
-        src={embedUrl}
+        src={isVisibleLs ? embedUrl : ''}
         style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
         title="Livestream"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -1022,53 +1688,72 @@ function Livestream({ initialUrl = AJ_EMBED, onUrlChange, onClose, onFullscreen,
   )
 }
 
-// ─── Weather (Open-Meteo, geocoded city) ─────────────────────────────────────
-const GEO_URL = name =>
-  `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&format=json`
+// ─── Weather (Open-Meteo + Nominatim geocoding) ───────────────────────────────
+const NOM_URL = q =>
+  `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`
 const WX_URL  = (lat, lon) =>
   `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-  `&current=temperature_2m,wind_speed_10m,wind_direction_10m,weather_code,relative_humidity_2m,surface_pressure` +
-  `&wind_speed_unit=kmh`
+  `&current=temperature_2m,apparent_temperature,wind_speed_10m,wind_direction_10m,weather_code,relative_humidity_2m` +
+  `&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max` +
+  `&wind_speed_unit=kmh&timezone=auto`
 
 function decodeWmo(code) {
-  if (code === 0) return { label: 'Clear Sky',     icon: '☀️' }
-  if (code <= 2)  return { label: 'Partly Cloudy', icon: '🌤' }
-  if (code === 3) return { label: 'Overcast',      icon: '☁️' }
-  if (code <= 48) return { label: 'Fog',           icon: '🌫' }
-  if (code <= 55) return { label: 'Drizzle',       icon: '🌦' }
-  if (code <= 65) return { label: 'Rain',          icon: '🌧' }
-  if (code <= 77) return { label: 'Snow',          icon: '🌨' }
-  if (code <= 82) return { label: 'Rain Showers',  icon: '🌧' }
-  if (code <= 86) return { label: 'Snow Showers',  icon: '🌨' }
-  if (code <= 99) return { label: 'Thunderstorm',  icon: '⛈' }
-  return { label: 'Unknown', icon: '🌡' }
+  if (code === 0)  return { label: 'Clear Sky',     icon: '☀️'  }
+  if (code <= 2)   return { label: 'Partly Cloudy', icon: '⛅'  }
+  if (code === 3)  return { label: 'Overcast',      icon: '☁️'  }
+  if (code <= 48)  return { label: 'Fog',           icon: '🌫️' }
+  if (code <= 67)  return { label: 'Rain',          icon: '🌧️' }
+  if (code <= 77)  return { label: 'Snow',          icon: '❄️'  }
+  if (code <= 82)  return { label: 'Rain Showers',  icon: '🌦️' }
+  if (code <= 86)  return { label: 'Snow Showers',  icon: '❄️'  }
+  if (code <= 99)  return { label: 'Thunderstorm',  icon: '⛈️'  }
+  return           { label: 'Unknown',              icon: '🌡️' }
 }
 
-function windDir(deg) {
-  return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(deg / 45) % 8]
-}
+const WX_DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
-function Weather({ initialCity = 'Berlin', onCityChange, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+function Weather({ widgetId, initialCity = 'Berlin', onCityChange, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+  const locKey = `vigil_weather_loc_${widgetId ?? 'default'}`
+
+  const [latLon,    setLatLon]    = useState(() => {
+    try { const r = localStorage.getItem(locKey); return r ? JSON.parse(r) : null } catch { return null }
+  })
   const [city,      setCity]      = useState(initialCity)
   const [cityInput, setCityInput] = useState(initialCity)
-  const [editing,   setEditing]   = useState(false)
-  const [locName,   setLocName]   = useState(initialCity)
-  const [latLon,    setLatLon]    = useState(null)   // {lat, lon, name} set by vigil:location
-  const [data,      setData]      = useState(null)
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState(null)
+  const [locName,   setLocName]   = useState(() => {
+    try { const r = localStorage.getItem(locKey); return r ? (JSON.parse(r).name || initialCity) : initialCity } catch { return initialCity }
+  })
+  const [data,       setData]       = useState(null)
+  const [daily,      setDaily]      = useState(null)
+  const [loading,    setLoading]    = useState(true)
+  const [error,      setError]      = useState(null)
+  const [fetchKey,   setFetchKey]   = useState(0)
+  const bodyRef                     = useRef(null)
+  const [bodyH,      setBodyH]      = useState(999)
+  const isVisibleWx = usePageVisibility()
 
-  useEffect(() => { setCity(initialCity); setCityInput(initialCity) }, [initialCity])
+  useEffect(() => {
+    if (!bodyRef.current) return
+    const ro = new ResizeObserver(([e]) => setBodyH(e.contentRect.height))
+    ro.observe(bodyRef.current)
+    return () => ro.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!latLon) { setCity(initialCity); setCityInput(initialCity); setLocName(initialCity) }
+  }, [initialCity])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     function onLocation(e) {
       const { name, lat, lon } = e.detail ?? {}
       if (typeof lat !== 'number' || typeof lon !== 'number') return
-      setLatLon({ lat, lon, name: name || '' })
+      const loc = { lat, lon, name: name || '' }
+      setLatLon(loc); setLocName(name || '')
+      try { localStorage.setItem(locKey, JSON.stringify(loc)) } catch {}
     }
     window.addEventListener('vigil:location', onLocation)
     return () => window.removeEventListener('vigil:location', onLocation)
-  }, [])
+  }, [locKey])
 
   useEffect(() => {
     let cancelled = false
@@ -1079,16 +1764,24 @@ function Weather({ initialCity = 'Berlin', onCityChange, onClose, onFullscreen, 
         if (latLon) {
           lat = latLon.lat; lon = latLon.lon; name = latLon.name
         } else {
-          const geo = await fetch(GEO_URL(city)).then(r => r.json())
-          const loc = geo.results?.[0]
+          const json = await fetch(NOM_URL(city), {
+            headers: { 'User-Agent': 'Vigil/1.0' },
+            signal: AbortSignal.timeout(8000),
+          }).then(r => r.json())
+          const loc = json[0]
           if (!loc) throw new Error(`"${city}" not found`)
-          lat = loc.latitude; lon = loc.longitude; name = loc.name
+          lat = parseFloat(loc.lat); lon = parseFloat(loc.lon)
+          name = loc.display_name.split(',')[0].trim()
+          const saved = { lat, lon, name }
+          setLatLon(saved)
+          try { localStorage.setItem(locKey, JSON.stringify(saved)) } catch {}
         }
         if (cancelled) return
         setLocName(name)
-        const wx = await fetch(WX_URL(lat, lon)).then(r => r.json())
+        const wx = await fetch(WX_URL(lat, lon), { signal: AbortSignal.timeout(8000) }).then(r => r.json())
         if (cancelled) return
         setData(wx.current)
+        setDaily(wx.daily ?? null)
       } catch (e) {
         if (!cancelled) setError(e.message || 'Fetch failed')
       } finally {
@@ -1096,57 +1789,97 @@ function Weather({ initialCity = 'Berlin', onCityChange, onClose, onFullscreen, 
       }
     }
     run()
-    const id = setInterval(run, 10 * 60_000)
+    const id = setInterval(() => { if (!document.hidden) run() }, 10 * 60_000)
     return () => { cancelled = true; clearInterval(id) }
-  }, [city, latLon])
+  }, [city, latLon, locKey, fetchKey])
+
+  // Re-fetch when tab becomes visible again
+  useEffect(() => {
+    if (isVisibleWx) setFetchKey(k => k + 1)
+  }, [isVisibleWx])
 
   function handleCitySubmit(e) {
     e.preventDefault()
     const c = cityInput.trim()
-    if (c) { setCity(c); setLatLon(null); onCityChange?.(c) }
-    setEditing(false)
+    if (!c) return
+    try { localStorage.removeItem(locKey) } catch {}
+    setLatLon(null); setCity(c); onCityChange?.(c)
   }
 
-  const wmo = data ? decodeWmo(data.weather_code) : null
+  const wmo         = data ? decodeWmo(data.weather_code) : null
+  const todayHi     = daily?.temperature_2m_max?.[0]
+  const todayLo     = daily?.temperature_2m_min?.[0]
+  const showForecast = bodyH >= 220 && daily?.time?.length > 0
+  const fcastDays   = (daily?.time ?? []).slice(0, 5).map((dateStr, i) => ({
+    day: WX_DAY_NAMES[new Date(dateStr + 'T12:00:00').getDay()],
+    wmo: decodeWmo(daily.weather_code[i]),
+    max: Math.round(daily.temperature_2m_max[i]),
+    min: Math.round(daily.temperature_2m_min[i]),
+  }))
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header">
-        <span className="widget-title">Weather · {locName}</span>
-        <div className="widget-actions">
-          <span className={`widget-badge${!error && !loading ? '' : ' inactive'}`}>{loading ? 'LOADING…' : error ? 'ERROR' : 'LIVE'}</span>
-          <button className="widget-btn" onClick={() => setEditing(v => !v)} title="Change city">✎</button>
-          {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
-          {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
-          {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
-        </div>
-      </div>
-      {editing && (
-        <form className="rss-url-bar" onSubmit={handleCitySubmit} style={{ flexShrink: 0 }}>
-          <input className="rss-input" value={cityInput} onChange={e => setCityInput(e.target.value)} placeholder="City name…" spellCheck={false} autoFocus />
-          <button className="rss-go-btn" type="submit">GO</button>
-        </form>
-      )}
-      <div className="widget-body">
-        {error ? <div className="feed-error">{error}</div>
-        : loading || !data ? <div className="feed-loading">Fetching weather…</div>
-        : (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', gap: '6px', padding: '8px 12px' }}>
-            <span style={{ fontSize: '22px' }}>{wmo.icon}</span>
-            <span style={{ fontSize: '30px', fontWeight: 300, color: '#e6edf3', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{Math.round(data.temperature_2m)}°C</span>
-            <span style={{ fontSize: '11px', color: '#6e8098', letterSpacing: '0.06em' }}>{wmo.label}</span>
-            <div style={{ width: '100%', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {[
-                { label: 'Wind',     val: `${Math.round(data.wind_speed_10m)} km/h ${windDir(data.wind_direction_10m)}` },
-                { label: 'Humidity', val: `${data.relative_humidity_2m}%` },
-                { label: 'Pressure', val: `${Math.round(data.surface_pressure)} hPa` },
-              ].map(s => (
-                <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#6e8098', padding: '2px 0', borderTop: '1px solid #1e2d3d' }}>
-                  <span>{s.label}</span>
-                  <span style={{ color: '#c9d1d9', fontWeight: 500 }}>{s.val}</span>
-                </div>
-              ))}
+      <WHeader title={`WEATHER · ${locName.toUpperCase()}`} badge="LIVE" badgeActive={!loading && !error} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
+
+      <form className="wx-search-bar" onSubmit={handleCitySubmit} onPointerDownCapture={e => e.stopPropagation()}>
+        <input
+          className="wx-search-input"
+          value={cityInput}
+          onChange={e => setCityInput(e.target.value)}
+          placeholder="City or country..."
+          spellCheck={false}
+        />
+        <button className="wx-search-btn" type="submit">🔍</button>
+      </form>
+
+      <div className="widget-body" ref={bodyRef}>
+        {error ? (
+          <div className="widget-error">
+            <span className="widget-error-icon">⚠</span>
+            {error}
+            <button className="widget-error-retry" onClick={() => { setError(null); setFetchKey(k => k + 1) }}>Retry</button>
+          </div>
+        ) : loading || !data ? (
+          <div className="skel-block" style={{ width: '100%' }}>
+            <SkeletonLine w="60%" h={40} />
+            <SkeletonLine w="40%" h={12} />
+            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              {[55, 42, 60, 48].map((w, i) => <SkeletonLine key={i} w={`${w}%`} h={10} />)}
             </div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+              {[1,2,3,4,5].map(i => <SkeletonLine key={i} w="18%" h={56} />)}
+            </div>
+          </div>
+        ) : (
+          <div className="wx-body">
+            <div className="wx-main">
+              <div className="wx-icon-temp">
+                <span className="wx-icon">{wmo.icon}</span>
+                <span className="wx-temp">{Math.round(data.temperature_2m)}°C</span>
+              </div>
+              <div className="wx-condition">{wmo.label}</div>
+              <div className="wx-stats-row">
+                {todayHi != null && (
+                  <span className="wx-stat-item">↑{Math.round(todayHi)}° ↓{Math.round(todayLo)}°</span>
+                )}
+                <span className="wx-stat-item">💧 {data.relative_humidity_2m}%</span>
+                <span className="wx-stat-item">💨 {Math.round(data.wind_speed_10m)} km/h</span>
+                <span className="wx-stat-item">🌡️ {Math.round(data.apparent_temperature)}°C</span>
+              </div>
+            </div>
+            {showForecast && (
+              <div className="wx-forecast">
+                {fcastDays.map(d => (
+                  <div key={d.day} className="wx-fcast-card">
+                    <span className="wx-fcast-day">{d.day}</span>
+                    <span className="wx-fcast-icon">{d.wmo.icon}</span>
+                    <span className="wx-fcast-hi">{d.max}°</span>
+                    <span className="wx-fcast-lo">{d.min}°</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="attr-line">via Open-Meteo · Nominatim</div>
           </div>
         )}
       </div>
@@ -1201,7 +1934,7 @@ function readWidgets(wsId) {
 function ChartWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <WHeader title="TV Chart" onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
+      <WHeader title="TV CHART" onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
       <div style={{ height: 'calc(100% - 36px)', width: '100%', overflow: 'hidden' }}>
         <AdvancedRealTimeChart
           symbol="BTCUSD"
@@ -1329,11 +2062,11 @@ function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, on
   switch (widget.type) {
     case 'map':      return <AtlasWidget  {...p} />
     case 'feeds':    return <FeedsWidget  {...p} />
-    case 'feed':     return <KeywordFeed  {...p} initialUrl={settings.keywordFeedUrl} onUrlChange={url  => updateSetting('keywordFeedUrl', url)} />
-    case 'rss':      return <RssFeed      {...p} initialUrl={settings.rssFeedUrl}     onUrlChange={url  => updateSetting('rssFeedUrl', url)} />
-    case 'prices':   return <PriceTracker {...p} />
+    case 'feed':     return <KeywordFeed  {...p} />
+    case 'rss':      return <RssFeed      {...p} widgetId={widget.id} />
+    case 'prices':   return <PriceTracker {...p} widgetId={widget.id} />
     case 'stream':   return <Livestream   {...p} initialUrl={settings.livestreamUrl}  onUrlChange={url  => updateSetting('livestreamUrl', url)} />
-    case 'weather':  return <Weather      {...p} initialCity={settings.weatherCity}   onCityChange={city => updateSetting('weatherCity', city)} />
+    case 'weather':  return <Weather      {...p} widgetId={widget.id} initialCity={settings.weatherCity} onCityChange={city => updateSetting('weatherCity', city)} />
     case 'conflict': return <ConflictFeed {...p} />
     case 'chart':    return <ChartWidget  {...p} />
     case 'browser':       return <BrowserWidget        {...p} widgetId={widget.id} />
