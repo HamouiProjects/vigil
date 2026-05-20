@@ -290,6 +290,13 @@
 .leaflet-control-attribution a { color: #3a4a5c !important; }
 
 .widget-title-group { display: flex; align-items: center; gap: 8px; }
+.widget-subtitle {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #23d160;
+  padding: 2px 12px 3px; background: #0a1018;
+  border-bottom: 1px solid #1a2535;
+  line-height: 1.4;
+}
 .widget-icon { font-size: 13px; opacity: 0.85; }
 .widget-title {
   font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
@@ -434,6 +441,28 @@
 }
 .weather-stat-val { color: #c9d1d9; font-weight: 500; }
 
+/* ── Browser widget ── */
+.browser-bar {
+  display: flex; flex-shrink: 0; border-bottom: 1px solid #1e2d3d;
+}
+.browser-nav-btn {
+  background: #080f18; border: none; border-right: 1px solid #1e2d3d;
+  color: #4a6070; font-size: 13px; padding: 0 10px; cursor: pointer;
+  transition: color 0.15s, background 0.15s; line-height: 1;
+}
+.browser-nav-btn:hover:not(:disabled) { color: #c9d1d9; background: rgba(255,255,255,0.05); }
+.browser-nav-btn:disabled { opacity: 0.3; cursor: default; }
+.browser-error {
+  flex-shrink: 0; padding: 10px 14px;
+  font-size: 11px; color: #6e8098; background: #0a0e1a;
+  border-bottom: 1px solid #1e2d3d;
+}
+.browser-error-btn {
+  background: none; border: none; color: #00c6ff; font-size: 11px;
+  cursor: pointer; padding: 0; text-decoration: underline;
+}
+.browser-error-btn:hover { color: #5ae0ff; }
+
 /* ── Livestream widget ── */
 .stream-container {
   display: flex; flex-direction: column; width: 100%; height: 100%;
@@ -559,6 +588,7 @@
 .widget[data-collapsed] > *:not(.widget-header) {
   display: none !important;
 }
+.widget[data-collapsed] .widget-subtitle { display: none !important; }
 
 /* ── Fullscreen overlay ── */
 .fullscreen-overlay {

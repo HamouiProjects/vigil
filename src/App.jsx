@@ -308,14 +308,17 @@ async function fetchNOAAStorms() {
   })).filter(s => !isNaN(s.lat) && !isNaN(s.lng))
 }
 
-function mapPopupHtml(name, row2, lat, lng, country) {
-  const safe  = name.replace(/"/g, '&quot;')
-  const safeC = (country || '').replace(/"/g, '&quot;')
+function mapPopupHtml(name, row2) {
   return `<div class="cmap-popup">
     <div class="cmap-popup-name">${name}</div>
     <div class="cmap-popup-row">${row2}</div>
-    <a class="cmap-popup-link" href="#" data-kw="${safe}" data-lat="${lat}" data-lon="${lng}" data-country="${safeC}">Search news →</a>
   </div>`
+}
+
+function fireMarkerEvents(keyword, name, country, lat, lon) {
+  window.dispatchEvent(new CustomEvent('vigil:search',   { detail: { keyword } }))
+  window.dispatchEvent(new CustomEvent('vigil:location', { detail: { name, country: country || '', lat, lon } }))
+  window.dispatchEvent(new CustomEvent('vigil:region',   { detail: { country: country || name } }))
 }
 
 const USGS_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson'
@@ -384,8 +387,9 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
           radius: quakeSize(q.mag) / 2, fillColor: '#9b59b6', color: '#7d3c98',
           weight: 1, opacity: 0.9, fillOpacity: 0.75,
         })
-        cm.bindPopup(mapPopupHtml(`M${q.mag.toFixed(1)} — ${q.place}`, quakeTimeAgo(q.time), q.lat, q.lng, ''),
+        cm.bindPopup(mapPopupHtml(`M${q.mag.toFixed(1)} — ${q.place}`, quakeTimeAgo(q.time)),
           { className: 'cmap-popup-wrap', maxWidth: 240, minWidth: 180 })
+        cm.on('click', () => fireMarkerEvents(q.place, q.place, '', q.lat, q.lng))
         layerQuake.current?.addLayer(cm)
       })
       setQuakeLive(true)
@@ -397,8 +401,9 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
       layerStorm.current?.clearLayers()
       storms.forEach(s => {
         const mk = L.marker([s.lat, s.lng], { icon: stormIcon(s.cls) })
-        mk.bindPopup(mapPopupHtml(s.name, `${s.cls} · ${s.wind} kt`, s.lat, s.lng, s.country),
+        mk.bindPopup(mapPopupHtml(s.name, `${s.cls} · ${s.wind} kt`),
           { className: 'cmap-popup-wrap', maxWidth: 220, minWidth: 160 })
+        mk.on('click', () => fireMarkerEvents(`${s.name} storm`, s.name, s.country, s.lat, s.lng))
         layerStorm.current?.addLayer(mk)
       })
     } catch { /* no active storms or CORS */ }
@@ -440,9 +445,11 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
       const mk = L.marker([evt.lat, evt.lng], { icon: conflictIcon(evt.category) })
       mk.bindPopup(mapPopupHtml(
         evt.name,
-        `${evt.typeStr} · <span class="cmap-status-${evt.status}">${evt.status}</span>`,
-        evt.lat, evt.lng, evt.country
+        `${evt.typeStr} · <span class="cmap-status-${evt.status}">${evt.status}</span>`
       ), { className: 'cmap-popup-wrap', maxWidth: 220, minWidth: 170 })
+      mk.on('click', () => fireMarkerEvents(
+        `${evt.name} ${evt.country}`.trim(), evt.name, evt.country, evt.lat, evt.lng
+      ))
       layerConflict.current.addLayer(mk)
     })
 
@@ -451,9 +458,11 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
       const mk = L.marker([wf.lat, wf.lng], { icon: wildfireIcon() })
       mk.bindPopup(mapPopupHtml(
         wf.name,
-        'Fire risk zone <span style="color:#6e8098;font-size:9px">(reference)</span>',
-        wf.lat, wf.lng, wf.country
+        'Fire risk zone <span style="color:#6e8098;font-size:9px">(reference)</span>'
       ), { className: 'cmap-popup-wrap', maxWidth: 220, minWidth: 170 })
+      mk.on('click', () => fireMarkerEvents(
+        `${wf.name} wildfire`, wf.name, wf.country, wf.lat, wf.lng
+      ))
       layerWildfire.current.addLayer(mk)
     })
 
@@ -469,20 +478,6 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
         window.dispatchEvent(new CustomEvent('vigil:region',   { detail: { country: zone.name } }))
       })
       layerPiracy.current.addLayer(rect)
-    })
-
-    // Unified popup link handler — fires all three cross-widget events
-    map.on('popupopen', e => {
-      const link = e.popup.getElement()?.querySelector('.cmap-popup-link')
-      if (!link) return
-      link.addEventListener('click', ev => {
-        ev.preventDefault()
-        const { kw, lat, lon, country } = link.dataset
-        window.dispatchEvent(new CustomEvent('vigil:search',   { detail: { keyword: kw } }))
-        window.dispatchEvent(new CustomEvent('vigil:location', { detail: { name: kw, lat: parseFloat(lat), lon: parseFloat(lon), country: country || '' } }))
-        window.dispatchEvent(new CustomEvent('vigil:region',   { detail: { country: country || kw } }))
-        map.closePopup()
-      })
     })
 
     refresh()
@@ -650,14 +645,22 @@ function FeedsWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapse
 
 // ─── CONFLICT region tabs ─────────────────────────────────────────────────────
 const CONFLICT_REGIONS = [
-  { id: 'ukraine',    label: '🇺🇦 UKRAINE',    src: 'https://liveuamap.com/en?q=ukraine'     },
-  { id: 'middleeast', label: '🌙 MIDDLE EAST',  src: 'https://liveuamap.com/en?q=middle+east' },
-  { id: 'africa',     label: '🌍 AFRICA',       src: 'https://liveuamap.com/en?q=africa'      },
-  { id: 'sudan',      label: '🇸🇩 SUDAN',       src: 'https://liveuamap.com/en?q=sudan'       },
-  { id: 'syria',      label: '🇸🇾 SYRIA',       src: 'https://liveuamap.com/en?q=syria'       },
-  { id: 'yemen',      label: '🇾🇪 YEMEN',       src: 'https://liveuamap.com/en?q=yemen'       },
-  { id: 'gaza',       label: '🇵🇸 GAZA',        src: 'https://liveuamap.com/en?q=gaza'        },
-  { id: 'asia',       label: '🌏 ASIA',         src: 'https://liveuamap.com/en?q=asia'        },
+  { id: 'worldwide',    label: '🌍 WORLDWIDE',     src: 'https://liveuamap.com'                    },
+  { id: 'ukraine',      label: '🇺🇦 UKRAINE',      src: 'https://liveuamap.com/en/ukraine'         },
+  { id: 'middleeast',   label: '🌙 MIDDLE EAST',   src: 'https://liveuamap.com/en/middleeast'      },
+  { id: 'israel',       label: '🇮🇱 ISRAEL/GAZA',  src: 'https://liveuamap.com/en/israel'          },
+  { id: 'syria',        label: '🇸🇾 SYRIA',        src: 'https://liveuamap.com/en/syria'           },
+  { id: 'yemen',        label: '🇾🇪 YEMEN',        src: 'https://liveuamap.com/en/yemen'           },
+  { id: 'sudan',        label: '🇸🇩 SUDAN',        src: 'https://liveuamap.com/en/sudan'           },
+  { id: 'africa',       label: '🌍 AFRICA',        src: 'https://liveuamap.com/en/africa'          },
+  { id: 'libya',        label: '🇱🇾 LIBYA',        src: 'https://liveuamap.com/en/libya'           },
+  { id: 'iraq',         label: '🇮🇶 IRAQ',         src: 'https://liveuamap.com/en/iraq'            },
+  { id: 'afghanistan',  label: '🇦🇫 AFGHANISTAN',  src: 'https://liveuamap.com/en/afghanistan'     },
+  { id: 'asia',         label: '🌏 ASIA',          src: 'https://liveuamap.com/en/asia'            },
+  { id: 'myanmar',      label: '🇲🇲 MYANMAR',      src: 'https://liveuamap.com/en/myanmar'         },
+  { id: 'latinamerica', label: '🌎 LATIN AMERICA', src: 'https://liveuamap.com/en/latinamerica'    },
+  { id: 'usa',          label: '🇺🇸 USA',          src: 'https://liveuamap.com/en/usa'             },
+  { id: 'russia',       label: '🇷🇺 RUSSIA',       src: 'https://liveuamap.com/en/russia'          },
 ]
 
 const REGION_SLUG_MAP = {
@@ -665,56 +668,32 @@ const REGION_SLUG_MAP = {
   sudan: 'sudan', khartoum: 'sudan',
   syria: 'syria', idlib: 'syria',
   yemen: 'yemen',
-  israel: 'gaza', palestine: 'gaza', gaza: 'gaza',
-  myanmar: 'asia', pakistan: 'asia', india: 'asia', afghanistan: 'asia', philippines: 'asia',
+  israel: 'israel', palestine: 'israel', gaza: 'israel',
+  iraq: 'iraq', baghdad: 'iraq',
+  libya: 'libya', tripoli: 'libya',
+  afghanistan: 'afghanistan', kabul: 'afghanistan',
+  myanmar: 'myanmar', rangoon: 'myanmar',
+  russia: 'russia', moscow: 'russia',
+  usa: 'usa',
+  myanmar2: 'myanmar', pakistan: 'asia', india: 'asia', philippines: 'asia',
   drc: 'africa', nigeria: 'africa', ethiopia: 'africa', mozambique: 'africa', mali: 'africa',
 }
 
-// ─── CONFLICT (LiveUAMap with region tabs) ────────────────────────────────────
+// ─── CONFLICT (LiveUAMap) ─────────────────────────────────────────────────────
 function ConflictFeed({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
-  const [region, setRegion] = useState('ukraine')
-  const src = CONFLICT_REGIONS.find(r => r.id === region)?.src ?? CONFLICT_REGIONS[0].src
-
-  useEffect(() => {
-    function onRegion(e) {
-      const raw = (e.detail?.country ?? '').trim().toLowerCase()
-      if (!raw) return
-      const slug = REGION_SLUG_MAP[raw]
-        ?? CONFLICT_REGIONS.find(r => raw.includes(r.id) || r.id.includes(raw))?.id
-      if (slug) setRegion(slug)
-    }
-    window.addEventListener('vigil:region', onRegion)
-    return () => window.removeEventListener('vigil:region', onRegion)
-  }, [])
-
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
       <WHeader title="CONFLICT" badge="LIVE" badgeActive={true} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
-      <div className="cmap-layer-bar" style={{ overflowX: 'auto', scrollbarWidth: 'none' }} onPointerDownCapture={e => e.stopPropagation()}>
-        {CONFLICT_REGIONS.map(r => (
-          <button
-            key={r.id}
-            className={`conf-tab-btn${region === r.id ? ' active' : ''}`}
-            onClick={() => setRegion(r.id)}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
-      <div style={{ height: 'calc(100% - 36px - 32px)', width: '100%', position: 'relative', overflow: 'hidden', background: '#0a0e1a' }}>
-        <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
-          <iframe
-            key={src}
-            src={src}
-            style={{ width: '100%', height: 'calc(100% + 80px)', border: 'none', position: 'absolute', top: 0, left: 0 }}
-            title="CONFLICT"
-            allowFullScreen
-          />
-        </div>
-      </div>
+      <iframe
+        src="https://liveuamap.com"
+        style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
+        title="CONFLICT"
+        allowFullScreen
+      />
     </div>
   )
 }
+
 
 // ─── News Search (Google News RSS via rss2json) ───────────────────────────────
 const DEFAULT_KEYWORDS = 'conflict'
@@ -1195,12 +1174,13 @@ const WS_META_KEY        = 'vigil_workspaces'
 const widgetsKey         = id => `vigil_ws${id.replace('ws-', '')}_widgets`
 const DEFAULT_WORKSPACES = [{ id: 'ws-1', name: 'Workspace 1' }]
 const DEFAULT_WIDGETS    = [
-  { id: 'atlas',   type: 'map'     },
-  { id: 'feed',    type: 'feed'    },
-  { id: 'rss',     type: 'rss'     },
-  { id: 'prices',  type: 'prices'  },
-  { id: 'stream',  type: 'stream'  },
-  { id: 'weather', type: 'weather' },
+  { id: 'atlas',         type: 'map'           },
+  { id: 'feed',          type: 'feed'          },
+  { id: 'rss',           type: 'rss'           },
+  { id: 'prices',        type: 'prices'        },
+  { id: 'stream',        type: 'stream'        },
+  { id: 'weather',       type: 'weather'       },
+  { id: 'conflict', type: 'conflict' },
 ]
 
 function readWorkspacesMeta() {
@@ -1234,6 +1214,88 @@ function ChartWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapse
   )
 }
 
+// ─── Browser widget ──────────────────────────────────────────────────────────
+const BROWSER_DEFAULT_URL = 'https://www.google.com'
+
+function BrowserWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+  const storageKey = `vigil_browser_${widgetId}`
+  const savedUrl   = (() => { try { return localStorage.getItem(storageKey) || BROWSER_DEFAULT_URL } catch { return BROWSER_DEFAULT_URL } })()
+
+  const histRef      = useRef({ stack: [savedUrl], idx: 0 })
+  const [url,        setUrl]      = useState(savedUrl)
+  const [input,      setInput]    = useState(savedUrl)
+  const [error,      setError]    = useState(false)
+  const [frameKey,   setFrameKey] = useState(0)   // bump to remount iframe (refresh)
+  const [, tick]                  = useState(0)   // force re-render for canGoBack/Forward
+
+  function load(raw) {
+    let u = raw.trim()
+    if (!u) return
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u
+    const h = histRef.current
+    h.stack  = h.stack.slice(0, h.idx + 1)
+    h.stack.push(u)
+    h.idx    = h.stack.length - 1
+    setUrl(u); setInput(u); setError(false); setFrameKey(0); tick(n => n + 1)
+    try { localStorage.setItem(storageKey, u) } catch {}
+  }
+
+  function step(delta) {
+    const h = histRef.current
+    const next = h.idx + delta
+    if (next < 0 || next >= h.stack.length) return
+    h.idx = next
+    const u = h.stack[next]
+    setUrl(u); setInput(u); setError(false); setFrameKey(0); tick(n => n + 1)
+    try { localStorage.setItem(storageKey, u) } catch {}
+  }
+
+  const canBack    = histRef.current.idx > 0
+  const canForward = histRef.current.idx < histRef.current.stack.length - 1
+
+  return (
+    <div className="widget" data-collapsed={collapsed || undefined}>
+      <WHeader title="BROWSER" onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
+      <form
+        className="browser-bar"
+        onSubmit={e => { e.preventDefault(); load(input) }}
+        onPointerDownCapture={e => e.stopPropagation()}
+      >
+        <button type="button" className="browser-nav-btn" onClick={() => step(-1)} disabled={!canBack}    title="Back">←</button>
+        <button type="button" className="browser-nav-btn" onClick={() => step(1)}  disabled={!canForward} title="Forward">→</button>
+        <input
+          className="rss-input"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          placeholder="Enter any URL..."
+          spellCheck={false}
+        />
+        <button className="rss-go-btn" type="submit" title="Go">GO</button>
+        <button type="button" className="rss-go-btn" onClick={() => { setError(false); setFrameKey(k => k + 1) }} title="Refresh">↻</button>
+        <button type="button" className="rss-go-btn" onClick={() => window.open(url, '_blank', 'noopener')} title="Open in new tab">↗</button>
+      </form>
+      {error
+        ? (
+          <div className="browser-error">
+            This site cannot be embedded.{' '}
+            <button className="browser-error-btn" onClick={() => window.open(url, '_blank', 'noopener')}>↗ Open in new tab</button>
+          </div>
+        ) : (
+          <iframe
+            key={url + frameKey}
+            src={url}
+            style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
+            title="Browser"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+            allow="fullscreen"
+            onError={() => setError(true)}
+          />
+        )
+      }
+    </div>
+  )
+}
+
 // ─── Widget catalog + renderer ────────────────────────────────────────────────
 const WIDGET_CATALOG = [
   { type: 'map',      label: 'ATLAS',        icon: '🗺' },
@@ -1243,8 +1305,9 @@ const WIDGET_CATALOG = [
   { type: 'prices',   label: 'Price Tracker',icon: '📈' },
   { type: 'stream',   label: 'Livestream',   icon: '📺' },
   { type: 'weather',  label: 'Weather',      icon: '🌤' },
-  { type: 'conflict', label: 'CONFLICT',     icon: '⚔️' },
-  { type: 'chart',    label: 'TV Chart',     icon: '📊' },
+  { type: 'conflict', label: 'CONFLICT', icon: '⚔️' },
+  { type: 'chart',    label: 'TV Chart', icon: '📊' },
+  { type: 'browser',       label: 'Browser',       icon: '🌐' },
 ]
 
 // Default dimensions when adding via picker
@@ -1256,8 +1319,9 @@ const WIDGET_DEFAULTS = {
   prices:   { w: 3, h: 8  },
   stream:   { w: 3, h: 8  },
   weather:  { w: 3, h: 8  },
-  conflict: { w: 6, h: 11 },
+  conflict: { w: 8, h: 12 },
   chart:    { w: 6, h: 11 },
+  browser:         { w: 6, h: 14 },
 }
 
 function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, onCollapse, collapsed, settings, updateSetting }) {
@@ -1272,6 +1336,7 @@ function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, on
     case 'weather':  return <Weather      {...p} initialCity={settings.weatherCity}   onCityChange={city => updateSetting('weatherCity', city)} />
     case 'conflict': return <ConflictFeed {...p} />
     case 'chart':    return <ChartWidget  {...p} />
+    case 'browser':       return <BrowserWidget        {...p} widgetId={widget.id} />
     default:         return null
   }
 }
@@ -1299,18 +1364,19 @@ function AddWidgetModal({ onAdd, onClose }) {
 
 // ─── Default layout ───────────────────────────────────────────────────────────
 const DEFAULT_LAYOUT = [
-  { i: 'atlas',   x: 0, y: 0,  w: 8, h: 14 },
-  { i: 'feed',    x: 8, y: 0,  w: 4, h: 14 },
-  { i: 'rss',     x: 0, y: 14, w: 3, h: 10 },
-  { i: 'prices',  x: 3, y: 14, w: 3, h: 10 },
-  { i: 'stream',  x: 6, y: 14, w: 3, h: 10 },
-  { i: 'weather', x: 9, y: 14, w: 3, h: 10 },
+  { i: 'atlas',         x: 0, y: 0,  w: 8, h: 14 },
+  { i: 'feed',          x: 8, y: 0,  w: 4, h: 14 },
+  { i: 'rss',           x: 0, y: 14, w: 3, h: 10 },
+  { i: 'prices',        x: 3, y: 14, w: 3, h: 10 },
+  { i: 'stream',        x: 6, y: 14, w: 3, h: 10 },
+  { i: 'weather',       x: 9, y: 14, w: 3, h: 10 },
+  { i: 'conflict', x: 0, y: 24, w: 12, h: 14 },
 ]
 
 const wsKey = id => `vigil_workspace_${id.replace('ws-', '')}`
 
 // ─── Layout version — bump to force-reset all saved layouts on next load ─────
-const LAYOUT_VERSION     = 3
+const LAYOUT_VERSION     = 6
 const LAYOUT_VERSION_KEY = 'vigil_layout_version'
 ;(function initLayoutVersion() {
   try {

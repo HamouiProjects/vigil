@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m *)",
+      "Bash(git push *)",
+      "Bash(npm *)",
+      "Bash(node *)",
+      "Edit",
+      "Write",
+      "PowerShell(Get-Process *)",
+      "Bash(npx vite *)",
+      "Bash(Get-Process node *)",
+      "Bash(Stop-Process -Force)",
+      "Bash(Start-Sleep -Milliseconds 500)"
+    ]
+  }
+}
