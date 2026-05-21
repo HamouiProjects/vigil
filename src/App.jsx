@@ -2469,7 +2469,10 @@ function BrowserWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollap
   function load(raw) {
     let u = raw.trim()
     if (!u) return
-    if (!/^https?:\/\//i.test(u)) u = 'https://' + u
+    if (!/^https?:\/\//i.test(u)) {
+      if (!u.includes('.')) u += '.com'
+      u = 'https://' + u
+    }
     const h = histRef.current
     h.stack  = h.stack.slice(0, h.idx + 1)
     h.stack.push(u)
@@ -2490,7 +2493,9 @@ function BrowserWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollap
 
   const canBack    = histRef.current.idx > 0
   const canForward = histRef.current.idx < histRef.current.stack.length - 1
-  const isBlocked  = /twitter\.com|x\.com/i.test(url)
+  const isBlocked  = /twitter\.com|x\.com|facebook\.com|instagram\.com|linkedin\.com/i.test(url)
+  const blockedHost    = isBlocked ? (() => { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url } })() : ''
+  const blockedDisplay = url.replace(/^https?:\/\//, '').slice(0, 55)
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
@@ -2506,18 +2511,30 @@ function BrowserWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollap
           className="rss-input"
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder="Enter any URL..."
+          placeholder="Enter any URL…"
           spellCheck={false}
         />
         <button className="rss-go-btn" type="submit" title="Go">GO</button>
         <button type="button" className="rss-go-btn" onClick={() => { setError(false); setFrameKey(k => k + 1) }} title="Refresh">↻</button>
         <button type="button" className="rss-go-btn" onClick={() => window.open(url, '_blank', 'noopener')} title="Open in new tab">↗</button>
       </form>
+      <div className="browser-shortcuts" onPointerDownCapture={e => e.stopPropagation()}>
+        <button className="browser-shortcut-btn" onClick={() => setInput('https://x.com/search?q=')}>🐦 X/Twitter</button>
+        <button className="browser-shortcut-btn" onClick={() => setInput('https://www.reddit.com/search/?q=')}>📰 Reddit</button>
+        <button className="browser-shortcut-btn" onClick={() => setInput('https://www.linkedin.com/search/results/all/?keywords=')}>💼 LinkedIn</button>
+        <button className="browser-shortcut-btn" onClick={() => setInput('')}>🌐 Custom</button>
+      </div>
       {isBlocked
         ? (
-          <div className="browser-error">
-            X / Twitter blocks embedding for security reasons.{' '}
-            <button className="browser-error-btn" onClick={() => window.open(url, '_blank', 'noopener')}>Open in new tab →</button>
+          <div className="browser-blocked">
+            <div className="browser-blocked-icon">⚠</div>
+            <div className="browser-blocked-title">{blockedHost} doesn't allow embedding.</div>
+            <div className="browser-blocked-sub">
+              Open it in your browser — you can still use it there while keeping Vigil open.
+            </div>
+            <button className="browser-open-btn" onClick={() => window.open(url, '_blank', 'noopener')}>
+              ↗ Open {blockedDisplay} in new tab
+            </button>
           </div>
         )
         : error

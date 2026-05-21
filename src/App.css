@@ -1069,6 +1069,34 @@
 }
 .browser-nav-btn:hover:not(:disabled) { color: #c9d1d9; background: rgba(255,255,255,0.05); }
 .browser-nav-btn:disabled { opacity: 0.3; cursor: default; }
+.browser-shortcuts {
+  display: flex; flex-shrink: 0; border-bottom: 1px solid #1e2d3d;
+  background: #060c14; overflow-x: auto; scrollbar-width: none;
+}
+.browser-shortcuts::-webkit-scrollbar { display: none; }
+.browser-shortcut-btn {
+  background: none; border: none; border-right: 1px solid #1e2d3d;
+  color: #4a6070; font-size: 10px; padding: 5px 10px; cursor: pointer;
+  font-family: inherit; white-space: nowrap; flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+.browser-shortcut-btn:hover { color: #c9d1d9; background: rgba(255,255,255,0.03); }
+.browser-blocked {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px; padding: 24px; text-align: center;
+  background: #060c14;
+}
+.browser-blocked-icon { font-size: 26px; }
+.browser-blocked-title { font-size: 13px; color: #8fa3b3; font-weight: 600; }
+.browser-blocked-sub {
+  font-size: 11px; color: #4a6a8a; max-width: 280px; line-height: 1.6;
+}
+.browser-open-btn {
+  margin-top: 4px; background: rgba(0,198,255,0.08); border: 1px solid rgba(0,198,255,0.22);
+  color: #00c6ff; font-size: 11px; padding: 6px 14px; border-radius: 4px;
+  cursor: pointer; font-family: inherit; transition: background 0.15s; word-break: break-all;
+}
+.browser-open-btn:hover { background: rgba(0,198,255,0.18); }
 .browser-error {
   flex-shrink: 0; padding: 10px 14px;
   font-size: 11px; color: #6e8098; background: #0a0e1a;
