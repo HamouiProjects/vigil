@@ -970,6 +970,77 @@
   font-size: 9px; color: #2a3a4a; letter-spacing: 0.05em; text-align: center;
 }
 
+/* ── RSS Feed — source tab bar (FIX 1) ── */
+.rss-source-tabs {
+  display: flex; align-items: center; gap: 0;
+  overflow-x: auto; scrollbar-width: none; flex-shrink: 0;
+  background: #060c14; border-bottom: 1px solid #1a2535;
+  padding: 0 4px;
+}
+.rss-source-tabs::-webkit-scrollbar { display: none; }
+.rss-stab {
+  display: flex; align-items: center; gap: 4px;
+  padding: 0 8px; height: 28px; white-space: nowrap;
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  color: #4a6a8a; font-size: 10px; font-family: inherit; cursor: pointer;
+  transition: color 0.15s, border-color 0.15s; flex-shrink: 0;
+}
+.rss-stab:hover { color: #8fa3b3; }
+.rss-stab.active { color: #c9d1d9; border-bottom-color: #00c6ff; }
+.rss-stab-off { opacity: 0.45; }
+.rss-stab-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  transition: background 0.2s;
+}
+.rss-stab-badge {
+  font-size: 8px; background: #00c6ff; color: #000;
+  border-radius: 6px; padding: 0 4px; line-height: 14px;
+  font-weight: 700; flex-shrink: 0;
+}
+.rss-stab-err {
+  font-size: 9px; cursor: pointer; flex-shrink: 0;
+  color: #f5c518;
+}
+.rss-stab-del {
+  font-size: 11px; line-height: 1; background: none; border: none;
+  color: #2a3a4a; padding: 0 0 0 2px; cursor: pointer;
+  font-family: inherit; transition: color 0.15s; flex-shrink: 0;
+}
+.rss-stab:hover .rss-stab-del { color: #4a6a8a; }
+.rss-stab-del:hover { color: #ff4d4f !important; }
+.rss-stab-add { padding: 0 10px; font-size: 14px; color: #4a6a8a; }
+.rss-stab-add:hover { color: #00c6ff; }
+.rss-stab-add.active { color: #00c6ff; border-bottom-color: #00c6ff; }
+
+/* ── RSS Feed — add form with autocomplete ── */
+.rss-add-bar {
+  display: flex; align-items: center; gap: 0; flex-shrink: 0;
+  background: #060c14; border-bottom: 1px solid #1a2535;
+  padding: 4px 6px; gap: 4px;
+}
+.rss-add-name-wrap {
+  position: relative; flex: 1;
+}
+.rss-sug-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
+  background: #0d1b2a; border: 1px solid #1a2535; border-top: none;
+  border-radius: 0 0 4px 4px; overflow: hidden;
+}
+.rss-sug-item {
+  display: flex; flex-direction: column; padding: 5px 8px; cursor: pointer;
+  border-bottom: 1px solid #1a2535; gap: 1px;
+}
+.rss-sug-item:last-child { border-bottom: none; }
+.rss-sug-item:hover { background: rgba(0,198,255,0.06); }
+.rss-sug-name { font-size: 10px; color: #c9d1d9; font-weight: 600; }
+.rss-sug-url { font-size: 8px; color: #4a6a8a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rss-cancel-btn {
+  background: transparent; border: none; color: #4a6a8a; font-size: 12px;
+  padding: 0 6px; cursor: pointer; font-family: inherit; flex-shrink: 0;
+  transition: color 0.15s;
+}
+.rss-cancel-btn:hover { color: #ff4d4f; }
+
 /* ── Weather widget (redesigned) ── */
 .wx-search-bar {
   display: flex; flex-shrink: 0; background: #080f18;
