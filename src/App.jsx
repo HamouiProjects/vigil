@@ -2454,9 +2454,10 @@ function ChartWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapse
 
 // ─── Browser widget ──────────────────────────────────────────────────────────
 const BROWSER_DEFAULT_URL = 'https://www.google.com'
+const BROWSER_BLOCKED     = /twitter\.com|x\.com|facebook\.com|instagram\.com|linkedin\.com|reddit\.com/i
 
 function BrowserWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
-  const storageKey = `vigil_browser_${widgetId}`
+  const storageKey = `vigil_browser_url_${widgetId}`
   const savedUrl   = (() => { try { return localStorage.getItem(storageKey) || BROWSER_DEFAULT_URL } catch { return BROWSER_DEFAULT_URL } })()
 
   const histRef      = useRef({ stack: [savedUrl], idx: 0 })
@@ -2493,9 +2494,7 @@ function BrowserWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollap
 
   const canBack    = histRef.current.idx > 0
   const canForward = histRef.current.idx < histRef.current.stack.length - 1
-  const isBlocked  = /twitter\.com|x\.com|facebook\.com|instagram\.com|linkedin\.com/i.test(url)
-  const blockedHost    = isBlocked ? (() => { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url } })() : ''
-  const blockedDisplay = url.replace(/^https?:\/\//, '').slice(0, 55)
+  const isBlocked  = BROWSER_BLOCKED.test(url)
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
@@ -2518,23 +2517,12 @@ function BrowserWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollap
         <button type="button" className="rss-go-btn" onClick={() => { setError(false); setFrameKey(k => k + 1) }} title="Refresh">↻</button>
         <button type="button" className="rss-go-btn" onClick={() => window.open(url, '_blank', 'noopener')} title="Open in new tab">↗</button>
       </form>
-      <div className="browser-shortcuts" onPointerDownCapture={e => e.stopPropagation()}>
-        <button className="browser-shortcut-btn" onClick={() => setInput('https://x.com/search?q=')}>🐦 X/Twitter</button>
-        <button className="browser-shortcut-btn" onClick={() => setInput('https://www.reddit.com/search/?q=')}>📰 Reddit</button>
-        <button className="browser-shortcut-btn" onClick={() => setInput('https://www.linkedin.com/search/results/all/?keywords=')}>💼 LinkedIn</button>
-        <button className="browser-shortcut-btn" onClick={() => setInput('')}>🌐 Custom</button>
-      </div>
       {isBlocked
         ? (
           <div className="browser-blocked">
             <div className="browser-blocked-icon">⚠</div>
-            <div className="browser-blocked-title">{blockedHost} doesn't allow embedding.</div>
-            <div className="browser-blocked-sub">
-              Open it in your browser — you can still use it there while keeping Vigil open.
-            </div>
-            <button className="browser-open-btn" onClick={() => window.open(url, '_blank', 'noopener')}>
-              ↗ Open {blockedDisplay} in new tab
-            </button>
+            <div className="browser-blocked-title">This site doesn't allow embedding.</div>
+            <button className="browser-open-btn" onClick={() => window.open(url, '_blank', 'noopener')}>↗ Open in new tab</button>
           </div>
         )
         : error
@@ -2560,6 +2548,208 @@ function BrowserWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollap
 }
 
 // ─── Widget catalog + renderer ────────────────────────────────────────────────
+// ─── Social Feed widget ───────────────────────────────────────────────────────
+const SOCIAL_DEFAULT_FOLLOWS = [
+  { id: 'sf-1', platform: 'reddit',   type: 'subreddit', value: 'worldnews',        label: 'r/worldnews' },
+  { id: 'sf-2', platform: 'reddit',   type: 'subreddit', value: 'ukraine',           label: 'r/ukraine' },
+  { id: 'sf-3', platform: 'twitter',  type: 'keyword',   value: 'Iran war',          label: 'Iran war' },
+  { id: 'sf-4', platform: 'telegram', type: 'channel',   value: 'ukrainianmilitary', label: '@ukrainianmilitary' },
+]
+const SOCIAL_PLAT_ORDER = ['twitter', 'reddit', 'telegram']
+const SOCIAL_PLAT_LABEL = { twitter: 'X / TWITTER', reddit: 'REDDIT', telegram: 'TELEGRAM' }
+function socialIcon(p) { return p === 'twitter' ? '🐦' : p === 'reddit' ? '🔴' : '✈️' }
+function socialFmt(n)  { return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n) }
+function socialAge(utc) {
+  const s = Math.floor(Date.now() / 1000) - utc
+  if (s < 60) return 'just now'
+  if (s < 3600)  return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
+}
+
+function SocialFeed({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+  const storageKey = `vigil_social_follows_${widgetId}`
+
+  const [follows,      setFollows]      = useState(() => {
+    try { const s = JSON.parse(localStorage.getItem(storageKey) || 'null'); return Array.isArray(s) && s.length ? s : SOCIAL_DEFAULT_FOLLOWS } catch { return SOCIAL_DEFAULT_FOLLOWS }
+  })
+  const [activeId,     setActiveId]     = useState(() => follows[0]?.id ?? null)
+  const [addingFollow, setAddingFollow] = useState(false)
+  const [addPlatform,  setAddPlatform]  = useState('reddit')
+  const [addValue,     setAddValue]     = useState('')
+  const [posts,        setPosts]        = useState([])
+  const [loading,      setLoading]      = useState(false)
+
+  const activeFollow = follows.find(f => f.id === activeId) ?? null
+
+  function saveFollows(next) {
+    setFollows(next)
+    try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch {}
+  }
+
+  function addFollow() {
+    const v = addValue.trim(); if (!v) return
+    let type, value, label
+    if (addPlatform === 'reddit') {
+      const clean = v.replace(/^r\//, '')
+      const isSub = !/\s/.test(clean)
+      type = isSub ? 'subreddit' : 'keyword'; value = isSub ? clean : v; label = isSub ? `r/${clean}` : v
+    } else if (addPlatform === 'twitter') {
+      const isHandle = /^@?[A-Za-z0-9_]+$/.test(v)
+      type = isHandle ? 'account' : 'keyword'; value = v.replace(/^@/, ''); label = isHandle ? `@${value}` : v
+    } else {
+      type = 'channel'; value = v.replace(/^@/, ''); label = `@${value}`
+    }
+    const entry = { id: `sf-${Date.now()}`, platform: addPlatform, type, value, label }
+    saveFollows([...follows, entry]); setActiveId(entry.id); setAddValue(''); setAddingFollow(false)
+  }
+
+  function removeFollow(id) {
+    const next = follows.filter(f => f.id !== id)
+    saveFollows(next)
+    if (activeId === id) setActiveId(next[0]?.id ?? null)
+  }
+
+  const fetchReddit = useCallback(async (follow) => {
+    if (!follow || follow.platform !== 'reddit') return
+    setLoading(true)
+    try {
+      const url = follow.type === 'subreddit'
+        ? `https://www.reddit.com/r/${follow.value}.json?limit=25`
+        : `https://www.reddit.com/search.json?q=${encodeURIComponent(follow.value)}&sort=new&limit=25`
+      const res  = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(10000) })
+      const json = await res.json()
+      setPosts((json?.data?.children ?? []).map(c => c.data))
+    } catch { setPosts([]) }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (activeFollow?.platform === 'reddit') { setPosts([]); fetchReddit(activeFollow) }
+    else setPosts([])
+  }, [activeFollow, fetchReddit])
+
+  useEffect(() => {
+    if (activeFollow?.platform !== 'reddit') return
+    const id = setInterval(() => fetchReddit(activeFollow), 10 * 60_000)
+    return () => clearInterval(id)
+  }, [activeFollow, fetchReddit])
+
+  const grouped = {}
+  follows.forEach(f => { (grouped[f.platform] ??= []).push(f) })
+
+  const addPlaceholder = addPlatform === 'twitter'  ? 'Username (e.g. @PakMilitary) or keyword'
+                       : addPlatform === 'reddit'   ? 'Subreddit (e.g. ukraine) or keyword'
+                       :                              'Channel (e.g. @ukrainianmilitary)'
+
+  function renderRight() {
+    if (!activeFollow) return <div className="empty-state">Select a source from the sidebar</div>
+
+    if (activeFollow.platform === 'twitter') {
+      const tUrl = activeFollow.type === 'account'
+        ? `https://x.com/${activeFollow.value}`
+        : `https://x.com/search?q=${encodeURIComponent(activeFollow.value)}`
+      return (
+        <div className="browser-blocked">
+          <div className="browser-blocked-icon">🐦</div>
+          <div className="browser-blocked-title">X / Twitter requires a paid API key</div>
+          <div className="browser-blocked-sub">Open it in your browser to browse this account or search — Vigil stays open in the background.</div>
+          <button className="browser-open-btn" onClick={() => window.open(tUrl, '_blank', 'noopener')}>↗ Open {activeFollow.label} on X</button>
+        </div>
+      )
+    }
+
+    if (activeFollow.platform === 'telegram') {
+      return (
+        <div className="browser-blocked">
+          <div className="browser-blocked-icon">✈️</div>
+          <div className="browser-blocked-title">Telegram channel</div>
+          <div className="browser-blocked-sub">Open this channel in Telegram or your browser to read messages.</div>
+          <button className="browser-open-btn" onClick={() => window.open(`https://t.me/${activeFollow.value}`, '_blank', 'noopener')}>↗ Open {activeFollow.label} on Telegram</button>
+        </div>
+      )
+    }
+
+    // Reddit
+    if (loading && posts.length === 0) return <SkeletonFeedItems count={6} />
+    if (!loading && posts.length === 0) return (
+      <div className="empty-state"><span className="empty-state-icon">🔍</span>No posts found for {activeFollow.label}</div>
+    )
+    return posts.map((post, i) => (
+      <a key={i} className="social-post" href={`https://reddit.com${post.permalink}`} target="_blank" rel="noopener noreferrer">
+        <div className="social-post-meta">🔴 r/{post.subreddit} · {socialAge(post.created_utc)}</div>
+        <div className="social-post-title">{post.title}</div>
+        <div className="social-post-score">▲ {socialFmt(post.score)} · 💬 {socialFmt(post.num_comments)}</div>
+      </a>
+    ))
+  }
+
+  return (
+    <div className="widget" data-collapsed={collapsed || undefined}>
+      <div className="widget-header">
+        <span className="widget-title">SOCIAL FEED</span>
+        <div className="widget-actions">
+          <span className={`widget-badge${loading ? ' inactive' : ''}`}>{loading ? 'LOADING' : 'LIVE'}</span>
+          {onCollapse   && <button className="widget-btn" onClick={onCollapse}   title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
+          {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
+          {onClose      && <button className="widget-btn" onClick={onClose}      title="Close">✕</button>}
+        </div>
+      </div>
+
+      <div className="rss-body">
+        {/* LEFT SIDEBAR */}
+        <div className="social-sidebar" onPointerDownCapture={e => e.stopPropagation()}>
+          <div className="rss-sidebar-label">FOLLOWING</div>
+          <div className="rss-source-list">
+            {SOCIAL_PLAT_ORDER.filter(p => grouped[p]?.length).map(platform => (
+              <div key={platform}>
+                <div className="social-group-label">{SOCIAL_PLAT_LABEL[platform]}</div>
+                {grouped[platform].map(f => (
+                  <div key={f.id} className={`rss-source-item${activeId === f.id ? ' active' : ''}`} onClick={() => setActiveId(f.id)}>
+                    <span className="social-plat-icon">{socialIcon(f.platform)}</span>
+                    <span className="rss-source-name">{f.label}</span>
+                    <button className="rss-source-del" onClick={e => { e.stopPropagation(); removeFollow(f.id) }}>×</button>
+                  </div>
+                ))}
+              </div>
+            ))}
+
+            {addingFollow && (
+              <div className="rss-add-source-form" onPointerDownCapture={e => e.stopPropagation()}
+                style={{ padding: '6px 8px', borderTop: '1px solid #1a2535' }}>
+                <div className="social-platform-btns">
+                  {SOCIAL_PLAT_ORDER.map(p => (
+                    <button key={p} className={`social-plat-btn${addPlatform === p ? ' active' : ''}`}
+                      onClick={() => { setAddPlatform(p); setAddValue('') }}>{socialIcon(p)}</button>
+                  ))}
+                </div>
+                <input autoFocus className="rss-add-source-input" value={addValue}
+                  onChange={e => setAddValue(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addFollow(); if (e.key === 'Escape') { setAddingFollow(false); setAddValue('') } }}
+                  placeholder={addPlaceholder} />
+                <div className="rss-add-source-actions">
+                  <button className="rss-add-source-add" onClick={addFollow}>ADD</button>
+                  <button className="rss-add-source-cancel" onClick={() => { setAddingFollow(false); setAddValue('') }}>Cancel</button>
+                </div>
+              </div>
+            )}
+            <button className="rss-add-source-btn" style={{ margin: '4px 8px', width: 'calc(100% - 16px)' }}
+              onClick={() => setAddingFollow(v => !v)}>＋ Add</button>
+          </div>
+        </div>
+
+        {/* RIGHT PANEL */}
+        <div className="rss-right" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+            {renderRight()}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Widget catalog + renderer ────────────────────────────────────────────────
 const WIDGET_CATALOG = [
   { type: 'map',      label: 'ATLAS',        icon: '🗺' },
   { type: 'feeds',    label: 'Feeds',        icon: '🌐' },
@@ -2570,7 +2760,8 @@ const WIDGET_CATALOG = [
   { type: 'weather',  label: 'Weather',      icon: '🌤' },
   { type: 'conflict', label: 'CONFLICT', icon: '⚔️' },
   { type: 'chart',    label: 'TV Chart', icon: '📊' },
-  { type: 'browser',       label: 'Browser',       icon: '🌐' },
+  { type: 'browser', label: 'Browser',     icon: '🌐' },
+  { type: 'social', label: 'SOCIAL FEED', icon: '📡' },
 ]
 
 // Default dimensions when adding via picker
@@ -2584,7 +2775,8 @@ const WIDGET_DEFAULTS = {
   weather:  { w: 3, h: 8  },
   conflict: { w: 8, h: 12 },
   chart:    { w: 6, h: 11 },
-  browser:         { w: 6, h: 14 },
+  browser: { w: 6, h: 14 },
+  social:  { w: 5, h: 11 },
 }
 
 function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, onCollapse, collapsed, settings, updateSetting }) {
@@ -2599,8 +2791,9 @@ function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, on
     case 'weather':  return <Weather      {...p} widgetId={widget.id} initialCity={settings.weatherCity} onCityChange={city => updateSetting('weatherCity', city)} />
     case 'conflict': return <ConflictFeed {...p} />
     case 'chart':    return <ChartWidget  {...p} />
-    case 'browser':       return <BrowserWidget        {...p} widgetId={widget.id} />
-    default:         return null
+    case 'browser': return <BrowserWidget {...p} widgetId={widget.id} />
+    case 'social':  return <SocialFeed  {...p} widgetId={widget.id} />
+    default:        return null
   }
 }
 
