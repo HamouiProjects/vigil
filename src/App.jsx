@@ -1135,14 +1135,16 @@ function KeywordFeed({ widgetId = 'newssearch', onClose, onFullscreen, isFullscr
 
 // ─── RSS Feed (multi-feed with keyword filter) ────────────────────────────────
 const RSS_DEFAULT_FEEDS = [
-  { id: 'bbc',       name: 'BBC News',     url: 'https://feeds.bbci.co.uk/news/rss.xml',            enabled: true, color: '#e63946' },
-  { id: 'aljazeera', name: 'Al Jazeera',   url: 'https://www.aljazeera.com/xml/rss/all.xml',         enabled: true, color: '#00b894' },
-  { id: 'france24',  name: 'France 24',    url: 'https://www.france24.com/en/rss',                   enabled: true, color: '#0984e3' },
-  { id: 'guardian',  name: 'The Guardian', url: 'https://www.theguardian.com/world/rss',             enabled: true, color: '#a29bfe' },
-  { id: 'dw',        name: 'DW News',      url: 'https://rss.dw.com/rdf/rss-en-all',                enabled: true, color: '#fdcb6e' },
+  { id: 'bbc',       name: 'BBC News',      url: 'https://feeds.bbci.co.uk/news/rss.xml',            enabled: true, color: '#e63946' },
+  { id: 'aljazeera', name: 'Al Jazeera',    url: 'https://www.aljazeera.com/xml/rss/all.xml',         enabled: true, color: '#00b894' },
+  { id: 'france24',  name: 'France 24',     url: 'https://www.france24.com/en/rss',                   enabled: true, color: '#0984e3' },
+  { id: 'guardian',  name: 'The Guardian',  url: 'https://www.theguardian.com/world/rss',             enabled: true, color: '#a29bfe' },
+  { id: 'dw',        name: 'DW News',       url: 'https://rss.dw.com/rdf/rss-en-all',                enabled: true, color: '#fdcb6e' },
+  { id: 'mee',       name: 'Mid East Eye',  url: 'https://www.middleeasteye.net/rss',                 enabled: true, color: '#00b894' },
+  { id: 'rt',        name: 'RT News',       url: 'https://www.rt.com/rss/',                          enabled: true, color: '#fd79a8' },
 ]
 const RSS_EXTRA_COLORS = ['#fd79a8', '#fdcb6e', '#e17055', '#74b9ff', '#55efc4', '#636e72']
-const RSS_BROKEN_DOMAINS = ['feeds.reuters.com', 'feeds.apnews.com', 'foxnews.com']
+const RSS_BROKEN_DOMAINS = ['feeds.reuters.com', 'feeds.apnews.com', 'foxnews.com', 'haaretz.com', 'arabnews.com']
 const RSS_SUGGESTIONS = [
   { name: 'BBC News',        url: 'https://feeds.bbci.co.uk/news/rss.xml',                       color: '#bb1919' },
   { name: 'BBC World',       url: 'https://feeds.bbci.co.uk/news/world/rss.xml',                  color: '#bb1919' },
@@ -1255,13 +1257,10 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
   const feedsRef       = useRef(feeds); feedsRef.current = feeds
   const isVisibleRss   = usePageVisibility()
 
-  // Validate saved active source on mount
+  // Always open on "All" view — don't restore a specific source across sessions
   useEffect(() => {
-    const saved = localStorage.getItem(`vigil_rss_active_source_${widgetId}`)
-    if (saved && saved !== 'all' && !feeds.some(f => f.id === saved)) {
-      setActiveSource('all')
-      try { localStorage.setItem(`vigil_rss_active_source_${widgetId}`, 'all') } catch {}
-    }
+    setActiveSource('all')
+    try { localStorage.setItem(`vigil_rss_active_source_${widgetId}`, 'all') } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -1303,6 +1302,7 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
             description: (item.description ?? '').replace(/<[^>]+>/g, '').trim(),
             _feedId:     f.id,
             _feedName:   f.name,
+            _category:   (item.categories?.[0] ?? '').trim(),
           }))
         } else {
           newErrors[f.id] = true
@@ -1334,6 +1334,7 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
             description: (item.description ?? '').replace(/<[^>]+>/g, '').trim(),
             _feedId:     feed.id,
             _feedName:   feed.name,
+            _category:   (item.categories?.[0] ?? '').trim(),
           }))
         }))
         setErrorByFeed(prev => { const next = { ...prev }; delete next[feed.id]; return next })
@@ -1672,10 +1673,10 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
                       rel="noopener noreferrer"
                       onClick={() => markSeen(item.link)}
                     >
-                      <div className="rss-art-bar" style={{ background: color }} />
                       <div className="rss-art-body">
                         <div className="rss-art-meta">
                           <span className="rss-art-source" style={{ color }}>{item._feedName}</span>
+                          {item._category && <span className="rss-art-section">· {item._category}</span>}
                           <span className="rss-art-time">· {rssRelTime(item.pubDate)}</span>
                         </div>
                         <div className="rss-art-title">{item.title}</div>

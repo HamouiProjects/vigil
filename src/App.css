@@ -573,7 +573,7 @@
 
 /* ── RSS filter bar ── */
 .rss-filter-bar {
-  position: sticky; top: 0; z-index: 2;
+  flex-shrink: 0;
   background: #0d1421; border-bottom: 1px solid #1a2535;
 }
 .rss-filter-input { width: 100%; padding-right: 28px !important; box-sizing: border-box; }
@@ -924,15 +924,16 @@
 }
 
 .rss-right {
-  flex: 1; min-width: 0; min-height: 0; overflow-y: auto;
-  scrollbar-width: thin; scrollbar-color: #1e2d3d transparent;
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; overflow: hidden;
 }
 .rss-result-count {
   font-size: 9px; color: #4a6a8a; letter-spacing: 0.04em;
   padding: 2px 10px 4px;
 }
 .rss-articles {
-  min-height: 0;
+  flex: 1; min-height: 0; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: #1e2d3d transparent;
 }
 
 /* ── RSS article items (new layout) ── */
@@ -944,13 +945,8 @@
 }
 .rss-article:hover { background: rgba(255,255,255,0.025); }
 .rss-article:hover .rss-art-ext { opacity: 1; }
-.rss-art-bar {
-  width: 3px; flex-shrink: 0; opacity: 0.75;
-  transition: opacity 0.2s;
-}
-.rss-article.rss-seen .rss-art-bar { opacity: 0.25; }
 .rss-art-body {
-  flex: 1; padding: 6px 6px 6px 9px; min-width: 0;
+  flex: 1; padding: 6px 9px; min-width: 0;
   display: flex; flex-direction: column; gap: 2px;
 }
 .rss-comfortable .rss-art-body { padding: 9px 6px 9px 9px; gap: 3px; }
@@ -959,6 +955,7 @@
   font-size: 9px; font-weight: 600; letter-spacing: 0.07em;
   text-transform: uppercase; white-space: nowrap; flex-shrink: 0;
 }
+.rss-art-section { font-size: 9px; color: #3a4a5c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px; }
 .rss-art-time { font-size: 9px; color: #3a4a5c; white-space: nowrap; }
 .rss-art-title {
   font-size: 11px; color: #8fa3b3; line-height: 1.45;
