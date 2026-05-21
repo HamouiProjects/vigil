@@ -1949,7 +1949,10 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
   const [fetchError,  setFetchError]  = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
   const [timeAgo,     setTimeAgo]     = useState('')
-  const [toast,       setToast]       = useState(null)
+  const [toast,         setToast]         = useState(null)
+  const [selectedAsset, setSelectedAsset] = useState(null)
+  const [chartOpen,     setChartOpen]     = useState(false)
+  const [chartInterval, setChartInterval] = useState('D')
   const toastKeyRef = useRef(0)
   const bodyRef     = useRef(null)
   const assetsRef   = useRef(assets)
@@ -2075,7 +2078,13 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
 
   function handleChartClick(asset) {
     const tvSym = COINGECKO_TO_TV[asset.id] ?? `BINANCE:${asset.ticker}USDT`
-    window.dispatchEvent(new CustomEvent('vigil-chart-symbol', { detail: { symbol: tvSym } }))
+    setSelectedAsset({ ...asset, tvSym })
+    setChartOpen(true)
+  }
+
+  function closeChart() {
+    setChartOpen(false)
+    setTimeout(() => setSelectedAsset(null), 260)
   }
 
   return (
@@ -2125,21 +2134,42 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
             <button className="widget-error-retry" onClick={() => { setFetchError(null); fetchAll(true) }}>↻ Retry</button>
           </div>
         ) : (
-          <div className="pt-scroll">
-            {assets.length === 0
-              ? <div className="empty-state"><span className="empty-state-icon">📈</span>Search below to add assets</div>
-              : <div className="pt-grid">
-                  {assets.map(asset => (
-                    <AssetCard key={asset.id} asset={asset} priceData={priceData} onRemove={handleRemove} onChartClick={handleChartClick} />
-                  ))}
-                </div>
-            }
-            <AssetSearch existingIds={assets.map(a => a.id)} onAdd={handleAdd} />
-            <div className="pt-footer">
-              <span>{lastRefresh ? `Updated ${timeAgo}` : ''}</span>
-              <span>via CoinGecko</span>
+          <>
+            <div className="pt-scroll">
+              {assets.length === 0
+                ? <div className="empty-state"><span className="empty-state-icon">📈</span>Search below to add assets</div>
+                : <div className="pt-grid">
+                    {assets.map(asset => (
+                      <AssetCard key={asset.id} asset={asset} priceData={priceData} onRemove={handleRemove} onChartClick={handleChartClick} />
+                    ))}
+                  </div>
+              }
+              <AssetSearch existingIds={assets.map(a => a.id)} onAdd={handleAdd} />
+              <div className="pt-footer">
+                <span>{lastRefresh ? `Updated ${timeAgo}` : ''}</span>
+                <span>via CoinGecko</span>
+              </div>
             </div>
-          </div>
+            <div className={`pt-chart-panel${chartOpen ? ' open' : ''}`}>
+              {selectedAsset && (
+                <>
+                  <div className="pt-chart-header" onPointerDownCapture={e => e.stopPropagation()}>
+                    <span className="pt-chart-ticker">● {selectedAsset.tvSym.includes(':') ? selectedAsset.tvSym.split(':')[1] : selectedAsset.tvSym}</span>
+                    {[['1','1m'],['5','5m'],['15','15m'],['60','1h'],['240','4h'],['D','D']].map(([tf, label]) => (
+                      <button key={tf} className={`pt-chart-tf${chartInterval === tf ? ' active' : ''}`} onClick={() => setChartInterval(tf)}>{label}</button>
+                    ))}
+                    <button className="pt-chart-close" onClick={closeChart}>✕</button>
+                  </div>
+                  <iframe
+                    key={selectedAsset.tvSym + chartInterval}
+                    src={`https://s.tradingview.com/widgetembed/?frameElementId=tv_pt&symbol=${encodeURIComponent(selectedAsset.tvSym)}&interval=${chartInterval}&theme=dark&style=1&locale=en&toolbar_bg=0d1421&enable_publishing=0&hide_side_toolbar=1&allow_symbol_change=0&save_image=0`}
+                    style={{ display: 'block', width: '100%', height: '270px', border: 'none', flexShrink: 0 }}
+                    title="Asset Chart"
+                  />
+                </>
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -2471,18 +2501,6 @@ function ChartWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse
   })
   const [inputSymbol, setInputSymbol] = useState(activeSymbol)
 
-  useEffect(() => {
-    const handler = e => {
-      const sym = e.detail?.symbol
-      if (!sym) return
-      setActiveSymbol(sym)
-      setInputSymbol(sym)
-      try { localStorage.setItem(storageKey, sym) } catch {}
-    }
-    window.addEventListener('vigil-chart-symbol', handler)
-    return () => window.removeEventListener('vigil-chart-symbol', handler)
-  }, [storageKey])
-
   function go(raw) {
     const sym = raw.trim().toUpperCase()
     if (!sym) return
@@ -2496,7 +2514,7 @@ function ChartWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <WHeader title="TV CHART" onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
+      <WHeader title={<>CHART<span className="chart-tv-credit">powered by TradingView</span></>} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
       <form
         className="tvchart-bar"
         onSubmit={e => { e.preventDefault(); go(inputSymbol) }}
@@ -2831,7 +2849,7 @@ const WIDGET_CATALOG = [
   { type: 'stream',   label: 'Livestream',   icon: '📺' },
   { type: 'weather',  label: 'Weather',      icon: '🌤' },
   { type: 'conflict', label: 'CONFLICT', icon: '⚔️' },
-  { type: 'chart',    label: 'TV Chart', icon: '📊' },
+  { type: 'chart',    label: 'CHART',    icon: '📊' },
   { type: 'browser', label: 'Browser',     icon: '🌐' },
   { type: 'social', label: 'SOCIAL FEED', icon: '📡' },
 ]
