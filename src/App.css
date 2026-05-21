@@ -722,15 +722,8 @@
 }
 .pt-chart-ticker {
   font-size: 10px; font-weight: 700; color: #00ff88; letter-spacing: 0.05em;
-  margin-right: 4px; flex-shrink: 0;
+  flex: 1; flex-shrink: 0;
 }
-.pt-chart-tf {
-  background: none; border: 1px solid #1e2d3d; color: #4a6070;
-  font-size: 9px; padding: 2px 5px; border-radius: 3px; cursor: pointer;
-  font-family: inherit; transition: background 0.1s, color 0.1s, border-color 0.1s;
-}
-.pt-chart-tf.active { background: rgba(0,198,255,0.1); border-color: #00c6ff; color: #00c6ff; }
-.pt-chart-tf:hover:not(.active) { color: #8fa3b3; border-color: #2a3f55; }
 .pt-chart-close {
   margin-left: auto; background: none; border: none; color: #4a6070;
   font-size: 11px; cursor: pointer; padding: 2px 5px; flex-shrink: 0;

@@ -1952,7 +1952,6 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
   const [toast,         setToast]         = useState(null)
   const [selectedAsset, setSelectedAsset] = useState(null)
   const [chartOpen,     setChartOpen]     = useState(false)
-  const [chartInterval, setChartInterval] = useState('D')
   const toastKeyRef = useRef(0)
   const bodyRef     = useRef(null)
   const assetsRef   = useRef(assets)
@@ -2155,14 +2154,11 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
                 <>
                   <div className="pt-chart-header" onPointerDownCapture={e => e.stopPropagation()}>
                     <span className="pt-chart-ticker">● {selectedAsset.tvSym.includes(':') ? selectedAsset.tvSym.split(':')[1] : selectedAsset.tvSym}</span>
-                    {[['1','1m'],['5','5m'],['15','15m'],['60','1h'],['240','4h'],['D','D']].map(([tf, label]) => (
-                      <button key={tf} className={`pt-chart-tf${chartInterval === tf ? ' active' : ''}`} onClick={() => setChartInterval(tf)}>{label}</button>
-                    ))}
                     <button className="pt-chart-close" onClick={closeChart}>✕</button>
                   </div>
                   <iframe
-                    key={selectedAsset.tvSym + chartInterval}
-                    src={`https://s.tradingview.com/widgetembed/?frameElementId=tv_pt&symbol=${encodeURIComponent(selectedAsset.tvSym)}&interval=${chartInterval}&theme=dark&style=1&locale=en&toolbar_bg=0d1421&enable_publishing=0&hide_side_toolbar=1&allow_symbol_change=0&save_image=0`}
+                    key={selectedAsset.tvSym}
+                    src={`https://s.tradingview.com/widgetembed/?frameElementId=tv_pt&symbol=${encodeURIComponent(selectedAsset.tvSym)}&interval=D&theme=dark&style=1&locale=en&toolbar_bg=0d1421&enable_publishing=0&hide_side_toolbar=0&allow_symbol_change=0&save_image=0`}
                     style={{ display: 'block', width: '100%', height: '270px', border: 'none', flexShrink: 0 }}
                     title="Asset Chart"
                   />
