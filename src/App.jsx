@@ -1286,7 +1286,7 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
     setLoading(true)
     const results = await Promise.allSettled(
       enabled.map(f =>
-        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(f.url)}&count=50`,
+        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(f.url)}`,
           { signal: AbortSignal.timeout(15000) }).then(r => r.json())
       )
     )
@@ -1321,7 +1321,7 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
 
   async function retrySingleFeed(feed) {
     try {
-      const res  = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}&count=50`,
+      const res  = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}`,
         { signal: AbortSignal.timeout(15000) })
       const json = await res.json()
       if (json?.status === 'ok') {
