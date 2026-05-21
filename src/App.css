@@ -367,6 +367,28 @@
 }
 .widget-error-icon { font-size: 20px; opacity: 0.6; }
 
+/* ── Atlas feeds bar (row 2 of toolbar) ── */
+.cmap-feeds-bar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 0 8px; height: 32px; flex-shrink: 0;
+  background: #060c14; border-bottom: 1px solid #1a2535;
+}
+
+/* ── Atlas collapsible toolbar ── */
+.atlas-slim-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 24px; padding: 0 10px; flex-shrink: 0;
+  background: #060c14; border-bottom: 1px solid #1a2535;
+  cursor: pointer; user-select: none;
+}
+.atlas-slim-bar:hover { background: #0a1220; }
+.atlas-dot-row { display: flex; align-items: center; gap: 5px; }
+.atlas-dot { width: 6px; height: 6px; border-radius: 50%; transition: background 0.2s; flex-shrink: 0; }
+.atlas-mode-label { font-size: 8px; color: #4a6a8a; letter-spacing: 0.1em; margin-left: 3px; }
+.atlas-chevron { font-size: 8px; color: #4a6a8a; }
+.atlas-toolbar-wrap { overflow: hidden; max-height: 0; transition: max-height 0.2s ease; flex-shrink: 0; }
+.atlas-toolbar-wrap.open { max-height: 64px; }
+
 /* ── Atlas loading bar ── */
 .atlas-loading-bar {
   display: flex; align-items: center; gap: 6px;
@@ -842,7 +864,7 @@
 
 /* ── Add Widget Modal ── */
 .modal-overlay {
-  position: fixed; inset: 0; z-index: 600;
+  position: fixed; inset: 0; z-index: 1100;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(2px);
   display: flex; align-items: center; justify-content: center;
 }

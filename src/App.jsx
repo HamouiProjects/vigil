@@ -384,9 +384,12 @@ async function fetchUSGS() {
   return quakes
 }
 
-const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, showPiracy, onLoadingChange }, ref) {
+const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, showPiracy, onLoadingChange, initialCenter = [20, 0], initialZoom = 2, onMove }, ref) {
   const containerRef  = useRef(null)
   const mapRef        = useRef(null)
+  const onMoveRef     = useRef(onMove)
+  onMoveRef.current   = onMove
+  const initViewRef   = useRef({ center: initialCenter, zoom: initialZoom })
   const layerConflict = useRef(null)
   const layerQuake    = useRef(null)
   const layerStorm    = useRef(null)
@@ -448,6 +451,7 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
   useImperativeHandle(ref, () => ({
     refresh,
     invalidateSize: () => { mapRef.current?.invalidateSize() },
+    setView: (center, zoom) => { mapRef.current?.setView(center, zoom) },
   }), [refresh])
 
   // Capture show* in a ref so the map-init effect can read their current values
@@ -457,7 +461,7 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
-    const map = L.map(containerRef.current, { center: [20, 0], zoom: 2, zoomControl: true })
+    const map = L.map(containerRef.current, { center: initViewRef.current.center, zoom: initViewRef.current.zoom, zoomControl: true })
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© <a href="https://openstreetmap.org" target="_blank">OpenStreetMap</a>',
       maxZoom: 18,
@@ -514,6 +518,11 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
       layerPiracy.current.addLayer(rect)
     })
 
+    map.on('moveend', () => {
+      const c = map.getCenter()
+      onMoveRef.current?.({ center: [c.lat, c.lng], zoom: map.getZoom() })
+    })
+
     refresh()
     return () => { map.remove(); mapRef.current = null }
   }, [refresh])
@@ -527,14 +536,69 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
   )
 })
 
-function AtlasWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
-  const [showConflicts, setShowConflicts] = useState(true)
-  const [showNatural,   setShowNatural]   = useState(true)
-  const [showPiracy,    setShowPiracy]    = useState(true)
-  const [mapMode,     setMapMode]     = useState('leaflet')
-  const [iframeSrc,   setIframeSrc]   = useState('')
-  const [dataLoading, setDataLoading] = useState(false)
-  const atlasRef = useRef(null)
+const ATLAS_STATE_KEY   = id => `vigil_atlas_state_${id}`
+const ATLAS_TOOLBAR_KEY = id => `vigil_atlas_toolbar_collapsed_${id}`
+
+function readAtlasState(id) {
+  try { return JSON.parse(localStorage.getItem(ATLAS_STATE_KEY(id)) || 'null') } catch { return null }
+}
+
+function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+  const saved = readAtlasState(widgetId)
+
+  const [showConflicts, setShowConflicts] = useState(saved?.showConflicts ?? true)
+  const [showNatural,   setShowNatural]   = useState(saved?.showNatural   ?? true)
+  const [showPiracy,    setShowPiracy]    = useState(saved?.showPiracy    ?? true)
+  const [mapMode,       setMapMode]       = useState(saved?.mapMode       ?? 'leaflet')
+  const [iframeSrc,     setIframeSrc]     = useState(saved?.iframeSrc     ?? '')
+  const [dataLoading,   setDataLoading]   = useState(false)
+  const [toolbarOpen,   setToolbarOpen]   = useState(() => {
+    try { return JSON.parse(localStorage.getItem(ATLAS_TOOLBAR_KEY(widgetId)) ?? 'false') } catch { return false }
+  })
+  const atlasRef      = useRef(null)
+  const currentViewRef = useRef({ center: saved?.center ?? [20, 0], zoom: saved?.zoom ?? 2 })
+
+  function saveState(patch) {
+    try {
+      const cur = JSON.parse(localStorage.getItem(ATLAS_STATE_KEY(widgetId)) || '{}')
+      localStorage.setItem(ATLAS_STATE_KEY(widgetId), JSON.stringify({ ...cur, ...patch }))
+    } catch {}
+  }
+
+  // Persist layer/mode toggles whenever they change
+  useEffect(() => {
+    saveState({ showConflicts, showNatural, showPiracy, mapMode, iframeSrc })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showConflicts, showNatural, showPiracy, mapMode, iframeSrc])
+
+  useEffect(() => {
+    try { localStorage.setItem(ATLAS_TOOLBAR_KEY(widgetId), JSON.stringify(toolbarOpen)) } catch {}
+  }, [toolbarOpen, widgetId])
+
+  // Portal (fullscreen) instance: broadcast latest view on unmount so grid instance can sync
+  useEffect(() => {
+    if (!isFullscreen) return
+    return () => {
+      window.dispatchEvent(new CustomEvent('vigil:atlas-exit-fs', {
+        detail: { widgetId, center: currentViewRef.current.center, zoom: currentViewRef.current.zoom },
+      }))
+    }
+  }, [isFullscreen, widgetId])
+
+  // Grid instance: on fullscreen exit event, restore the view the user left at
+  useEffect(() => {
+    if (isFullscreen) return
+    function onExitFs(e) {
+      if (e.detail?.widgetId !== widgetId) return
+      const { center, zoom } = e.detail
+      currentViewRef.current = { center, zoom }
+      saveState({ center, zoom })
+      setTimeout(() => atlasRef.current?.setView(center, zoom), 250) // after invalidateSize
+    }
+    window.addEventListener('vigil:atlas-exit-fs', onExitFs)
+    return () => window.removeEventListener('vigil:atlas-exit-fs', onExitFs)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFullscreen, widgetId])
 
   // Invalidate Leaflet tiles on fullscreen toggle
   useEffect(() => {
@@ -570,54 +634,91 @@ function AtlasWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapse
           {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
         </div>
       </div>
-      <div className="cmap-layer-bar" onPointerDownCapture={e => e.stopPropagation()}>
-        <button
-          className={`cmap-layer-btn${isLeaflet && showConflicts ? ' active' : ''}`}
-          onClick={() => { setMapMode('leaflet'); setShowConflicts(v => !v) }}
-        >
-          🔴 CONFLICTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Armed conflict zones · Source: ReliefWeb</span></span>
-        </button>
-        <button
-          className={`cmap-layer-btn${isLeaflet && showNatural ? ' active' : ''}`}
-          onClick={() => { setMapMode('leaflet'); setShowNatural(v => !v) }}
-        >
-          🟢 NATURAL<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Earthquakes · Wildfires · Storms · Sources: USGS, NOAA</span></span>
-        </button>
-        <button
-          className={`cmap-layer-btn${isLeaflet && showPiracy ? ' active' : ''}`}
-          onClick={() => { setMapMode('leaflet'); setShowPiracy(v => !v) }}
-        >
-          🚢 PIRACY<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Maritime piracy high-risk zones · Source: IMB</span></span>
-        </button>
-        <button
-          className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('adsbexchange') ? ' active' : ''}`}
-          onClick={() => switchToIframe('https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3')}
-        >
-          ✈️ FLIGHTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live air traffic · Source: ADS-B Exchange</span></span>
-        </button>
-        <button
-          className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('myshiptracking') ? ' active' : ''}`}
-          onClick={() => switchToIframe('https://www.myshiptracking.com/')}
-        >
-          ⚓ MARINE<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live vessel tracking · Source: MyShipTracking</span></span>
-        </button>
-        <button
-          className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('checkpoint') ? ' active' : ''}`}
-          onClick={() => switchToIframe('https://threatmap.checkpoint.com/')}
-        >
-          🛡 CYBER<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live cyber attacks · Source: Checkpoint</span></span>
-        </button>
-        {isLeaflet && (
-          <button className="cmap-update-btn" onClick={() => atlasRef.current?.refresh()} title="Re-fetch live data">⟳ Update</button>
-        )}
+
+      {/* Slim indicator bar — always visible, click to expand/collapse toolbar */}
+      <div className="atlas-slim-bar" onPointerDownCapture={e => e.stopPropagation()} onClick={() => setToolbarOpen(v => !v)}>
+        <div className="atlas-dot-row">
+          {isLeaflet ? (
+            <>
+              <span className="atlas-dot" style={{ background: showConflicts ? '#e53935' : '#1e2d3d' }} />
+              <span className="atlas-dot" style={{ background: showNatural   ? '#43a047' : '#1e2d3d' }} />
+              <span className="atlas-dot" style={{ background: showPiracy    ? '#00acc1' : '#1e2d3d' }} />
+              <span className="atlas-mode-label">ATLAS</span>
+            </>
+          ) : (
+            <>
+              <span className="atlas-dot" style={{ background: iframeSrc.includes('adsbexchange')   ? '#42a5f5' : '#1e2d3d' }} />
+              <span className="atlas-dot" style={{ background: iframeSrc.includes('myshiptracking') ? '#26c6da' : '#1e2d3d' }} />
+              <span className="atlas-dot" style={{ background: iframeSrc.includes('checkpoint')     ? '#ab47bc' : '#1e2d3d' }} />
+              <span className="atlas-mode-label">
+                {iframeSrc.includes('adsbexchange') ? 'FLIGHTS' : iframeSrc.includes('myshiptracking') ? 'MARINE' : iframeSrc.includes('checkpoint') ? 'CYBER' : 'LIVE FEED'}
+              </span>
+            </>
+          )}
+        </div>
+        <span className="atlas-chevron">{toolbarOpen ? '▲' : '▼'}</span>
       </div>
+
+      {/* Collapsible toolbar rows */}
+      <div className={`atlas-toolbar-wrap${toolbarOpen ? ' open' : ''}`} onPointerDownCapture={e => e.stopPropagation()}>
+        {/* Row 1: data overlay layers */}
+        <div className="cmap-layer-bar">
+          <button
+            className={`cmap-layer-btn${isLeaflet && showConflicts ? ' active' : ''}`}
+            onClick={() => { setMapMode('leaflet'); setShowConflicts(v => !v) }}
+          >
+            🔴 CONFLICTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Armed conflict zones · Source: ReliefWeb</span></span>
+          </button>
+          <button
+            className={`cmap-layer-btn${isLeaflet && showNatural ? ' active' : ''}`}
+            onClick={() => { setMapMode('leaflet'); setShowNatural(v => !v) }}
+          >
+            🟢 NATURAL<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Earthquakes · Wildfires · Storms · Sources: USGS, NOAA</span></span>
+          </button>
+          <button
+            className={`cmap-layer-btn${isLeaflet && showPiracy ? ' active' : ''}`}
+            onClick={() => { setMapMode('leaflet'); setShowPiracy(v => !v) }}
+          >
+            🚢 PIRACY<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Maritime piracy high-risk zones · Source: IMB</span></span>
+          </button>
+          {isLeaflet && (
+            <button className="cmap-update-btn" onClick={() => atlasRef.current?.refresh()} title="Re-fetch live data">⟳ Update</button>
+          )}
+          {!isLeaflet && (
+            <button className="cmap-update-btn" onClick={() => setMapMode('leaflet')} title="Back to ATLAS map">← ATLAS</button>
+          )}
+        </div>
+
+        {/* Row 2: live iframe feeds */}
+        <div className="cmap-feeds-bar">
+          <button
+            className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('adsbexchange') ? ' active' : ''}`}
+            onClick={() => switchToIframe('https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3')}
+          >
+            ✈️ FLIGHTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live air traffic · Source: ADS-B Exchange</span></span>
+          </button>
+          <button
+            className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('myshiptracking') ? ' active' : ''}`}
+            onClick={() => switchToIframe('https://www.myshiptracking.com/')}
+          >
+            ⚓ MARINE<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live vessel tracking · Source: MyShipTracking</span></span>
+          </button>
+          <button
+            className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('checkpoint') ? ' active' : ''}`}
+            onClick={() => switchToIframe('https://threatmap.checkpoint.com/')}
+          >
+            🛡 CYBER<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live cyber attacks · Source: Checkpoint</span></span>
+          </button>
+        </div>
+      </div>
+
       {dataLoading && (
         <div className="atlas-loading-bar">
           <span style={{ fontSize: '8px', color: '#2a3a4a', letterSpacing: '0.1em', whiteSpace: 'nowrap' }}>LOADING DATA LAYERS</span>
           <div className="skel-line" />
         </div>
       )}
-      <div style={{ height: `calc(100% - 36px - 32px${dataLoading ? ' - 20px' : ''})`, width: '100%', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minHeight: 0, width: '100%', position: 'relative', overflow: 'hidden' }}>
         {isLeaflet ? (
           <AtlasMap
             ref={atlasRef}
@@ -625,6 +726,12 @@ function AtlasWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapse
             showNatural={showNatural}
             showPiracy={showPiracy}
             onLoadingChange={setDataLoading}
+            initialCenter={currentViewRef.current.center}
+            initialZoom={currentViewRef.current.zoom}
+            onMove={({ center, zoom }) => {
+              currentViewRef.current = { center, zoom }
+              saveState({ center, zoom })
+            }}
           />
         ) : (
           <iframe
@@ -1904,6 +2011,7 @@ function readSettings(wsId) {
 
 // ─── Workspace + widget persistence ──────────────────────────────────────────
 const WS_META_KEY        = 'vigil_workspaces'
+const ACTIVE_WS_KEY      = 'vigil_active_workspace'
 const widgetsKey         = id => `vigil_ws${id.replace('ws-', '')}_widgets`
 const DEFAULT_WORKSPACES = [{ id: 'ws-1', name: 'Workspace 1' }]
 const DEFAULT_WIDGETS    = [
@@ -2060,7 +2168,7 @@ const WIDGET_DEFAULTS = {
 function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, onCollapse, collapsed, settings, updateSetting }) {
   const p = { onClose, onFullscreen, isFullscreen, onCollapse, collapsed }
   switch (widget.type) {
-    case 'map':      return <AtlasWidget  {...p} />
+    case 'map':      return <AtlasWidget  {...p} widgetId={widget.id} />
     case 'feeds':    return <FeedsWidget  {...p} />
     case 'feed':     return <KeywordFeed  {...p} />
     case 'rss':      return <RssFeed      {...p} widgetId={widget.id} />
@@ -2134,12 +2242,21 @@ function readLayout(wsId) {
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
+function resolveInitialWs() {
+  try {
+    const wsList = readWorkspacesMeta()
+    const saved  = localStorage.getItem(ACTIVE_WS_KEY)
+    return (saved && wsList.some(w => w.id === saved)) ? saved : (wsList[0]?.id ?? 'ws-1')
+  } catch { return 'ws-1' }
+}
+const _INIT_WS = resolveInitialWs()
+
 export default function App() {
   const [workspaces,   setWorkspaces]   = useState(readWorkspacesMeta)
-  const [activeWs,     setActiveWs]     = useState(() => readWorkspacesMeta()[0]?.id ?? 'ws-1')
-  const [layout,       setLayout]       = useState(() => readLayout(readWorkspacesMeta()[0]?.id ?? 'ws-1'))
-  const [settings,     setSettings]     = useState(() => readSettings(readWorkspacesMeta()[0]?.id ?? 'ws-1'))
-  const [widgets,      setWidgets]      = useState(() => readWidgets(readWorkspacesMeta()[0]?.id ?? 'ws-1'))
+  const [activeWs,     setActiveWs]     = useState(_INIT_WS)
+  const [layout,       setLayout]       = useState(() => readLayout(_INIT_WS))
+  const [settings,     setSettings]     = useState(() => readSettings(_INIT_WS))
+  const [widgets,      setWidgets]      = useState(() => readWidgets(_INIT_WS))
   const [fullscreenId, setFullscreenId] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [collapseMap,  setCollapseMap]  = useState({})  // { [widgetId]: savedH }
@@ -2199,6 +2316,7 @@ export default function App() {
       localStorage.setItem(wsKey(activeWsRef.current), JSON.stringify(layout))
     }
     setActiveWs(wsId)
+    localStorage.setItem(ACTIVE_WS_KEY, wsId)
     setLayout(readLayout(wsId))
     setSettings(readSettings(wsId))
     setWidgets(readWidgets(wsId))
@@ -2243,6 +2361,7 @@ export default function App() {
       if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null }
       const fallback = next[0].id
       setActiveWs(fallback)
+      localStorage.setItem(ACTIVE_WS_KEY, fallback)
       setLayout(readLayout(fallback))
       setSettings(readSettings(fallback))
       setWidgets(readWidgets(fallback))
@@ -2291,15 +2410,19 @@ export default function App() {
 
   function toggleCollapse(widgetId) {
     const isCollapsed = !!collapseMap[widgetId]
+    const wType    = widgets.find(w => w.id === widgetId)?.type
+    const defaultH = WIDGET_DEFAULTS[wType]?.h ?? 8
+
     if (isCollapsed) {
-      const savedH = collapseMap[widgetId]
+      const savedH = (collapseMap[widgetId] > 1) ? collapseMap[widgetId] : defaultH
       setLayout(prev => prev.map(item => item.i === widgetId ? { ...item, h: savedH } : item))
       setCollapseMap(prev => { const next = { ...prev }; delete next[widgetId]; return next })
     } else {
-      const item = layout.find(i => i.i === widgetId)
-      const savedH = item?.h ?? 8
+      const item    = layout.find(i => i.i === widgetId)
+      const current = item?.h ?? defaultH
+      const saveH   = current > 1 ? current : defaultH
       setLayout(prev => prev.map(i => i.i === widgetId ? { ...i, h: 1 } : i))
-      setCollapseMap(prev => ({ ...prev, [widgetId]: savedH }))
+      setCollapseMap(prev => ({ ...prev, [widgetId]: saveH }))
     }
   }
 
