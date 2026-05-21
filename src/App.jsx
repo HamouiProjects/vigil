@@ -1257,10 +1257,13 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
   const feedsRef       = useRef(feeds); feedsRef.current = feeds
   const isVisibleRss   = usePageVisibility()
 
-  // Always open on "All" view — don't restore a specific source across sessions
+  // Reset to 'all' on mount if saved value is not 'all' or a valid current feed id
   useEffect(() => {
-    setActiveSource('all')
-    try { localStorage.setItem(`vigil_rss_active_source_${widgetId}`, 'all') } catch {}
+    const saved = localStorage.getItem(`vigil_rss_active_source_${widgetId}`)
+    if (saved && saved !== 'all' && !feeds.some(f => f.id === saved)) {
+      setActiveSource('all')
+      try { localStorage.setItem(`vigil_rss_active_source_${widgetId}`, 'all') } catch {}
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -1439,6 +1442,7 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
     try { localStorage.setItem(`vigil_rss_filters_${widgetId}`, JSON.stringify(next)) } catch {}
   }
   function applyFilter(kw) {
+    clearTimeout(filterTimerRef.current)
     setFilterInput(kw); setFilter(kw)
     try { localStorage.setItem(`vigil_rss_keyword_${widgetId}`, kw) } catch {}
   }
@@ -1611,8 +1615,8 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
           </div>
         </div>
 
-        {/* RIGHT PANEL — overflow-y scrolls; filter bar is sticky */}
-        <div className="rss-right">
+        {/* RIGHT PANEL */}
+        <div className="rss-right" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div className="rss-filter-bar" onPointerDownCapture={e => e.stopPropagation()}>
             <input
               className="rss-input rss-filter-input"
@@ -1642,7 +1646,7 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
           </div>
 
           {/* Article list */}
-          <div className="rss-articles">
+          <div className="rss-articles" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
             {isFirstLoad ? (
               <SkeletonFeedItems count={6} />
             ) : displayItems.length === 0 ? (
