@@ -1135,13 +1135,13 @@ function KeywordFeed({ widgetId = 'newssearch', onClose, onFullscreen, isFullscr
 
 // ─── RSS Feed (multi-feed with keyword filter) ────────────────────────────────
 const RSS_DEFAULT_FEEDS = [
-  { id: 'bbc',       name: 'BBC News',     url: 'https://feeds.bbci.co.uk/news/rss.xml',            enabled: true, color: '#bb1919' },
-  { id: 'aljazeera', name: 'Al Jazeera',   url: 'https://www.aljazeera.com/xml/rss/all.xml',         enabled: true, color: '#009966' },
-  { id: 'france24',  name: 'France 24',    url: 'https://www.france24.com/en/rss',                   enabled: true, color: '#003f8a' },
-  { id: 'guardian',  name: 'The Guardian', url: 'https://www.theguardian.com/world/rss',             enabled: true, color: '#005689' },
-  { id: 'dw',        name: 'DW News',      url: 'https://rss.dw.com/rdf/rss-en-all',                enabled: true, color: '#c8102e' },
+  { id: 'bbc',       name: 'BBC News',     url: 'https://feeds.bbci.co.uk/news/rss.xml',            enabled: true, color: '#e63946' },
+  { id: 'aljazeera', name: 'Al Jazeera',   url: 'https://www.aljazeera.com/xml/rss/all.xml',         enabled: true, color: '#00b894' },
+  { id: 'france24',  name: 'France 24',    url: 'https://www.france24.com/en/rss',                   enabled: true, color: '#0984e3' },
+  { id: 'guardian',  name: 'The Guardian', url: 'https://www.theguardian.com/world/rss',             enabled: true, color: '#a29bfe' },
+  { id: 'dw',        name: 'DW News',      url: 'https://rss.dw.com/rdf/rss-en-all',                enabled: true, color: '#fdcb6e' },
 ]
-const RSS_EXTRA_COLORS = ['#c678dd', '#00c6ff', '#f5c518', '#23d160', '#ff7f50', '#e06c75', '#56b6c2']
+const RSS_EXTRA_COLORS = ['#fd79a8', '#fdcb6e', '#e17055', '#74b9ff', '#55efc4', '#636e72']
 const RSS_BROKEN_DOMAINS = ['feeds.reuters.com', 'feeds.apnews.com', 'foxnews.com']
 const RSS_SUGGESTIONS = [
   { name: 'BBC News',        url: 'https://feeds.bbci.co.uk/news/rss.xml',                       color: '#bb1919' },
@@ -1240,6 +1240,14 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
   const [newUrl,       setNewUrl]       = useState('')
   const [addError,     setAddError]     = useState('')
   const [showSugs,     setShowSugs]     = useState(false)
+  const [savedFilters, setSavedFilters] = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(`vigil_rss_filters_${widgetId}`) || 'null')
+      return Array.isArray(s) ? s : ['Iran', 'Gaza', 'Ukraine', 'Strait of Hormuz']
+    } catch { return ['Iran', 'Gaza', 'Ukraine', 'Strait of Hormuz'] }
+  })
+  const [addingFilter, setAddingFilter] = useState(false)
+  const [newFilter,    setNewFilter]    = useState('')
 
   const seenRef        = useRef(new Set())
   const [seenVersion,  setSeenVersion]  = useState(0)
@@ -1278,7 +1286,7 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
     setLoading(true)
     const results = await Promise.allSettled(
       enabled.map(f =>
-        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(f.url)}`,
+        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(f.url)}&count=50`,
           { signal: AbortSignal.timeout(15000) }).then(r => r.json())
       )
     )
@@ -1313,7 +1321,7 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
 
   async function retrySingleFeed(feed) {
     try {
-      const res  = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}`,
+      const res  = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}&count=50`,
         { signal: AbortSignal.timeout(15000) })
       const json = await res.json()
       if (json?.status === 'ok') {
@@ -1425,6 +1433,28 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
     setAddingSource(false); setNewName(''); setNewUrl(''); setAddError(''); setShowSugs(false)
   }
 
+  function saveSavedFilters(next) {
+    setSavedFilters(next)
+    try { localStorage.setItem(`vigil_rss_filters_${widgetId}`, JSON.stringify(next)) } catch {}
+  }
+  function applyFilter(kw) {
+    setFilterInput(kw); setFilter(kw)
+    try { localStorage.setItem(`vigil_rss_keyword_${widgetId}`, kw) } catch {}
+  }
+  function removeFilter(kw) {
+    saveSavedFilters(savedFilters.filter(x => x !== kw))
+    if (filter === kw) {
+      setFilterInput(''); setFilter('')
+      try { localStorage.removeItem(`vigil_rss_keyword_${widgetId}`) } catch {}
+    }
+  }
+  function addSavedFilter() {
+    const kw = newFilter.trim()
+    if (!kw || savedFilters.includes(kw)) { setNewFilter(''); setAddingFilter(false); return }
+    saveSavedFilters([...savedFilters, kw])
+    setNewFilter(''); setAddingFilter(false)
+  }
+
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
       <div className="widget-header">
@@ -1505,52 +1535,78 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
                 </div>
               )
             })}
-          </div>
 
-          {/* Inline add form */}
-          {addingSource && (
-            <div className="rss-add-source-form" onPointerDownCapture={e => e.stopPropagation()}
-              style={{ padding: '6px 8px', borderTop: '1px solid #1a2535', flexShrink: 0 }}>
-              <div className="rss-add-name-wrap">
+            {/* Inline add-source form */}
+            {addingSource && (
+              <div className="rss-add-source-form" onPointerDownCapture={e => e.stopPropagation()}
+                style={{ padding: '6px 8px', borderTop: '1px solid #1a2535' }}>
+                <div className="rss-add-name-wrap">
+                  <input
+                    autoFocus
+                    className="rss-add-source-input"
+                    value={newName}
+                    onChange={e => { setNewName(e.target.value); setNewUrl(''); setAddError(''); setShowSugs(true) }}
+                    onFocus={() => setShowSugs(true)}
+                    onBlur={() => setTimeout(() => setShowSugs(false), 160)}
+                    placeholder="Source name…"
+                  />
+                  {showSugs && filteredSugs.length > 0 && (
+                    <div className="rss-sug-dropdown">
+                      {filteredSugs.slice(0, 5).map((s, i) => (
+                        <div key={i} className="rss-sug-item" onMouseDown={() => selectSuggestion(s)}>
+                          <span className="rss-sug-name">{s.name}</span>
+                          <span className="rss-sug-url">{s.url}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <input
+                  className="rss-add-source-input"
+                  value={newUrl}
+                  onChange={e => { setNewUrl(e.target.value); setAddError('') }}
+                  placeholder="RSS URL…"
+                  spellCheck={false}
+                />
+                {addError && <span style={{ fontSize: '8px', color: '#ff4d4f' }}>{addError}</span>}
+                <div className="rss-add-source-actions">
+                  <button className="rss-add-source-add" onClick={addFeed}>ADD</button>
+                  <button className="rss-add-source-cancel" onClick={closeAddForm}>Cancel</button>
+                </div>
+              </div>
+            )}
+            <button className="rss-add-source-btn" style={{ margin: '4px 8px', width: 'calc(100% - 16px)' }}
+              onClick={() => setAddingSource(v => !v)}>
+              ＋ Add Source
+            </button>
+
+            {/* FILTERS section */}
+            <div className="rss-filters-divider">FILTERS</div>
+            {savedFilters.map(kw => (
+              <div
+                key={kw}
+                className={`rss-filter-item${filter === kw ? ' active' : ''}`}
+                onClick={() => applyFilter(kw)}
+              >
+                <span className="rss-filter-label">{kw}</span>
+                <button className="rss-source-del" onClick={e => { e.stopPropagation(); removeFilter(kw) }}>×</button>
+              </div>
+            ))}
+            {addingFilter ? (
+              <div style={{ padding: '4px 8px' }}>
                 <input
                   autoFocus
                   className="rss-add-source-input"
-                  value={newName}
-                  onChange={e => { setNewName(e.target.value); setNewUrl(''); setAddError(''); setShowSugs(true) }}
-                  onFocus={() => setShowSugs(true)}
-                  onBlur={() => setTimeout(() => setShowSugs(false), 160)}
-                  placeholder="Source name…"
+                  value={newFilter}
+                  onChange={e => setNewFilter(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addSavedFilter(); if (e.key === 'Escape') { setAddingFilter(false); setNewFilter('') } }}
+                  placeholder="Keyword…"
+                  style={{ width: '100%' }}
                 />
-                {showSugs && filteredSugs.length > 0 && (
-                  <div className="rss-sug-dropdown">
-                    {filteredSugs.slice(0, 5).map((s, i) => (
-                      <div key={i} className="rss-sug-item" onMouseDown={() => selectSuggestion(s)}>
-                        <span className="rss-sug-name">{s.name}</span>
-                        <span className="rss-sug-url">{s.url}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
-              <input
-                className="rss-add-source-input"
-                value={newUrl}
-                onChange={e => { setNewUrl(e.target.value); setAddError('') }}
-                placeholder="RSS URL…"
-                spellCheck={false}
-              />
-              {addError && <span style={{ fontSize: '8px', color: '#ff4d4f' }}>{addError}</span>}
-              <div className="rss-add-source-actions">
-                <button className="rss-add-source-add" onClick={addFeed}>ADD</button>
-                <button className="rss-add-source-cancel" onClick={closeAddForm}>Cancel</button>
-              </div>
-            </div>
-          )}
-
-          <div className="rss-sidebar-footer">
-            <button className="rss-add-source-btn" onClick={() => setAddingSource(v => !v)}>
-              ＋ Add Source
-            </button>
+            ) : (
+              <button className="rss-filter-add-btn" onClick={() => setAddingFilter(true)}>＋ Add filter</button>
+            )}
           </div>
         </div>
 
@@ -1604,10 +1660,9 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
             ) : (
               <>
                 {displayItems.map((item, i) => {
-                  const color   = feedColor(item._feedId)
-                  const isSeen  = seenRef.current.has(item.link)
-                  const showSrc = activeSource === 'all' || !!filter
-                  const desc    = item.description?.slice(0, 150)
+                  const color  = feedColor(item._feedId)
+                  const isSeen = seenRef.current.has(item.link)
+                  const desc   = item.description?.slice(0, 150)
                   return (
                     <a
                       key={i}
@@ -1620,8 +1675,8 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
                       <div className="rss-art-bar" style={{ background: color }} />
                       <div className="rss-art-body">
                         <div className="rss-art-meta">
-                          {showSrc && <span className="rss-art-source">{item._feedName}</span>}
-                          <span className="rss-art-time">{rssRelTime(item.pubDate)}</span>
+                          <span className="rss-art-source" style={{ color }}>{item._feedName}</span>
+                          <span className="rss-art-time">· {rssRelTime(item.pubDate)}</span>
                         </div>
                         <div className="rss-art-title">{item.title}</div>
                         {density === 'comfortable' && desc && (
