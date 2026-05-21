@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ReactGridLayout as GridLayout, WidthProvider } from 'react-grid-layout/legacy'
-import { AdvancedRealTimeChart, TickerTape } from 'react-ts-tradingview-widgets'
+import { TickerTape } from 'react-ts-tradingview-widgets'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
@@ -1708,6 +1708,21 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
 }
 
 // ─── Price Tracker ────────────────────────────────────────────────────────────
+const COINGECKO_TO_TV = {
+  'bitcoin':     'BINANCE:BTCUSDT',
+  'ethereum':    'BINANCE:ETHUSDT',
+  'solana':      'BINANCE:SOLUSDT',
+  'cardano':     'BINANCE:ADAUSDT',
+  'pax-gold':    'OANDA:XAUUSD',
+  'tether-gold': 'OANDA:XAUUSD',
+}
+const PT_ASSET_COLORS = {
+  'bitcoin':  '#f7931a',
+  'ethereum': '#627eea',
+  'solana':   '#9945ff',
+  'pax-gold': '#d4af37',
+}
+
 const PT_DEFAULT_ASSETS = [
   { id: 'bitcoin',  ticker: 'BTC' },
   { id: 'ethereum', ticker: 'ETH' },
@@ -1756,7 +1771,7 @@ function Sparkline({ points, isUp }) {
     const y = pad + (1 - (v - min) / range) * (H - pad * 2)
     return `${x.toFixed(1)},${y.toFixed(1)}`
   }).join(' ')
-  const color = isUp ? '#00c6ff' : '#ff4444'
+  const color = isUp ? '#00ff88' : '#ff4444'
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
       style={{ width: '100%', height: '40px', display: 'block', overflow: 'visible' }}>
@@ -1772,6 +1787,7 @@ function AssetSearch({ existingIds, onAdd }) {
   const [open,    setOpen]    = useState(false)
   const timerRef = useRef(null)
   const wrapRef  = useRef(null)
+  const inputRef = useRef(null)
 
   function search(q) {
     clearTimeout(timerRef.current)
@@ -1803,6 +1819,7 @@ function AssetSearch({ existingIds, onAdd }) {
     setQuery('')
     setResults([])
     setOpen(false)
+    setTimeout(() => inputRef.current?.focus(), 0)
   }
 
   useEffect(() => {
@@ -1816,11 +1833,12 @@ function AssetSearch({ existingIds, onAdd }) {
   return (
     <div className="pt-asset-search" ref={wrapRef} onPointerDownCapture={e => e.stopPropagation()}>
       <input
+        ref={inputRef}
         className="rss-input pt-search-input"
         value={query}
         onChange={e => { setQuery(e.target.value); search(e.target.value); setOpen(true) }}
         onFocus={() => setOpen(true)}
-        placeholder="Search CoinGecko…"
+        placeholder="Search to add asset…"
         spellCheck={false}
       />
       {open && query.trim() && (
@@ -1850,15 +1868,16 @@ function AssetSearch({ existingIds, onAdd }) {
   )
 }
 
-function AssetCard({ asset, priceData, editMode, onRemove }) {
+function AssetCard({ asset, priceData, onRemove, onChartClick }) {
   const isNonCg = asset.source === 'tv' || asset.source === 'metals'
-  const sym    = asset.symbol ?? asset.ticker ?? asset.id.slice(0, 6).toUpperCase()
-  const d      = priceData[asset.id]
+  const sym     = asset.symbol ?? asset.ticker ?? asset.id.slice(0, 6).toUpperCase()
+  const d       = priceData[asset.id]
   const loading = !isNonCg && !d
-  const price  = d?.price ?? null
-  const chg    = d?.change24h ?? null
-  const isUp   = (chg ?? 0) >= 0
-  const stale  = d?.stale ?? false
+  const price   = d?.price ?? null
+  const chg     = d?.change24h ?? null
+  const isUp    = (chg ?? 0) >= 0
+  const stale   = d?.stale ?? false
+  const accent  = PT_ASSET_COLORS[asset.id] ?? '#ffffff'
   const [flash, setFlash] = useState(null)
   const prevRef = useRef(null)
 
@@ -1875,11 +1894,12 @@ function AssetCard({ asset, priceData, editMode, onRemove }) {
   }, [price])
 
   return (
-    <div className={`asset-card${stale && !isNonCg ? ' asset-stale' : ''}${flash ? ` asset-flash-${flash}` : ''}${loading ? ' asset-loading' : ''}`}>
-      {editMode && (
-        <button className="asset-remove-btn" onClick={() => onRemove(asset.id)} title="Remove">×</button>
-      )}
-      <div className="asset-symbol">{sym}</div>
+    <div
+      className={`asset-card${stale && !isNonCg ? ' asset-stale' : ''}${flash ? ` asset-flash-${flash}` : ''}${loading ? ' asset-loading' : ''}`}
+      onClick={() => onChartClick?.(asset)}
+    >
+      <button className="asset-remove-btn" onClick={e => { e.stopPropagation(); onRemove(asset.id) }} title="Remove">×</button>
+      <div className="asset-symbol" style={{ color: accent }}>{sym}</div>
       {isNonCg ? (
         <>
           <div className="asset-price">—</div>
@@ -1894,7 +1914,7 @@ function AssetCard({ asset, priceData, editMode, onRemove }) {
         </>
       ) : (
         <>
-          <div className="asset-price">${ptFmtPrice(price)}</div>
+          <div className="asset-price">{price == null ? '—' : `$${ptFmtPrice(price)}`}</div>
           <div className={`asset-change ${isUp ? 'up' : 'down'}`}>
             {chg == null ? '—' : `${isUp ? '▲' : '▼'} ${Math.abs(chg).toFixed(2)}%`}
           </div>
@@ -1908,7 +1928,6 @@ function AssetCard({ asset, priceData, editMode, onRemove }) {
 
 function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
   const assetsKey = `vigil_prices_assets_${widgetId ?? 'default'}`
-
   const isVisiblePt = usePageVisibility()
 
   const [assets,      setAssets]      = useState(() => {
@@ -1925,25 +1944,22 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
     } catch { return PT_DEFAULT_ASSETS }
   })
   const [mode,        setMode]        = useState('grid')
-  const [editMode,    setEditMode]    = useState(false)
   const [priceData,   setPriceData]   = useState({})
   const [loading,     setLoading]     = useState(true)
   const [fetchError,  setFetchError]  = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
   const [timeAgo,     setTimeAgo]     = useState('')
-  const bodyRef  = useRef(null)
-  const assetsRef = useRef(assets)
+  const [toast,       setToast]       = useState(null)
+  const toastKeyRef = useRef(0)
+  const bodyRef     = useRef(null)
+  const assetsRef   = useRef(assets)
   assetsRef.current = assets
 
-  // Write back cleaned assets so stale source fields don't survive next reload
   useEffect(() => {
-    try {
-      localStorage.setItem(assetsKey, JSON.stringify(assets))
-    } catch {}
+    try { localStorage.setItem(assetsKey, JSON.stringify(assets)) } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // "Updated X ago" counter
   useEffect(() => {
     const tick = () => {
       if (!lastRefresh) return
@@ -1994,10 +2010,10 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
     for (const a of cgList) {
       const d = cg[a.id]
       updates[a.id] = {
-        price:     d?.usd ?? null,
-        change24h: d?.usd_24h_change ?? null,
-        sparkline: withSpark ? null : null,
-        stale:     !d,
+        price:       d?.usd ?? null,
+        change24h:   d?.usd_24h_change ?? null,
+        sparkline:   withSpark ? null : null,
+        stale:       !d,
         lastUpdated: Date.now(),
       }
     }
@@ -2022,7 +2038,6 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
     setLoading(false)
   }, [])
 
-  // Initial full load, then price-only every 60s, sparklines every 5min (skip when hidden)
   useEffect(() => {
     fetchAll(true)
     const p = setInterval(() => { if (!document.hidden) fetchAll(false) }, 60_000)
@@ -2030,7 +2045,6 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
     return () => { clearInterval(p); clearInterval(s) }
   }, [fetchAll, assets])
 
-  // Re-fetch when tab becomes visible again
   useEffect(() => {
     if (isVisiblePt) fetchAll(false)
   }, [isVisiblePt]) // fetchAll is stable
@@ -2041,13 +2055,27 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
     try { localStorage.setItem(assetsKey, JSON.stringify(clean)) } catch {}
   }
 
-  function removeAsset(id) {
-    saveAssets(assets.filter(a => a.id !== id))
+  function showToast(msg) {
+    const key = ++toastKeyRef.current
+    setToast({ msg, key })
+    setTimeout(() => setToast(t => t?.key === key ? null : t), 1800)
   }
 
-  function addAsset(item) {
+  function handleAdd(item) {
     if (assets.find(a => a.id === item.id)) return
     saveAssets([...assets, { id: item.id, ticker: item.ticker ?? item.symbol ?? item.id.slice(0, 6).toUpperCase() }])
+    showToast(`+ Added: ${item.ticker ?? item.id}`)
+    fetchAll(false)
+  }
+
+  function handleRemove(id) {
+    saveAssets(assets.filter(a => a.id !== id))
+    showToast('Removed')
+  }
+
+  function handleChartClick(asset) {
+    const tvSym = COINGECKO_TO_TV[asset.id] ?? `BINANCE:${asset.ticker}USDT`
+    window.dispatchEvent(new CustomEvent('vigil-chart-symbol', { detail: { symbol: tvSym } }))
   }
 
   return (
@@ -2058,14 +2086,14 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
           <span className={`widget-badge${loading ? ' inactive' : ''}`}>LIVE</span>
           <button className={`widget-btn pt-mode-btn${mode === 'grid' ? ' pt-mode-active' : ''}`} onClick={() => setMode('grid')} title="Grid">⊞</button>
           <button className={`widget-btn pt-mode-btn${mode === 'tape' ? ' pt-mode-active' : ''}`} onClick={() => setMode('tape')} title="Tape">≡</button>
-          <button className={`widget-btn${editMode ? ' pt-mode-active' : ''}`} onClick={() => setEditMode(v => !v)} title="Edit assets">✎</button>
           {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
           {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
           {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
         </div>
       </div>
 
-      <div className="widget-body" ref={bodyRef} style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+      <div className="widget-body" ref={bodyRef} style={{ flexDirection: 'column', alignItems: 'stretch', position: 'relative' }}>
+        {toast && <div key={toast.key} className="pt-toast">{toast.msg}</div>}
         {mode === 'tape' ? (
           <TickerTape
             symbols={PT_TAPE_SYMBOLS}
@@ -2088,31 +2116,29 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
                 </div>
               ))}
             </div>
+            <div className="pt-footer"><span></span><span>via CoinGecko</span></div>
           </div>
         ) : fetchError && Object.keys(priceData).length === 0 ? (
           <div className="widget-error">
             <span className="widget-error-icon">⚠</span>
             {fetchError}
-            <button className="widget-error-retry" onClick={() => { setFetchError(null); fetchAll(true) }}>Retry</button>
-          </div>
-        ) : assets.length === 0 ? (
-          <div className="empty-state">
-            <span className="empty-state-icon">📈</span>
-            Add assets using the ✎ button above
-            {editMode && <AssetSearch existingIds={[]} onAdd={addAsset} />}
+            <button className="widget-error-retry" onClick={() => { setFetchError(null); fetchAll(true) }}>↻ Retry</button>
           </div>
         ) : (
           <div className="pt-scroll">
-            <div className="pt-grid">
-              {assets.map(asset => (
-                <AssetCard key={asset.id} asset={asset} priceData={priceData} editMode={editMode} onRemove={removeAsset} />
-              ))}
+            {assets.length === 0
+              ? <div className="empty-state"><span className="empty-state-icon">📈</span>Search below to add assets</div>
+              : <div className="pt-grid">
+                  {assets.map(asset => (
+                    <AssetCard key={asset.id} asset={asset} priceData={priceData} onRemove={handleRemove} onChartClick={handleChartClick} />
+                  ))}
+                </div>
+            }
+            <AssetSearch existingIds={assets.map(a => a.id)} onAdd={handleAdd} />
+            <div className="pt-footer">
+              <span>{lastRefresh ? `Updated ${timeAgo}` : ''}</span>
+              <span>via CoinGecko</span>
             </div>
-            {editMode && (
-              <AssetSearch existingIds={assets.map(a => a.id)} onAdd={addAsset} />
-            )}
-            {lastRefresh && <div className="pt-footer">Updated {timeAgo}</div>}
-            <div className="attr-line">via CoinGecko</div>
           </div>
         )}
       </div>
@@ -2436,18 +2462,64 @@ function readWidgets(wsId) {
 }
 
 // ─── TV Chart (TradingView AdvancedRealTimeChart) ────────────────────────────
-function ChartWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+const TV_DEFAULT_SYMBOL = 'BINANCE:BTCUSDT'
+
+function ChartWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+  const storageKey = `vigil_tvchart_symbol_${widgetId ?? 'default'}`
+  const [activeSymbol, setActiveSymbol] = useState(() => {
+    try { return localStorage.getItem(storageKey) || TV_DEFAULT_SYMBOL } catch { return TV_DEFAULT_SYMBOL }
+  })
+  const [inputSymbol, setInputSymbol] = useState(activeSymbol)
+
+  useEffect(() => {
+    const handler = e => {
+      const sym = e.detail?.symbol
+      if (!sym) return
+      setActiveSymbol(sym)
+      setInputSymbol(sym)
+      try { localStorage.setItem(storageKey, sym) } catch {}
+    }
+    window.addEventListener('vigil-chart-symbol', handler)
+    return () => window.removeEventListener('vigil-chart-symbol', handler)
+  }, [storageKey])
+
+  function go(raw) {
+    const sym = raw.trim().toUpperCase()
+    if (!sym) return
+    setActiveSymbol(sym)
+    setInputSymbol(sym)
+    try { localStorage.setItem(storageKey, sym) } catch {}
+  }
+
+  const displayTicker = activeSymbol.includes(':') ? activeSymbol.split(':')[1] : activeSymbol
+  const tvUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_vigil&symbol=${encodeURIComponent(activeSymbol)}&interval=D&theme=dark&style=1&locale=en&toolbar_bg=0d1421&enable_publishing=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0`
+
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
       <WHeader title="TV CHART" onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
-      <div style={{ height: 'calc(100% - 36px)', width: '100%', overflow: 'hidden' }}>
-        <AdvancedRealTimeChart
-          symbol="BTCUSD"
-          theme="dark"
-          autosize
-          allow_symbol_change
+      <form
+        className="tvchart-bar"
+        onSubmit={e => { e.preventDefault(); go(inputSymbol) }}
+        onPointerDownCapture={e => e.stopPropagation()}
+      >
+        <span className="tvchart-symbol-dot">●</span>
+        <span className="tvchart-symbol-label">{displayTicker}</span>
+        <input
+          className="rss-input tvchart-input"
+          value={inputSymbol}
+          onChange={e => setInputSymbol(e.target.value)}
+          placeholder="Symbol (e.g. BTCUSDT, AAPL, EURUSD)"
+          spellCheck={false}
         />
-      </div>
+        <button className="rss-go-btn" type="submit">GO</button>
+      </form>
+      <iframe
+        key={activeSymbol}
+        src={tvUrl}
+        style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
+        title="TradingView Chart"
+        allow="clipboard-write"
+      />
     </div>
   )
 }
@@ -2790,7 +2862,7 @@ function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, on
     case 'stream':   return <Livestream   {...p} initialUrl={settings.livestreamUrl}  onUrlChange={url  => updateSetting('livestreamUrl', url)} />
     case 'weather':  return <Weather      {...p} widgetId={widget.id} initialCity={settings.weatherCity} onCityChange={city => updateSetting('weatherCity', city)} />
     case 'conflict': return <ConflictFeed {...p} />
-    case 'chart':    return <ChartWidget  {...p} />
+    case 'chart':    return <ChartWidget  {...p} widgetId={widget.id} />
     case 'browser': return <BrowserWidget {...p} widgetId={widget.id} />
     case 'social':  return <SocialFeed  {...p} widgetId={widget.id} />
     default:        return null
