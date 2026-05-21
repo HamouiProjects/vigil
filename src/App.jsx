@@ -849,11 +849,11 @@ function ConflictFeed({ onClose, onFullscreen, isFullscreen, onCollapse, collaps
 
 
 // ─── Shared tooltip ───────────────────────────────────────────────────────────
-function InfoTooltip({ text }) {
+function InfoTooltip({ text, wide }) {
   return (
     <span className="info-tip-wrap">
       <span className="info-tip-btn">?</span>
-      <span className="info-tip-box">{text}</span>
+      <span className={`info-tip-box${wide ? ' info-tip-box-wide' : ''}`}>{text}</span>
     </span>
   )
 }
@@ -872,11 +872,21 @@ async function fetchNewsSearch(q) {
   const items = json.items ?? []
   if (!items.length) throw new Error('No results')
   return items.map(item => ({
-    title:   item.title   ?? '(no title)',
-    link:    item.link    ?? '',
-    pubDate: item.pubDate ?? '',
-    source:  item.author  ?? '',
+    title:       item.title       ?? '(no title)',
+    link:        item.link        ?? '',
+    pubDate:     item.pubDate     ?? '',
+    source:      item.author      ?? '',
+    description: (item.description ?? '').replace(/<[^>]*>/g, ''),
   }))
+}
+
+function nsExtractSource(title) {
+  const parts = (title ?? '').split(' - ')
+  return parts.length > 1 ? parts[parts.length - 1].trim() : ''
+}
+function nsCleanTitle(title) {
+  const parts = (title ?? '').split(' - ')
+  return parts.length > 1 ? parts.slice(0, -1).join(' - ').trim() : (title ?? '')
 }
 
 const KF_DEFAULT_TABS = [
@@ -886,22 +896,32 @@ const KF_DEFAULT_TABS = [
 ]
 const KF_TABS_KEY = 'vigil_newssearch_tabs'
 
-function KeywordFeed({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+function KeywordFeed({ widgetId = 'newssearch', onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
   const [tabs, setTabs] = useState(() => {
     try {
       const s = JSON.parse(localStorage.getItem(KF_TABS_KEY) || 'null')
       return Array.isArray(s) && s.length ? s : KF_DEFAULT_TABS
     } catch { return KF_DEFAULT_TABS }
   })
-  const [activeId, setActiveId] = useState(() => tabs[0]?.id ?? 'world')
-  const [cache,    setCache]    = useState({}) // { tabId: { items, fetchedAt } }
-  const [loading,  setLoading]  = useState(false)
-  const [error,    setError]    = useState(null)
-  const [adding,   setAdding]   = useState(false)
-  const [newKw,    setNewKw]    = useState('')
+  const [activeId,    setActiveId]    = useState(() => tabs[0]?.id ?? 'world')
+  const [cache,       setCache]       = useState({})
+  const [loading,     setLoading]     = useState(false)
+  const [error,       setError]       = useState(null)
+  const [adding,      setAdding]      = useState(false)
+  const [newKw,       setNewKw]       = useState('')
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try {
+      const stored = localStorage.getItem(`vigil_newssearch_sidebar_collapsed_${widgetId}`)
+      return stored === null ? true : !JSON.parse(stored)
+    } catch { return true }
+  })
 
   const tabsRef  = useRef(tabs);  tabsRef.current  = tabs
   const cacheRef = useRef(cache); cacheRef.current = cache
+
+  useEffect(() => {
+    try { localStorage.setItem(`vigil_newssearch_sidebar_collapsed_${widgetId}`, JSON.stringify(!sidebarOpen)) } catch {}
+  }, [sidebarOpen, widgetId])
 
   function saveTabs(next) {
     setTabs(next)
@@ -920,7 +940,6 @@ function KeywordFeed({ onClose, onFullscreen, isFullscreen, onCollapse, collapse
     }
   }, [])
 
-  // Load on tab switch if stale (>5min) or uncached
   useEffect(() => {
     const tab = tabsRef.current.find(t => t.id === activeId)
     if (!tab) return
@@ -929,7 +948,6 @@ function KeywordFeed({ onClose, onFullscreen, isFullscreen, onCollapse, collapse
     load(activeId, tab.keyword)
   }, [activeId, load])
 
-  // Auto-refresh active tab every 2min (skip when tab hidden)
   useEffect(() => {
     const id = setInterval(() => {
       if (document.hidden) return
@@ -939,23 +957,21 @@ function KeywordFeed({ onClose, onFullscreen, isFullscreen, onCollapse, collapse
     return () => clearInterval(id)
   }, [activeId, load])
 
-  // Re-fetch on tab regain visibility
   const isVisible = usePageVisibility()
   useEffect(() => {
     if (!isVisible) return
-    const tab = tabsRef.current.find(t => t.id === activeId)
+    const tab   = tabsRef.current.find(t => t.id === activeId)
     const entry = cacheRef.current[activeId]
     if (tab && (!entry || Date.now() - entry.fetchedAt > 5 * 60_000)) load(activeId, tab.keyword)
   }, [isVisible, activeId, load])
 
-  // vigil:search cross-widget event
   useEffect(() => {
     function onSearch(e) {
       const kw = e.detail?.keyword?.trim()
       if (!kw) return
       const existing = tabsRef.current.find(t => t.keyword.toLowerCase() === kw.toLowerCase())
       if (existing) { setActiveId(existing.id); return }
-      const id = `tab-${Date.now()}`
+      const id   = `tab-${Date.now()}`
       const next = [...tabsRef.current, { id, keyword: kw }]
       saveTabs(next)
       setActiveId(id)
@@ -974,82 +990,144 @@ function KeywordFeed({ onClose, onFullscreen, isFullscreen, onCollapse, collapse
   }
 
   function removeTab(id) {
-    if (tabs.length <= 1) return
     const next = tabs.filter(t => t.id !== id)
+    if (!next.length) return
     saveTabs(next)
     if (activeId === id) setActiveId(next[0].id)
   }
 
-  const articles = cache[activeId]?.items ?? []
-  const badge    = loading ? 'LOADING' : error ? 'ERROR' : 'LIVE'
+  function handleRefresh() {
+    const tab = tabs.find(t => t.id === activeId)
+    if (!tab || loading) return
+    setCache(prev => { const next = { ...prev }; delete next[activeId]; return next })
+    load(activeId, tab.keyword)
+  }
+
+  const activeTab      = tabs.find(t => t.id === activeId)
+  const keyword        = activeTab?.keyword?.toLowerCase() ?? ''
+  const rawArticles    = cache[activeId]?.items ?? []
+  const filtered       = rawArticles.filter(art =>
+    art.title?.toLowerCase().includes(keyword) ||
+    art.description?.toLowerCase().includes(keyword)
+  )
+  const showFallback    = filtered.length === 0 && rawArticles.length > 0
+  const displayArticles = filtered.length > 0 ? filtered : rawArticles
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
       <div className="widget-header">
         <span className="widget-title">NEWS SEARCH</span>
-        <InfoTooltip text="Searches Google News worldwide. Save keyword watches as tabs to monitor multiple topics simultaneously." />
+        <InfoTooltip wide text={
+          <span>
+            <strong className="ns-tip-head">News Search</strong>
+            Searches Google News worldwide for your saved keywords. Results are sorted by recency and filtered to match your keyword in the headline.
+            <br /><br />
+            📌 <strong>Best for:</strong> broad topic monitoring across all sources worldwide (e.g. "Iran nuclear deal", "Federal Reserve").
+            <br /><br />
+            📰 <strong>Want specific outlets?</strong> Use the RSS Feed widget — add BBC, Reuters, Al Jazeera, or any source you trust, then filter by keyword there.
+            <br /><br />
+            💡 <strong>Tip:</strong> More specific keywords (e.g. "Strait of Hormuz blockade") return better results than single words (e.g. "Qatar").
+          </span>
+        } />
         <div className="widget-actions">
-          <span className={`widget-badge${loading || error ? ' inactive' : ''}`}>{badge}</span>
-          <button className="widget-btn" onClick={() => { const t = tabs.find(t => t.id === activeId); if (t) load(activeId, t.keyword) }} title="Refresh">↻</button>
+          <span className={`widget-badge${loading || error ? ' inactive' : ''}`}>{loading ? 'LOADING' : error ? 'ERROR' : 'LIVE'}</span>
+          <button className="widget-btn" onClick={handleRefresh} title="Refresh">
+            <span style={loading ? { display: 'inline-block', animation: 'ns-spin 0.8s linear infinite' } : undefined}>↻</span>
+          </button>
           {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
           {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
           {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
         </div>
       </div>
 
-      <div className="rss-tabs" onPointerDownCapture={e => e.stopPropagation()}>
-        {tabs.map(t => (
-          <button key={t.id}
-            className={`rss-tab kf-tab${activeId === t.id ? ' active' : ''}`}
-            onClick={() => setActiveId(t.id)}>
-            {t.keyword}
-            {tabs.length > 1 && (
-              <span className="kf-tab-close" onClick={ev => { ev.stopPropagation(); removeTab(t.id) }}>×</span>
-            )}
-          </button>
-        ))}
-        {adding ? (
-          <form className="kf-add-form" onSubmit={e => { e.preventDefault(); addTab() }}>
-            <input autoFocus className="kf-add-input" value={newKw}
-              onChange={e => setNewKw(e.target.value)}
-              placeholder="Keyword…"
-              onBlur={() => { if (!newKw.trim()) setAdding(false) }}
-            />
-          </form>
+      <div className="ns-body" onPointerDownCapture={e => e.stopPropagation()}>
+        {sidebarOpen ? (
+          <div className="ns-sidebar">
+            <div className="ns-sidebar-header">
+              <span className="ns-sidebar-title">KEYWORDS</span>
+              <button className="ns-sidebar-toggle" onClick={() => setSidebarOpen(false)} title="Collapse">‹</button>
+            </div>
+            <div className="ns-keyword-list">
+              {tabs.map(t => (
+                <div
+                  key={t.id}
+                  className={`ns-kw-item${activeId === t.id ? ' active' : ''}`}
+                  onClick={() => setActiveId(t.id)}
+                >
+                  <span className="ns-kw-text">{t.keyword}</span>
+                  {tabs.length > 1 && (
+                    <button className="ns-kw-del" onClick={e => { e.stopPropagation(); removeTab(t.id) }}>×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="ns-sidebar-footer">
+              {adding ? (
+                <form className="ns-add-form" onSubmit={e => { e.preventDefault(); addTab() }}>
+                  <input
+                    autoFocus
+                    className="ns-add-input"
+                    value={newKw}
+                    onChange={e => setNewKw(e.target.value)}
+                    placeholder="keyword…"
+                    onBlur={() => { if (!newKw.trim()) setAdding(false) }}
+                  />
+                </form>
+              ) : (
+                <button className="ns-add-btn" onClick={() => setAdding(true)}>+ Add</button>
+              )}
+            </div>
+          </div>
         ) : (
-          <button className="rss-tab kf-tab-add" onClick={() => setAdding(true)} title="Add keyword">+</button>
+          <div className="ns-slim-strip" onClick={() => setSidebarOpen(true)} title="Expand keywords">
+            <span className="ns-slim-chevron">›</span>
+          </div>
         )}
-      </div>
 
-      <div className="widget-body">
-        {loading && articles.length === 0 ? (
-          <SkeletonFeedItems count={8} />
-        ) : error && articles.length === 0 ? (
-          <div className="widget-error">
-            <span className="widget-error-icon">⚠</span>
-            {error}
-            <button className="widget-error-retry" onClick={() => { const t = tabs.find(t => t.id === activeId); if (t) { setError(null); load(activeId, t.keyword) } }}>Retry</button>
-          </div>
-        ) : articles.length === 0 ? (
-          <div className="empty-state">
-            <span className="empty-state-icon">📡</span>
-            No results for "{tabs.find(t => t.id === activeId)?.keyword}"
-          </div>
-        ) : (
-          <div className="feed-list">
-            {articles.map((art, i) => (
-              <a key={i} className="feed-item feed-item-link" href={art.link} target="_blank" rel="noopener noreferrer">
-                <div className="feed-dot blue" style={{ flexShrink: 0 }} />
-                <span className="feed-text">
-                  <span className="feed-source">{art.source || '—'}</span>
-                  {art.title}
-                </span>
-                <span className="feed-time">{rssRelTime(art.pubDate)}</span>
-              </a>
-            ))}
-            <div className="attr-line">via Google News · rss2json</div>
-          </div>
-        )}
+        <div className="ns-results">
+          {tabs.length === 0 ? (
+            <div className="empty-state">
+              <span className="empty-state-icon">📡</span>
+              Add a keyword above to start monitoring
+            </div>
+          ) : loading && rawArticles.length === 0 ? (
+            <SkeletonFeedItems count={8} />
+          ) : error && rawArticles.length === 0 ? (
+            <div className="widget-error">
+              <span className="widget-error-icon">⚠</span>
+              Google News unavailable
+              <button className="widget-error-retry" onClick={() => { setError(null); handleRefresh() }}>Retry ↺</button>
+            </div>
+          ) : (
+            <div className="feed-list">
+              {showFallback && (
+                <div className="ns-fallback-msg">
+                  No headlines matched "{activeTab?.keyword}" exactly — showing related results
+                </div>
+              )}
+              {displayArticles.map((art, i) => {
+                const src   = nsExtractSource(art.title) || art.source
+                const title = nsCleanTitle(art.title)
+                return (
+                  <a
+                    key={i}
+                    className={`ns-result-item${showFallback ? ' ns-dim' : ''}`}
+                    href={art.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <div className="ns-result-title">{title}</div>
+                    <div className="ns-result-meta">
+                      {src && <span className="ns-result-source">{src}</span>}
+                      <span className="ns-result-time">{rssRelTime(art.pubDate)}</span>
+                    </div>
+                  </a>
+                )
+              })}
+              {displayArticles.length > 0 && <div className="attr-line">via Google News · rss2json</div>}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -2170,7 +2248,7 @@ function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, on
   switch (widget.type) {
     case 'map':      return <AtlasWidget  {...p} widgetId={widget.id} />
     case 'feeds':    return <FeedsWidget  {...p} />
-    case 'feed':     return <KeywordFeed  {...p} />
+    case 'feed':     return <KeywordFeed  {...p} widgetId={widget.id} />
     case 'rss':      return <RssFeed      {...p} widgetId={widget.id} />
     case 'prices':   return <PriceTracker {...p} widgetId={widget.id} />
     case 'stream':   return <Livestream   {...p} initialUrl={settings.livestreamUrl}  onUrlChange={url  => updateSetting('livestreamUrl', url)} />
