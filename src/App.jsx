@@ -2490,6 +2490,7 @@ function BrowserWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollap
 
   const canBack    = histRef.current.idx > 0
   const canForward = histRef.current.idx < histRef.current.stack.length - 1
+  const isBlocked  = /twitter\.com|x\.com/i.test(url)
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
@@ -2512,7 +2513,14 @@ function BrowserWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollap
         <button type="button" className="rss-go-btn" onClick={() => { setError(false); setFrameKey(k => k + 1) }} title="Refresh">↻</button>
         <button type="button" className="rss-go-btn" onClick={() => window.open(url, '_blank', 'noopener')} title="Open in new tab">↗</button>
       </form>
-      {error
+      {isBlocked
+        ? (
+          <div className="browser-error">
+            X / Twitter blocks embedding for security reasons.{' '}
+            <button className="browser-error-btn" onClick={() => window.open(url, '_blank', 'noopener')}>Open in new tab →</button>
+          </div>
+        )
+        : error
         ? (
           <div className="browser-error">
             This site cannot be embedded.{' '}
