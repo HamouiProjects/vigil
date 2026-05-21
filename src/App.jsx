@@ -1135,12 +1135,13 @@ function KeywordFeed({ widgetId = 'newssearch', onClose, onFullscreen, isFullscr
 
 // ─── RSS Feed (multi-feed with keyword filter) ────────────────────────────────
 const RSS_DEFAULT_FEEDS = [
-  { id: 'bbc',       name: 'BBC News',   url: 'https://feeds.bbci.co.uk/news/rss.xml',        enabled: true },
-  { id: 'reuters',   name: 'Reuters',    url: 'https://feeds.reuters.com/reuters/topNews',      enabled: true },
-  { id: 'aljazeera', name: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml',     enabled: true },
-  { id: 'france24',  name: 'France 24',  url: 'https://www.france24.com/en/rss',               enabled: true },
+  { id: 'bbc',       name: 'BBC News',   url: 'https://feeds.bbci.co.uk/news/rss.xml',        enabled: true, color: '#bb1919' },
+  { id: 'reuters',   name: 'Reuters',    url: 'https://feeds.reuters.com/reuters/topNews',      enabled: true, color: '#ff8000' },
+  { id: 'aljazeera', name: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml',     enabled: true, color: '#009966' },
+  { id: 'france24',  name: 'France 24',  url: 'https://www.france24.com/en/rss',               enabled: true, color: '#003f8a' },
+  { id: 'apnews',    name: 'AP News',    url: 'https://feeds.apnews.com/rss/apf-topnews',      enabled: true, color: '#cc0000' },
 ]
-const RSS_COLORS = ['#00c6ff', '#23d160', '#f5c518', '#ff7f50', '#c678dd', '#e06c75']
+const RSS_EXTRA_COLORS = ['#c678dd', '#00c6ff', '#f5c518', '#23d160', '#ff7f50', '#e06c75', '#56b6c2']
 
 function rssRelTime(pubDate) {
   try {
@@ -1152,43 +1153,87 @@ function rssRelTime(pubDate) {
   } catch { return '—' }
 }
 
+function ensureFeedColor(feed, idx) {
+  return feed.color ? feed : { ...feed, color: RSS_EXTRA_COLORS[idx % RSS_EXTRA_COLORS.length] }
+}
+
 function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
   const storageKey = `vigil_rss_feeds_${widgetId}`
 
   const [feeds, setFeeds] = useState(() => {
     try {
+      // Migration: old single-widgetId key
+      const OLD_KEY = 'vigil_rss_feeds_rss'
+      if (!localStorage.getItem(storageKey) && localStorage.getItem(OLD_KEY)) {
+        const m = JSON.parse(localStorage.getItem(OLD_KEY) ?? 'null')
+        localStorage.removeItem(OLD_KEY)
+        if (Array.isArray(m) && m.length) {
+          const withColors = m.map(ensureFeedColor)
+          localStorage.setItem(storageKey, JSON.stringify(withColors))
+          return withColors
+        }
+      }
+      // Legacy v1: single url string
       const oldUrl = localStorage.getItem(`vigil_rss_url_${widgetId}`)
       if (oldUrl) {
         localStorage.removeItem(`vigil_rss_url_${widgetId}`)
-        const migrated = [...RSS_DEFAULT_FEEDS, { id: 'my-feed', name: 'My Feed', url: oldUrl, enabled: true }]
+        const migrated = [...RSS_DEFAULT_FEEDS, { id: 'my-feed', name: 'My Feed', url: oldUrl, enabled: true, color: RSS_EXTRA_COLORS[0] }]
         localStorage.setItem(storageKey, JSON.stringify(migrated))
         return migrated
       }
       const saved = JSON.parse(localStorage.getItem(storageKey) || 'null')
-      return Array.isArray(saved) && saved.length ? saved : RSS_DEFAULT_FEEDS
+      if (Array.isArray(saved) && saved.length) return saved.map(ensureFeedColor)
+      return RSS_DEFAULT_FEEDS
     } catch { return RSS_DEFAULT_FEEDS }
   })
 
-  const [editMode,     setEditMode]     = useState(false)
   const [itemsByFeed,  setItemsByFeed]  = useState({})
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState(null)
   const [lastRefresh,  setLastRefresh]  = useState(null)
   const [timeAgo,      setTimeAgo]      = useState('')
-  const [filterInput,  setFilterInput]  = useState('')
-  const [filter,       setFilter]       = useState('')
+  const [filterInput,  setFilterInput]  = useState(() => {
+    try { return localStorage.getItem(`vigil_rss_keyword_${widgetId}`) ?? '' } catch { return '' }
+  })
+  const [filter,       setFilter]       = useState(() => {
+    try { return localStorage.getItem(`vigil_rss_keyword_${widgetId}`) ?? '' } catch { return '' }
+  })
+  const [activeSource, setActiveSource] = useState(() => {
+    try { return localStorage.getItem(`vigil_rss_active_source_${widgetId}`) ?? 'all' } catch { return 'all' }
+  })
+  const [sidebarOpen,  setSidebarOpen]  = useState(() => {
+    try {
+      const stored = localStorage.getItem(`vigil_rss_sidebar_collapsed_${widgetId}`)
+      return stored === null ? true : !JSON.parse(stored)
+    } catch { return true }
+  })
+  const [density,      setDensity]      = useState(() => {
+    try { return localStorage.getItem(`vigil_rss_density_${widgetId}`) ?? 'compact' } catch { return 'compact' }
+  })
+  const [addingSource, setAddingSource] = useState(false)
   const [newName,      setNewName]      = useState('')
   const [newUrl,       setNewUrl]       = useState('')
   const [addError,     setAddError]     = useState('')
-  const filterTimerRef = useRef(null)
-  const isVisibleRss   = usePageVisibility()
 
-  const feedsRef = useRef(feeds)
-  feedsRef.current = feeds
+  const seenRef        = useRef(new Set())
+  const [seenVersion,  setSeenVersion]  = useState(0) // increments to trigger re-render on mark-seen
+  const filterTimerRef = useRef(null)
+  const feedsRef       = useRef(feeds); feedsRef.current = feeds
+  const isVisibleRss   = usePageVisibility()
 
   function saveFeeds(next) {
     setFeeds(next)
     try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch {}
+  }
+
+  function feedColor(feedId) {
+    return feedsRef.current.find(f => f.id === feedId)?.color ?? '#4a6a8a'
+  }
+
+  function markSeen(link) {
+    if (!link || seenRef.current.has(link)) return
+    seenRef.current.add(link)
+    setSeenVersion(v => v + 1)
   }
 
   const fetchAll = useCallback(async () => {
@@ -1202,14 +1247,20 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
       )
     )
     const anyOk = results.some(r => r.status === 'fulfilled' && r.value?.status === 'ok')
-    if (!anyOk) setError('Feed unavailable')
-    else setError(null)
+    setError(anyOk ? null : 'Feed unavailable')
     setItemsByFeed(prev => {
       const next = { ...prev }
       enabled.forEach((f, i) => {
         const r = results[i]
-        if (r.status === 'fulfilled' && r.value.status === 'ok') {
-          next[f.id] = (r.value.items ?? []).map(item => ({ ...item, _feedId: f.id, _feedName: f.name }))
+        if (r.status === 'fulfilled' && r.value?.status === 'ok') {
+          next[f.id] = (r.value.items ?? []).map(item => ({
+            title:       item.title       ?? '',
+            link:        item.link        ?? '',
+            pubDate:     item.pubDate     ?? '',
+            description: (item.description ?? '').replace(/<[^>]+>/g, '').trim(),
+            _feedId:     f.id,
+            _feedName:   f.name,
+          }))
         }
       })
       return next
@@ -1218,18 +1269,20 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
     setLoading(false)
   }, [])
 
+  function handleRefresh() {
+    if (loading) return
+    setItemsByFeed({})
+    fetchAll()
+  }
+
   useEffect(() => {
     fetchAll()
     const id = setInterval(() => { if (!document.hidden) fetchAll() }, 5 * 60_000)
     return () => clearInterval(id)
   }, [fetchAll, feeds])
 
-  // Re-fetch when tab becomes visible again
-  useEffect(() => {
-    if (isVisibleRss) fetchAll()
-  }, [isVisibleRss]) // fetchAll is stable
+  useEffect(() => { if (isVisibleRss) fetchAll() }, [isVisibleRss])
 
-  // "Updated X ago" counter
   useEffect(() => {
     const tick = () => {
       if (!lastRefresh) return
@@ -1241,42 +1294,57 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
     return () => clearInterval(id)
   }, [lastRefresh])
 
-  function feedColor(feedId) {
-    const idx = feeds.findIndex(f => f.id === feedId)
-    return RSS_COLORS[Math.max(0, idx) % RSS_COLORS.length]
-  }
+  useEffect(() => {
+    try { localStorage.setItem(`vigil_rss_sidebar_collapsed_${widgetId}`, JSON.stringify(!sidebarOpen)) } catch {}
+  }, [sidebarOpen, widgetId])
 
-  // Merge, dedup by title, sort by date
+  useEffect(() => {
+    try { localStorage.setItem(`vigil_rss_active_source_${widgetId}`, activeSource) } catch {}
+  }, [activeSource, widgetId])
+
+  // Unread counts (recalculated on every render triggered by seenVersion)
+  const unreadBySource = {}
+  // eslint-disable-next-line no-unused-expressions
+  seenVersion // reactive trigger
+  Object.entries(itemsByFeed).forEach(([feedId, items]) => {
+    unreadBySource[feedId] = items.filter(item => !seenRef.current.has(item.link)).length
+  })
+  const totalUnread = Object.values(unreadBySource).reduce((s, n) => s + n, 0)
+
+  // Merged + deduped + sorted all-source items
   const allItems = (() => {
     const seen = new Set()
     return Object.values(itemsByFeed)
       .flat()
       .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate))
-      .filter(item => {
-        if (seen.has(item.title)) return false
-        seen.add(item.title); return true
-      })
+      .filter(item => { if (seen.has(item.title)) return false; seen.add(item.title); return true })
   })()
 
-  // Client-side keyword filter
-  const displayItems = filter.trim()
-    ? allItems.filter(item => {
-        const q    = filter.toLowerCase()
-        const text = (item.title ?? '') + ' ' + (item.description ?? '').replace(/<[^>]+>/g, '')
-        return text.toLowerCase().includes(q)
-      })
-    : allItems
+  const sourceFilteredItems = activeSource === 'all'
+    ? allItems
+    : (itemsByFeed[activeSource] ?? []).slice().sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate))
 
-  const isFirstLoad = loading && Object.keys(itemsByFeed).length === 0
+  const displayItems = filter.trim()
+    ? sourceFilteredItems.filter(item =>
+        (item.title + ' ' + item.description).toLowerCase().includes(filter.toLowerCase())
+      )
+    : sourceFilteredItems
+
+  const isFirstLoad      = loading && Object.keys(itemsByFeed).length === 0
+  const activeSourceName = activeSource === 'all' ? 'all sources' : (feeds.find(f => f.id === activeSource)?.name ?? activeSource)
 
   function addFeed() {
     const name = newName.trim(), url = newUrl.trim()
     if (!name || !url) { setAddError('Name and URL required'); return }
-    saveFeeds([...feeds, { id: `feed-${Date.now()}`, name, url, enabled: true }])
-    setNewName(''); setNewUrl(''); setAddError('')
+    const newFeed = { id: `feed-${Date.now()}`, name, url, enabled: true, color: RSS_EXTRA_COLORS[feeds.length % RSS_EXTRA_COLORS.length] }
+    saveFeeds([...feeds, newFeed])
+    setNewName(''); setNewUrl(''); setAddError(''); setAddingSource(false)
   }
 
-  function removeFeed(id) { saveFeeds(feeds.filter(f => f.id !== id)) }
+  function removeFeed(id) {
+    saveFeeds(feeds.filter(f => f.id !== id))
+    if (activeSource === id) setActiveSource('all')
+  }
 
   function toggleFeed(id) {
     saveFeeds(feeds.map(f => f.id === id ? { ...f, enabled: !f.enabled } : f))
@@ -1286,103 +1354,210 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
     <div className="widget" data-collapsed={collapsed || undefined}>
       <div className="widget-header">
         <span className="widget-title">RSS FEED</span>
-        <InfoTooltip text="Monitor your chosen news outlets. Add any RSS feed URL, then filter by keyword to track specific topics across all your sources." />
+        <InfoTooltip wide text={
+          <span>
+            <strong className="ns-tip-head">RSS Feed</strong>
+            Monitor specific outlets you trust. Add any RSS feed URL and filter by keyword to track topics across your chosen sources only.
+            <br /><br />
+            📡 <strong>Best for:</strong> following specific outlets (BBC, Reuters, Al Jazeera) with keyword filtering.
+            <br /><br />
+            🔍 <strong>Want results from ALL sources worldwide?</strong> Use the News Search widget — it searches Google News globally.
+            <br /><br />
+            💡 <strong>Tip:</strong> Add niche sources not in mainstream media — think-tanks, regional outlets, wire services. Any RSS URL works.
+          </span>
+        } />
         <div className="widget-actions">
-          <span className={`widget-badge${loading ? ' inactive' : ''}`}>LIVE</span>
-          <button className="widget-btn" onClick={fetchAll} title="Refresh">↻</button>
-          <button className={`widget-btn${editMode ? ' pt-mode-active' : ''}`} onClick={() => setEditMode(v => !v)} title="Manage feeds">✎</button>
+          <span className={`widget-badge${loading || error ? ' inactive' : ''}`}>{loading ? 'LOADING' : error ? 'ERROR' : 'LIVE'}</span>
+          <button
+            className="widget-btn"
+            onClick={() => {
+              const next = density === 'compact' ? 'comfortable' : 'compact'
+              setDensity(next)
+              try { localStorage.setItem(`vigil_rss_density_${widgetId}`, next) } catch {}
+            }}
+            title={density === 'compact' ? 'Comfortable view' : 'Compact view'}
+          >{density === 'compact' ? '☰' : '≡'}</button>
+          <button className="widget-btn" onClick={handleRefresh} title="Refresh">
+            <span style={loading ? { display: 'inline-block', animation: 'ns-spin 0.8s linear infinite' } : undefined}>↻</span>
+          </button>
           {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
           {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
           {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
         </div>
       </div>
 
-      {/* Keyword filter bar — always visible */}
-      <div className="rss-filter-bar" onPointerDownCapture={e => e.stopPropagation()}>
-        <input className="rss-input rss-filter-input" value={filterInput}
-          onChange={e => {
-            const v = e.target.value
-            setFilterInput(v)
-            clearTimeout(filterTimerRef.current)
-            filterTimerRef.current = setTimeout(() => setFilter(v), 150)
-          }}
-          placeholder="Filter by keyword… (e.g. Iran, Federal Reserve)"
-        />
-        {filterInput && (
-          <button className="rss-filter-clear" onClick={() => { setFilterInput(''); setFilter('') }} title="Clear filter">×</button>
-        )}
-      </div>
-
-      {editMode && (
-        <div className="rss-edit-panel" onPointerDownCapture={e => e.stopPropagation()}>
-          {feeds.map((f, i) => (
-            <div key={f.id} className="rss-feed-row">
-              <span className="rss-feed-dot" style={{ background: RSS_COLORS[i % RSS_COLORS.length] }} />
-              <span className="rss-feed-name">{f.name}</span>
-              <span className="rss-feed-url" title={f.url}>{f.url}</span>
-              <button className={`rss-toggle${f.enabled ? ' on' : ''}`} onClick={() => toggleFeed(f.id)}>
-                {f.enabled ? 'ON' : 'OFF'}
-              </button>
-              <button className="rss-remove-btn" onClick={() => removeFeed(f.id)}>×</button>
+      <div className="rss-body" onPointerDownCapture={e => e.stopPropagation()}>
+        {/* Source sidebar */}
+        {sidebarOpen ? (
+          <div className="rss-sidebar">
+            <div className="rss-sidebar-header">
+              <span className="rss-sidebar-title">SOURCES</span>
+              <button className="rss-sidebar-toggle" onClick={() => setSidebarOpen(false)} title="Collapse">‹</button>
             </div>
-          ))}
-          <div className="rss-add-row">
-            <input className="rss-input" value={newName}
-              onChange={e => { setNewName(e.target.value); setAddError('') }}
-              placeholder="Feed name…" />
-            <input className="rss-input" value={newUrl}
-              onChange={e => { setNewUrl(e.target.value); setAddError('') }}
-              placeholder="RSS URL…" spellCheck={false} />
-            <button className="rss-go-btn" onClick={addFeed}>ADD</button>
+            <div className="rss-source-list">
+              {/* ALL row */}
+              <div
+                className={`rss-source-item${activeSource === 'all' ? ' active' : ''}`}
+                onClick={() => setActiveSource('all')}
+              >
+                <span className="rss-source-dot" style={{ background: '#00c6ff' }} />
+                <span className="rss-source-name">All</span>
+                {totalUnread > 0 && <span className="rss-source-badge">{totalUnread > 99 ? '99+' : totalUnread}</span>}
+              </div>
+              {feeds.map(f => {
+                const unread = unreadBySource[f.id] ?? 0
+                return (
+                  <div
+                    key={f.id}
+                    className={`rss-source-item${activeSource === f.id ? ' active' : ''}`}
+                    onClick={() => setActiveSource(f.id)}
+                  >
+                    <span className="rss-source-dot" style={{ background: f.color, opacity: f.enabled ? 0.85 : 0.3 }} />
+                    <span className="rss-source-name" style={{ opacity: f.enabled ? 1 : 0.45 }}>{f.name}</span>
+                    {unread > 0 && <span className="rss-source-badge">{unread > 99 ? '99+' : unread}</span>}
+                    <button
+                      className={`rss-source-toggle${f.enabled ? ' on' : ''}`}
+                      onClick={e => { e.stopPropagation(); toggleFeed(f.id) }}
+                      title={f.enabled ? 'Disable' : 'Enable'}
+                    />
+                    <button
+                      className="rss-source-del"
+                      onClick={e => { e.stopPropagation(); removeFeed(f.id) }}
+                      title="Remove source"
+                    >×</button>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="rss-sidebar-footer">
+              {addingSource ? (
+                <div className="rss-add-source-form">
+                  <input
+                    autoFocus
+                    className="rss-add-source-input"
+                    value={newName}
+                    onChange={e => { setNewName(e.target.value); setAddError('') }}
+                    placeholder="Source name…"
+                  />
+                  <input
+                    className="rss-add-source-input"
+                    value={newUrl}
+                    onChange={e => { setNewUrl(e.target.value); setAddError('') }}
+                    placeholder="RSS URL…"
+                    spellCheck={false}
+                  />
+                  {addError && <div style={{ fontSize: '9px', color: '#ff4d4f', padding: '2px 0' }}>{addError}</div>}
+                  <div className="rss-add-source-actions">
+                    <button className="rss-add-source-add" onClick={addFeed}>Add</button>
+                    <button className="rss-add-source-cancel" onClick={() => { setAddingSource(false); setNewName(''); setNewUrl(''); setAddError('') }}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <button className="rss-add-source-btn" onClick={() => setAddingSource(true)}>＋ Add Source</button>
+              )}
+            </div>
           </div>
-          {addError && <div className="pt-search-error" style={{ padding: '2px 6px 4px' }}>{addError}</div>}
-        </div>
-      )}
-
-      <div className="widget-body">
-        {isFirstLoad ? (
-          <SkeletonFeedItems count={6} />
-        ) : error && Object.keys(itemsByFeed).length === 0 ? (
-          <div className="widget-error">
-            <span className="widget-error-icon">⚠</span>
-            {error}
-            <button className="widget-error-retry" onClick={() => { setError(null); fetchAll() }}>Retry</button>
-          </div>
-        ) : displayItems.length === 0 ? (
-          filter ? (
-            <div className="empty-state">
-              <span className="empty-state-icon">🔍</span>
-              No articles matching "{filter}"
-            </div>
-          ) : (
-            <div className="empty-state">
-              <span className="empty-state-icon">📰</span>
-              No articles available
-            </div>
-          )
         ) : (
-          <div className="feed-list">
-            {displayItems.map((item, i) => {
-              const color = feedColor(item._feedId)
-              const desc  = item.description
-                ? item.description.replace(/<[^>]+>/g, '').trim().slice(0, 120)
-                : null
-              return (
-                <a key={i} className="feed-item feed-item-link" href={item.link} target="_blank" rel="noopener noreferrer">
-                  <div className="feed-dot" style={{ background: color, boxShadow: `0 0 4px ${color}`, flexShrink: 0 }} />
-                  <span className="feed-text">
-                    <span className="feed-source">{item._feedName}</span>
-                    {item.title}
-                    {desc && <span className="rss-desc">{desc}</span>}
-                  </span>
-                  <span className="feed-time">{rssRelTime(item.pubDate)}</span>
-                </a>
-              )
-            })}
-            {lastRefresh && <div className="rss-updated">Updated {timeAgo}</div>}
-            <div className="attr-line">via rss2json · {feeds.filter(f => f.enabled).map(f => f.name).join(', ')}</div>
+          <div className="rss-slim-strip" onClick={() => setSidebarOpen(true)} title="Expand sources">
+            <span className="rss-slim-chevron">›</span>
           </div>
         )}
+
+        {/* Right panel */}
+        <div className="rss-right">
+          {/* Filter bar */}
+          <div className="rss-filter-bar">
+            <input
+              className="rss-input rss-filter-input"
+              value={filterInput}
+              onChange={e => {
+                const v = e.target.value
+                setFilterInput(v)
+                clearTimeout(filterTimerRef.current)
+                filterTimerRef.current = setTimeout(() => {
+                  setFilter(v)
+                  try { v ? localStorage.setItem(`vigil_rss_keyword_${widgetId}`, v) : localStorage.removeItem(`vigil_rss_keyword_${widgetId}`) } catch {}
+                }, 150)
+              }}
+              placeholder="Filter headlines…"
+            />
+            {filterInput && (
+              <button className="rss-filter-clear" onClick={() => {
+                setFilterInput(''); setFilter('')
+                try { localStorage.removeItem(`vigil_rss_keyword_${widgetId}`) } catch {}
+              }} title="Clear filter">×</button>
+            )}
+          </div>
+          {filter && (
+            <div className="rss-result-count">
+              {displayItems.length} article{displayItems.length !== 1 ? 's' : ''} · filtered by "{filter}"
+            </div>
+          )}
+
+          {/* Article list */}
+          <div className="rss-articles">
+            {isFirstLoad ? (
+              <SkeletonFeedItems count={6} />
+            ) : error && Object.keys(itemsByFeed).length === 0 ? (
+              <div className="widget-error">
+                <span className="widget-error-icon">⚠</span>
+                Feed unavailable
+                <button className="widget-error-retry" onClick={() => { setError(null); handleRefresh() }}>Retry ↺</button>
+              </div>
+            ) : displayItems.length === 0 ? (
+              filter ? (
+                <div className="empty-state">
+                  <span className="empty-state-icon">🔍</span>
+                  No headlines matching "{filter}" in {activeSourceName}
+                  <button className="widget-error-retry" style={{ marginTop: 6 }} onClick={() => { setFilterInput(''); setFilter('') }}>Clear filter</button>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <span className="empty-state-icon">📰</span>
+                  No articles available
+                </div>
+              )
+            ) : (
+              <div className="feed-list">
+                {displayItems.map((item, i) => {
+                  const color   = feedColor(item._feedId)
+                  const isSeen  = seenRef.current.has(item.link)
+                  const showSrc = activeSource === 'all' || !!filter
+                  const desc    = item.description?.slice(0, 150)
+                  return (
+                    <a
+                      key={i}
+                      className={`rss-article${density === 'comfortable' ? ' rss-comfortable' : ''}${isSeen ? ' rss-seen' : ''}`}
+                      href={item.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => markSeen(item.link)}
+                    >
+                      <div className="rss-art-bar" style={{ background: color }} />
+                      <div className="rss-art-body">
+                        <div className="rss-art-meta">
+                          {showSrc && <span className="rss-art-source">{item._feedName}</span>}
+                          <span className="rss-art-time">{rssRelTime(item.pubDate)}</span>
+                        </div>
+                        <div className="rss-art-title">{item.title}</div>
+                        {density === 'comfortable' && desc && (
+                          <div className="rss-art-desc">{desc}</div>
+                        )}
+                      </div>
+                      <span className="rss-art-ext">→</span>
+                    </a>
+                  )
+                })}
+                <div className="rss-footer">
+                  {lastRefresh && <span className="rss-updated-inline">Updated {timeAgo}</span>}
+                  <div className="attr-line" style={{ borderTop: 'none', padding: '1px 0' }}>
+                    via rss2json · {feeds.filter(f => f.enabled).map(f => f.name).join(', ')}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
