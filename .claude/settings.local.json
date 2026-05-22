@@ -12,7 +12,15 @@
       "Bash(npx vite *)",
       "Bash(Get-Process node *)",
       "Bash(Stop-Process -Force)",
-      "Bash(Start-Sleep -Milliseconds 500)"
+      "Bash(Start-Sleep -Milliseconds 500)",
+      "PowerShell(New-Item *)",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\49157\\\\Projects\\\\vigil\\\\src\\\\App.jsx\" -Pattern \"ArticleReader|BrowserWidget|case 'browser'\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\49157\\\\Projects\\\\vigil\\\\src\\\\App.jsx\" -Pattern \"BrowserWidget\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\49157\\\\Projects\\\\vigil\\\\src\\\\App.jsx\" -Pattern \"case 'browser'|ArticleReader|BrowserWidget\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(Get-Content *)",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\49157\\\\Projects\\\\vigil\\\\src\\\\App.jsx\" -Pattern \"Browser\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "Bash(curl -s \"http://localhost:3000/api/fetch-article?url=https://www.theguardian.com/technology/2025/jan/01/ai-chips\")",
+      "Bash(curl *)"
     ]
   }
 }

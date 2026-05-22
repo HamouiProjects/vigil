@@ -255,17 +255,17 @@
 .cmap-layer-btn {
   font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
   text-transform: uppercase; font-family: 'JetBrains Mono', monospace;
-  color: var(--text-muted); background: transparent;
+  color: var(--text-secondary); background: transparent;
   border: 1px solid var(--border); border-radius: 2px;
   padding: 0 8px; height: 22px; cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s, opacity 0.15s;
-  white-space: nowrap; opacity: 0.45; text-decoration: line-through;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  white-space: nowrap;
 }
 .cmap-layer-btn.active {
-  color: var(--text-primary); background: var(--accent-dim);
-  border-color: rgba(0,212,255,0.25); opacity: 1; text-decoration: none;
+  color: var(--accent); background: var(--accent-dim);
+  border-color: rgba(0,212,255,0.25);
 }
-.cmap-layer-btn:hover  { opacity: 0.75; text-decoration: none; }
+.cmap-layer-btn:hover { color: var(--text-primary); }
 .cmap-update-btn {
   margin-left: auto;
   font-size: 9px; font-weight: 700; letter-spacing: 0.06em; font-family: 'JetBrains Mono', monospace;
@@ -406,28 +406,6 @@
   text-align: center; padding: 16px;
 }
 .widget-error-icon { font-size: 20px; opacity: 0.6; }
-
-/* ── Atlas feeds bar (row 2 of toolbar) ── */
-.cmap-feeds-bar {
-  display: flex; align-items: center; gap: 4px;
-  padding: 0 8px; height: 32px; flex-shrink: 0;
-  background: var(--bg); border-bottom: 1px solid var(--border);
-}
-
-/* ── Atlas collapsible toolbar ── */
-.atlas-slim-bar {
-  display: flex; align-items: center; justify-content: space-between;
-  height: 24px; padding: 0 10px; flex-shrink: 0;
-  background: var(--bg); border-bottom: 1px solid var(--border);
-  cursor: pointer; user-select: none;
-}
-.atlas-slim-bar:hover { background: var(--surface-elevated); }
-.atlas-dot-row { display: flex; align-items: center; gap: 5px; }
-.atlas-dot { width: 6px; height: 6px; border-radius: 50%; transition: background 0.2s; flex-shrink: 0; }
-.atlas-mode-label { font-size: 8px; color: var(--text-muted); letter-spacing: 0.1em; margin-left: 3px; font-family: 'JetBrains Mono', monospace; }
-.atlas-chevron { font-size: 8px; color: var(--text-muted); }
-.atlas-toolbar-wrap { overflow: hidden; max-height: 0; transition: max-height 0.2s ease; flex-shrink: 0; }
-.atlas-toolbar-wrap.open { max-height: 64px; }
 
 /* ── Atlas loading bar ── */
 .atlas-loading-bar {

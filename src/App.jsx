@@ -537,8 +537,7 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
   )
 })
 
-const ATLAS_STATE_KEY   = id => `vigil_atlas_state_${id}`
-const ATLAS_TOOLBAR_KEY = id => `vigil_atlas_toolbar_collapsed_${id}`
+const ATLAS_STATE_KEY = id => `vigil_atlas_state_${id}`
 
 function readAtlasState(id) {
   try { return JSON.parse(localStorage.getItem(ATLAS_STATE_KEY(id)) || 'null') } catch { return null }
@@ -555,9 +554,6 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
   const [mapMode,       setMapMode]       = useState(_isMaritime ? 'leaflet' : (saved?.mapMode ?? 'leaflet'))
   const [iframeSrc,     setIframeSrc]     = useState(_isMaritime ? ''        : _savedIframeSrc)
   const [dataLoading,   setDataLoading]   = useState(false)
-  const [toolbarOpen,   setToolbarOpen]   = useState(() => {
-    try { return JSON.parse(localStorage.getItem(ATLAS_TOOLBAR_KEY(widgetId)) ?? 'false') } catch { return false }
-  })
   const atlasRef      = useRef(null)
   const currentViewRef = useRef({ center: saved?.center ?? [20, 0], zoom: saved?.zoom ?? 2 })
 
@@ -573,10 +569,6 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
     saveState({ showConflicts, showNatural, showPiracy, mapMode, iframeSrc })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showConflicts, showNatural, showPiracy, mapMode, iframeSrc])
-
-  useEffect(() => {
-    try { localStorage.setItem(ATLAS_TOOLBAR_KEY(widgetId), JSON.stringify(toolbarOpen)) } catch {}
-  }, [toolbarOpen, widgetId])
 
   // Portal (fullscreen) instance: broadcast latest view on unmount so grid instance can sync
   useEffect(() => {
@@ -638,79 +630,36 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
         </div>
       </div>
 
-      {/* Slim indicator bar — always visible, click to expand/collapse toolbar */}
-      <div className="atlas-slim-bar" onPointerDownCapture={e => e.stopPropagation()} onClick={() => setToolbarOpen(v => !v)}>
-        <div className="atlas-dot-row">
-          {isLeaflet ? (
-            <>
-              <span className="atlas-dot" style={{ background: showConflicts ? '#e53935' : '#1e2d3d' }} />
-              <span className="atlas-dot" style={{ background: showNatural   ? '#43a047' : '#1e2d3d' }} />
-              <span className="atlas-dot" style={{ background: showPiracy    ? '#00acc1' : '#1e2d3d' }} />
-              <span className="atlas-mode-label">ATLAS</span>
-            </>
-          ) : (
-            <>
-              <span className="atlas-dot" style={{ background: iframeSrc.includes('adsbexchange') ? '#42a5f5' : '#1e2d3d' }} />
-              <span className="atlas-dot" style={{ background: iframeSrc.includes('checkpoint')   ? '#ab47bc' : '#1e2d3d' }} />
-              <span className="atlas-mode-label">
-                {iframeSrc.includes('adsbexchange') ? 'FLIGHTS' : iframeSrc.includes('checkpoint') ? 'CYBER' : 'LIVE FEED'}
-              </span>
-            </>
-          )}
-        </div>
-        <span className="atlas-chevron">{toolbarOpen ? '▲' : '▼'}</span>
-      </div>
-
-      {/* Collapsible toolbar rows */}
-      <div className={`atlas-toolbar-wrap${toolbarOpen ? ' open' : ''}`} onPointerDownCapture={e => e.stopPropagation()}>
-        {/* Row 1: data overlay layers */}
-        <div className="cmap-layer-bar">
-          <button
-            className={`cmap-layer-btn${isLeaflet && showConflicts ? ' active' : ''}`}
-            style={{ background: isLeaflet && showConflicts ? 'rgba(0,212,255,0.1)' : 'transparent', border: isLeaflet && showConflicts ? '1px solid #00D4FF' : '1px solid #1E2329', borderRadius: '3px', color: isLeaflet && showConflicts ? '#00D4FF' : '#8B949E', fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', height: '22px', padding: '0 8px', cursor: 'pointer', transition: 'all 0.15s', opacity: 1, textDecoration: 'none' }}
-            onClick={() => { setMapMode('leaflet'); setShowConflicts(v => !v) }}
-          >
-            CONFLICTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Armed conflict zones · Source: ReliefWeb</span></span>
-          </button>
-          <button
-            className={`cmap-layer-btn${isLeaflet && showNatural ? ' active' : ''}`}
-            style={{ background: isLeaflet && showNatural ? 'rgba(0,212,255,0.1)' : 'transparent', border: isLeaflet && showNatural ? '1px solid #00D4FF' : '1px solid #1E2329', borderRadius: '3px', color: isLeaflet && showNatural ? '#00D4FF' : '#8B949E', fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', height: '22px', padding: '0 8px', cursor: 'pointer', transition: 'all 0.15s', opacity: 1, textDecoration: 'none' }}
-            onClick={() => { setMapMode('leaflet'); setShowNatural(v => !v) }}
-          >
-            NATURAL<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Earthquakes · Wildfires · Storms · Sources: USGS, NOAA</span></span>
-          </button>
-          <button
-            className={`cmap-layer-btn${isLeaflet && showPiracy ? ' active' : ''}`}
-            style={{ background: isLeaflet && showPiracy ? 'rgba(0,212,255,0.1)' : 'transparent', border: isLeaflet && showPiracy ? '1px solid #00D4FF' : '1px solid #1E2329', borderRadius: '3px', color: isLeaflet && showPiracy ? '#00D4FF' : '#8B949E', fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', height: '22px', padding: '0 8px', cursor: 'pointer', transition: 'all 0.15s', opacity: 1, textDecoration: 'none' }}
-            onClick={() => { setMapMode('leaflet'); setShowPiracy(v => !v) }}
-          >
-            PIRACY<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Maritime piracy high-risk zones · Source: IMB</span></span>
-          </button>
-          {isLeaflet && (
-            <button className="cmap-update-btn" onClick={() => atlasRef.current?.refresh()} title="Re-fetch live data">⟳ Update</button>
-          )}
-          {!isLeaflet && (
-            <button className="cmap-update-btn" onClick={() => setMapMode('leaflet')} title="Back to ATLAS map">← ATLAS</button>
-          )}
-        </div>
-
-        {/* Row 2: live iframe feeds */}
-        <div className="cmap-feeds-bar">
-          <button
-            className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('adsbexchange') ? ' active' : ''}`}
-            style={{ background: !isLeaflet && iframeSrc.includes('adsbexchange') ? 'rgba(0,212,255,0.1)' : 'transparent', border: !isLeaflet && iframeSrc.includes('adsbexchange') ? '1px solid #00D4FF' : '1px solid #1E2329', borderRadius: '3px', color: !isLeaflet && iframeSrc.includes('adsbexchange') ? '#00D4FF' : '#8B949E', fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', height: '22px', padding: '0 8px', cursor: 'pointer', transition: 'all 0.15s', opacity: 1, textDecoration: 'none' }}
-            onClick={() => switchToIframe('https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3')}
-          >
-            FLIGHTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live air traffic · Source: ADS-B Exchange</span></span>
-          </button>
-          <button
-            className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('checkpoint') ? ' active' : ''}`}
-            style={{ background: !isLeaflet && iframeSrc.includes('checkpoint') ? 'rgba(0,212,255,0.1)' : 'transparent', border: !isLeaflet && iframeSrc.includes('checkpoint') ? '1px solid #00D4FF' : '1px solid #1E2329', borderRadius: '3px', color: !isLeaflet && iframeSrc.includes('checkpoint') ? '#00D4FF' : '#8B949E', fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', height: '22px', padding: '0 8px', cursor: 'pointer', transition: 'all 0.15s', opacity: 1, textDecoration: 'none' }}
-            onClick={() => switchToIframe('https://threatmap.checkpoint.com/')}
-          >
-            CYBER<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live cyber attacks · Source: Checkpoint</span></span>
-          </button>
-        </div>
+      {/* Single always-visible layer + feed bar */}
+      <div className="cmap-layer-bar" onPointerDownCapture={e => e.stopPropagation()}>
+        <button className={`cmap-layer-btn${isLeaflet && showConflicts ? ' active' : ''}`}
+          onClick={() => { setMapMode('leaflet'); setShowConflicts(v => !v) }}>
+          CONFLICTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Armed conflict zones · Source: ReliefWeb</span></span>
+        </button>
+        <button className={`cmap-layer-btn${isLeaflet && showNatural ? ' active' : ''}`}
+          onClick={() => { setMapMode('leaflet'); setShowNatural(v => !v) }}>
+          NATURAL<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Earthquakes · Wildfires · Storms · Sources: USGS, NOAA</span></span>
+        </button>
+        <button className={`cmap-layer-btn${isLeaflet && showPiracy ? ' active' : ''}`}
+          onClick={() => { setMapMode('leaflet'); setShowPiracy(v => !v) }}>
+          PIRACY<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Maritime piracy high-risk zones · Source: IMB</span></span>
+        </button>
+        <button className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('vesselfinder') ? ' active' : ''}`}
+          onClick={() => switchToIframe('https://www.vesselfinder.com/embed/?usemarsden=1')}>
+          MARINE<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live vessel tracking · Source: VesselFinder</span></span>
+        </button>
+        <button className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('adsbexchange') ? ' active' : ''}`}
+          onClick={() => switchToIframe('https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3')}>
+          FLIGHTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live air traffic · Source: ADS-B Exchange</span></span>
+        </button>
+        <button className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('checkpoint') ? ' active' : ''}`}
+          onClick={() => switchToIframe('https://threatmap.checkpoint.com/')}>
+          CYBER<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live cyber attacks · Source: Checkpoint</span></span>
+        </button>
+        {isLeaflet
+          ? <button className="cmap-update-btn" onClick={() => atlasRef.current?.refresh()} title="Re-fetch live data">⟳ Update</button>
+          : <button className="cmap-update-btn" onClick={() => setMapMode('leaflet')} title="Back to ATLAS map">← ATLAS</button>
+        }
       </div>
 
       {dataLoading && (
@@ -2478,10 +2427,11 @@ const DEFAULT_WIDGETS_BY_WS = {
     { id: 'stream',   type: 'stream'   },
   ],
   'ws-2': [
-    { id: 'prices',   type: 'prices'   },
-    { id: 'chart',    type: 'chart'    },
-    { id: 'feed',     type: 'feed'     },
-    { id: 'rss',      type: 'rss'      },
+    { id: 'prices',  type: 'prices'  },
+    { id: 'chart',   type: 'chart'   },
+    { id: 'heatmap', type: 'heatmap' },
+    { id: 'feed',    type: 'feed'    },
+    { id: 'rss',     type: 'rss'     },
   ],
   'ws-3': [
     { id: 'atlas',    type: 'map'      },
@@ -2526,7 +2476,7 @@ function ChartWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse
   }
 
   const displayTicker = activeSymbol.includes(':') ? activeSymbol.split(':')[1] : activeSymbol
-  const tvUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_vigil&symbol=${encodeURIComponent(activeSymbol)}&interval=D&theme=dark&style=1&locale=en&toolbar_bg=0d1421&enable_publishing=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0`
+  const tvUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_vigil&symbol=${encodeURIComponent(activeSymbol)}&interval=D&theme=dark&style=1&locale=en&toolbar_bg=0a0c10&bg_color=0a0c10&enable_publishing=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0`
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
@@ -2572,11 +2522,6 @@ function ArticleReaderWidget({ widgetId, onClose, onFullscreen, isFullscreen, on
   const [article,    setArticle]    = useState(null)
   const [error,      setError]      = useState(null)
   const [devOffline, setDevOffline] = useState(false)
-
-  useEffect(() => {
-    if (initUrl) doFetch(initUrl)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   async function doFetch(rawUrl) {
     let u = rawUrl.trim()
@@ -2901,6 +2846,18 @@ function SocialFeed({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse,
   )
 }
 
+// ─── Heatmap widget (TradingView stock heatmap) ───────────────────────────────
+const HEATMAP_URL = "https://s.tradingview.com/embed-widget/stock-heatmap/?locale=en#%7B%22exchanges%22%3A%5B%5D%2C%22dataSource%22%3A%22SPX500%22%2C%22grouping%22%3A%22sector%22%2C%22blockSize%22%3A%22market_cap_basic%22%2C%22blockColor%22%3A%22change%22%2C%22locale%22%3A%22en%22%2C%22symbolUrl%22%3A%22%22%2C%22colorTheme%22%3A%22dark%22%2C%22hasTopBar%22%3Afalse%2C%22isDataSetEnabled%22%3Afalse%2C%22isZoomEnabled%22%3Atrue%2C%22hasSymbolTooltip%22%3Atrue%2C%22isMonoSize%22%3Afalse%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%7D"
+
+function HeatmapWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+  return (
+    <div className="widget" data-collapsed={collapsed || undefined}>
+      <WHeader title="HEATMAP" onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
+      <iframe src={HEATMAP_URL} style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }} title="Market Heatmap" allow="clipboard-write" />
+    </div>
+  )
+}
+
 // ─── Widget catalog + renderer ────────────────────────────────────────────────
 const WIDGET_CATALOG = [
   { type: 'map',      label: 'ATLAS',        icon: '🗺' },
@@ -2910,42 +2867,45 @@ const WIDGET_CATALOG = [
   { type: 'prices',   label: 'Price Tracker',icon: '📈' },
   { type: 'stream',   label: 'Livestream',   icon: '📺' },
   { type: 'weather',  label: 'Weather',      icon: '🌤' },
-  { type: 'conflict', label: 'CONFLICT', icon: '⚔️' },
-  { type: 'chart',    label: 'CHART',    icon: '📊' },
-  { type: 'browser', label: 'Reader',      icon: '📄' },
-  { type: 'social', label: 'SOCIAL FEED', icon: '📡' },
+  { type: 'conflict', label: 'CONFLICT',     icon: '⚔️' },
+  { type: 'chart',    label: 'CHART',        icon: '📊' },
+  { type: 'heatmap',  label: 'Heatmap',      icon: '🟩' },
+  { type: 'browser',  label: 'Reader',       icon: '📄' },
+  { type: 'social',   label: 'SOCIAL FEED',  icon: '📡' },
 ]
 
 // Default dimensions when adding via picker
 const WIDGET_DEFAULTS = {
-  map:      { w: 8, h: 11 },
-  feeds:    { w: 8, h: 11 },
-  feed:     { w: 4, h: 11 },
-  rss:      { w: 3, h: 8  },
-  prices:   { w: 3, h: 8  },
-  stream:   { w: 3, h: 8  },
-  weather:  { w: 3, h: 8  },
-  conflict: { w: 8, h: 12 },
-  chart:    { w: 6, h: 11 },
-  browser: { w: 6, h: 14 },
-  social:  { w: 5, h: 11 },
+  map:      { w: 8,  h: 11 },
+  feeds:    { w: 8,  h: 11 },
+  feed:     { w: 4,  h: 11 },
+  rss:      { w: 3,  h: 8  },
+  prices:   { w: 3,  h: 8  },
+  stream:   { w: 3,  h: 8  },
+  weather:  { w: 3,  h: 8  },
+  conflict: { w: 8,  h: 12 },
+  chart:    { w: 6,  h: 11 },
+  heatmap:  { w: 6,  h: 8  },
+  browser:  { w: 6,  h: 14 },
+  social:   { w: 5,  h: 11 },
 }
 
 function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, onCollapse, collapsed, settings, updateSetting }) {
   const p = { onClose, onFullscreen, isFullscreen, onCollapse, collapsed }
   switch (widget.type) {
-    case 'map':      return <AtlasWidget  {...p} widgetId={widget.id} />
-    case 'feeds':    return <FeedsWidget  {...p} />
-    case 'feed':     return <KeywordFeed  {...p} widgetId={widget.id} />
-    case 'rss':      return <RssFeed      {...p} widgetId={widget.id} />
-    case 'prices':   return <PriceTracker {...p} widgetId={widget.id} />
-    case 'stream':   return <Livestream   {...p} initialUrl={settings.livestreamUrl}  onUrlChange={url  => updateSetting('livestreamUrl', url)} />
-    case 'weather':  return <Weather      {...p} widgetId={widget.id} initialCity={settings.weatherCity} onCityChange={city => updateSetting('weatherCity', city)} />
-    case 'conflict': return <ConflictFeed {...p} />
-    case 'chart':    return <ChartWidget  {...p} widgetId={widget.id} />
-    case 'browser': return <ArticleReaderWidget {...p} widgetId={widget.id} />
-    case 'social':  return <SocialFeed  {...p} widgetId={widget.id} />
-    default:        return null
+    case 'map':      return <AtlasWidget        {...p} widgetId={widget.id} />
+    case 'feeds':    return <FeedsWidget        {...p} />
+    case 'feed':     return <KeywordFeed        {...p} widgetId={widget.id} />
+    case 'rss':      return <RssFeed            {...p} widgetId={widget.id} />
+    case 'prices':   return <PriceTracker       {...p} widgetId={widget.id} />
+    case 'stream':   return <Livestream         {...p} initialUrl={settings.livestreamUrl}  onUrlChange={url  => updateSetting('livestreamUrl', url)} />
+    case 'weather':  return <Weather            {...p} widgetId={widget.id} initialCity={settings.weatherCity} onCityChange={city => updateSetting('weatherCity', city)} />
+    case 'conflict': return <ConflictFeed       {...p} />
+    case 'chart':    return <ChartWidget        {...p} widgetId={widget.id} />
+    case 'heatmap':  return <HeatmapWidget      {...p} />
+    case 'browser':  return <ArticleReaderWidget {...p} widgetId={widget.id} />
+    case 'social':   return <SocialFeed         {...p} widgetId={widget.id} />
+    default:         return null
   }
 }
 
@@ -2981,10 +2941,11 @@ const DEFAULT_LAYOUTS_BY_WS = {
     { i: 'stream',   x: 16, y: 14, w: 8,  h: 7  },
   ],
   'ws-2': [
-    { i: 'prices',   x: 0,  y: 0, w: 10, h: 9 },
-    { i: 'chart',    x: 10, y: 0, w: 14, h: 9 },
-    { i: 'feed',     x: 0,  y: 9, w: 12, h: 7 },
-    { i: 'rss',      x: 12, y: 9, w: 12, h: 7 },
+    { i: 'prices',  x: 0,  y: 0,  w: 12, h: 8 },
+    { i: 'chart',   x: 12, y: 0,  w: 12, h: 8 },
+    { i: 'heatmap', x: 0,  y: 8,  w: 12, h: 8 },
+    { i: 'feed',    x: 12, y: 8,  w: 12, h: 8 },
+    { i: 'rss',     x: 0,  y: 16, w: 16, h: 8 },
   ],
   'ws-3': [
     { i: 'atlas',    x: 0,  y: 0,  w: 14, h: 11 },
@@ -3032,10 +2993,11 @@ const LAYOUT_VERSION_KEY = 'vigil_layout_version'
         { type: 'stream',   x: 16, y: 14, w: 8,  h: 7  },
       ],
       'MARKET IMPACT': [
-        { type: 'prices', x: 0,  y: 0, w: 10, h: 9 },
-        { type: 'chart',  x: 10, y: 0, w: 14, h: 9 },
-        { type: 'feed',   x: 0,  y: 9, w: 12, h: 7 },
-        { type: 'rss',    x: 12, y: 9, w: 12, h: 7 },
+        { type: 'prices',  x: 0,  y: 0,  w: 12, h: 8 },
+        { type: 'chart',   x: 12, y: 0,  w: 12, h: 8 },
+        { type: 'heatmap', x: 0,  y: 8,  w: 12, h: 8 },
+        { type: 'feed',    x: 12, y: 8,  w: 12, h: 8 },
+        { type: 'rss',     x: 0,  y: 16, w: 16, h: 8 },
       ],
       'TECH COLD WAR': [
         { type: 'map',     x: 0,  y: 0,  w: 14, h: 11 },
@@ -3084,7 +3046,7 @@ const LAYOUT_VERSION_KEY = 'vigil_layout_version'
     if (localStorage.getItem(FLAG)) return
     const WS_KEYWORDS = {
       'CONFLICT WATCH': ['Gaza', 'Ukraine', 'Sudan'],
-      'MARKET IMPACT':  ['Sanctions', 'Oil', 'Federal Reserve'],
+      'MARKET IMPACT':  ['Federal Reserve', 'Inflation', 'Earnings'],
       'TECH COLD WAR':  ['Semiconductors', 'Taiwan', 'AI regulation'],
     }
     const workspaces = readWorkspacesMeta()
@@ -3131,6 +3093,67 @@ const LAYOUT_VERSION_KEY = 'vigil_layout_version'
         }
       } catch {}
     })
+    localStorage.setItem(FLAG, '1')
+  } catch {}
+})()
+
+// ─── One-time migration v4: heatmap + per-template RSS sources ───────────────
+;(function applyTemplateDefaultsV4() {
+  const FLAG = 'vigil_template_defaults_applied_v4'
+  try {
+    if (localStorage.getItem(FLAG)) return
+
+    const MI_RSS_FEEDS = [
+      { id: 'ft',      name: 'Financial Times', url: 'https://www.ft.com/rss/home',                             enabled: true, color: '#fdcb6e' },
+      { id: 'wsj',     name: 'WSJ Markets',     url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',           enabled: true, color: '#0984e3' },
+      { id: 'mwatch',  name: 'MarketWatch',     url: 'https://feeds.marketwatch.com/marketwatch/topstories/',   enabled: true, color: '#e63946' },
+      { id: 'seeka',   name: 'Seeking Alpha',   url: 'https://seekingalpha.com/market_currents.xml',            enabled: true, color: '#00b894' },
+      { id: 'econ',    name: 'The Economist',   url: 'https://www.economist.com/finance-and-economics/rss.xml', enabled: true, color: '#a29bfe' },
+    ]
+
+    const TCW_RSS_FEEDS = [
+      { id: 'register',  name: 'The Register',  url: 'https://www.theregister.com/headlines.atom',  enabled: true, color: '#e63946' },
+      { id: 'restworld', name: 'Rest of World', url: 'https://restofworld.org/feed/',               enabled: true, color: '#00b894' },
+      { id: 'scmp',      name: 'SCMP Tech',     url: 'https://www.scmp.com/rss/5/feed',             enabled: true, color: '#0984e3' },
+      { id: 'nikkei',    name: 'Nikkei Asia',   url: 'https://asia.nikkei.com/rss/feed/nar',        enabled: true, color: '#fdcb6e' },
+      { id: 'wired',     name: 'Wired',         url: 'https://www.wired.com/feed/rss',              enabled: true, color: '#a29bfe' },
+    ]
+
+    const workspaces = readWorkspacesMeta()
+    const now = Date.now()
+
+    workspaces.forEach(ws => {
+      if (ws.name === 'MARKET IMPACT') {
+        const widgetList = [
+          { id: `prices-${now}-0`,  type: 'prices'  },
+          { id: `chart-${now}-1`,   type: 'chart'   },
+          { id: `heatmap-${now}-2`, type: 'heatmap' },
+          { id: `feed-${now}-3`,    type: 'feed'    },
+          { id: `rss-${now}-4`,     type: 'rss'     },
+        ]
+        const layoutList = [
+          { i: widgetList[0].id, x: 0,  y: 0,  w: 12, h: 8 },
+          { i: widgetList[1].id, x: 12, y: 0,  w: 12, h: 8 },
+          { i: widgetList[2].id, x: 0,  y: 8,  w: 12, h: 8 },
+          { i: widgetList[3].id, x: 12, y: 8,  w: 12, h: 8 },
+          { i: widgetList[4].id, x: 0,  y: 16, w: 16, h: 8 },
+        ]
+        localStorage.setItem(widgetsKey(ws.id), JSON.stringify(widgetList))
+        localStorage.setItem(wsKey(ws.id),       JSON.stringify(layoutList))
+        localStorage.setItem(`vigil_rss_feeds_${widgetList[4].id}`, JSON.stringify(MI_RSS_FEEDS))
+        const miKwds = ['Federal Reserve', 'Inflation', 'Earnings']
+        localStorage.setItem(kfTabsKey(widgetList[3].id), JSON.stringify(miKwds.map((kw, i) => ({ id: `kw-${i}`, keyword: kw }))))
+      }
+      if (ws.name === 'TECH COLD WAR') {
+        let widgets = []
+        try { const r = localStorage.getItem(widgetsKey(ws.id)); if (r) widgets = JSON.parse(r) } catch {}
+        const rssWidget = widgets.find(w => w.type === 'rss')
+        if (rssWidget) {
+          localStorage.setItem(`vigil_rss_feeds_${rssWidget.id}`, JSON.stringify(TCW_RSS_FEEDS))
+        }
+      }
+    })
+
     localStorage.setItem(FLAG, '1')
   } catch {}
 })()
