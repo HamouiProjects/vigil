@@ -1,18 +1,24 @@
 :root {
-  --bg-void:     #0A0C10;
-  --bg-surface:  #0D1117;
-  --bg-elevated: #161B22;
-  --bg-hover:    #1C2128;
-  --border:      #21262D;
-  --border-active: #30363D;
-  --accent:      #00D4FF;
-  --accent-dim:  #0A4A5A;
-  --green:       #00FF88;
-  --red:         #FF3E3E;
-  --amber:       #FFB000;
-  --text-primary:   #E6EDF3;
-  --text-secondary: #8B949E;
-  --text-dim:       #484F58;
+  --bg:               #0A0C10;
+  --surface:          #0D1117;
+  --surface-elevated: #161B22;
+  --surface-hover:    #1C2128;
+  --border:           #1E2329;
+  --border-active:    #2D3440;
+  --accent:           #00D4FF;
+  --accent-dim:       rgba(0,212,255,0.15);
+  --green:            #00C96B;
+  --red:              #F85149;
+  --amber:            #D29922;
+  --text-primary:     #E6EDF3;
+  --text-secondary:   #8B949E;
+  --text-muted:       #484F58;
+  --font-mono:        'JetBrains Mono', monospace;
+  --font-sans:        'Inter', 'Segoe UI', system-ui, sans-serif;
+  --widget-gap:       6px;
+  --widget-padding:   12px;
+  --header-height:    30px;
+  --radius:           3px;
 }
 
 *, *::before, *::after {
@@ -22,9 +28,13 @@
 }
 
 body {
-  background-color: var(--bg-void);
+  background-color: var(--bg);
   color: var(--text-primary);
-  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
   height: 100vh;
   width: 100vw;
@@ -36,7 +46,15 @@ body {
   flex-direction: column;
 }
 
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border-active); }
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 148, 158, 0.3) transparent;
+}
+*::-webkit-scrollbar { width: 5px; height: 5px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(139, 148, 158, 0.25);
+  border-radius: 2px;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(0, 212, 255, 0.4); }
+*::-webkit-scrollbar-corner { background: transparent; }

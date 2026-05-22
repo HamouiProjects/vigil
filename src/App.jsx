@@ -190,7 +190,7 @@ function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRenameWs, onAddWs, 
 // ─── Shared widget header ─────────────────────────────────────────────────────
 function WHeader({ title, badge, badgeActive, onRefresh, onCollapse, collapsed, onClose, onFullscreen, isFullscreen }) {
   return (
-    <div className="widget-header">
+    <div className="widget-header widget-drag-handle">
       <div className="widget-title-group">
         <span className="widget-title">{title}</span>
       </div>
@@ -462,9 +462,10 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
     const map = L.map(containerRef.current, { center: initViewRef.current.center, zoom: initViewRef.current.zoom, zoomControl: true })
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://openstreetmap.org" target="_blank">OpenStreetMap</a>',
-      maxZoom: 18,
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 19,
     }).addTo(map)
 
     // Create layer groups but add them based on current show* values so that
@@ -549,8 +550,10 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
   const [showConflicts, setShowConflicts] = useState(saved?.showConflicts ?? true)
   const [showNatural,   setShowNatural]   = useState(saved?.showNatural   ?? true)
   const [showPiracy,    setShowPiracy]    = useState(saved?.showPiracy    ?? true)
-  const [mapMode,       setMapMode]       = useState(saved?.mapMode       ?? 'leaflet')
-  const [iframeSrc,     setIframeSrc]     = useState(saved?.iframeSrc     ?? '')
+  const _savedIframeSrc = saved?.iframeSrc ?? ''
+  const _isMaritime     = ['myshiptracking', 'marinetraffic', 'vesseltracker'].some(s => _savedIframeSrc.includes(s))
+  const [mapMode,       setMapMode]       = useState(_isMaritime ? 'leaflet' : (saved?.mapMode ?? 'leaflet'))
+  const [iframeSrc,     setIframeSrc]     = useState(_isMaritime ? ''        : _savedIframeSrc)
   const [dataLoading,   setDataLoading]   = useState(false)
   const [toolbarOpen,   setToolbarOpen]   = useState(() => {
     try { return JSON.parse(localStorage.getItem(ATLAS_TOOLBAR_KEY(widgetId)) ?? 'false') } catch { return false }
@@ -622,7 +625,7 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header">
+      <div className="widget-header widget-drag-handle">
         <span className="widget-title">ATLAS</span>
         <div className="widget-actions">
           <span className={`widget-badge${dataLoading ? ' inactive' : ''}`}>
@@ -647,11 +650,10 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
             </>
           ) : (
             <>
-              <span className="atlas-dot" style={{ background: iframeSrc.includes('adsbexchange')   ? '#42a5f5' : '#1e2d3d' }} />
-              <span className="atlas-dot" style={{ background: iframeSrc.includes('myshiptracking') ? '#26c6da' : '#1e2d3d' }} />
-              <span className="atlas-dot" style={{ background: iframeSrc.includes('checkpoint')     ? '#ab47bc' : '#1e2d3d' }} />
+              <span className="atlas-dot" style={{ background: iframeSrc.includes('adsbexchange') ? '#42a5f5' : '#1e2d3d' }} />
+              <span className="atlas-dot" style={{ background: iframeSrc.includes('checkpoint')   ? '#ab47bc' : '#1e2d3d' }} />
               <span className="atlas-mode-label">
-                {iframeSrc.includes('adsbexchange') ? 'FLIGHTS' : iframeSrc.includes('myshiptracking') ? 'MARINE' : iframeSrc.includes('checkpoint') ? 'CYBER' : 'LIVE FEED'}
+                {iframeSrc.includes('adsbexchange') ? 'FLIGHTS' : iframeSrc.includes('checkpoint') ? 'CYBER' : 'LIVE FEED'}
               </span>
             </>
           )}
@@ -665,21 +667,24 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
         <div className="cmap-layer-bar">
           <button
             className={`cmap-layer-btn${isLeaflet && showConflicts ? ' active' : ''}`}
+            style={{ background: isLeaflet && showConflicts ? 'rgba(0,212,255,0.1)' : 'transparent', border: isLeaflet && showConflicts ? '1px solid #00D4FF' : '1px solid #1E2329', borderRadius: '3px', color: isLeaflet && showConflicts ? '#00D4FF' : '#8B949E', fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', height: '22px', padding: '0 8px', cursor: 'pointer', transition: 'all 0.15s', opacity: 1, textDecoration: 'none' }}
             onClick={() => { setMapMode('leaflet'); setShowConflicts(v => !v) }}
           >
-            🔴 CONFLICTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Armed conflict zones · Source: ReliefWeb</span></span>
+            CONFLICTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Armed conflict zones · Source: ReliefWeb</span></span>
           </button>
           <button
             className={`cmap-layer-btn${isLeaflet && showNatural ? ' active' : ''}`}
+            style={{ background: isLeaflet && showNatural ? 'rgba(0,212,255,0.1)' : 'transparent', border: isLeaflet && showNatural ? '1px solid #00D4FF' : '1px solid #1E2329', borderRadius: '3px', color: isLeaflet && showNatural ? '#00D4FF' : '#8B949E', fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', height: '22px', padding: '0 8px', cursor: 'pointer', transition: 'all 0.15s', opacity: 1, textDecoration: 'none' }}
             onClick={() => { setMapMode('leaflet'); setShowNatural(v => !v) }}
           >
-            🟢 NATURAL<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Earthquakes · Wildfires · Storms · Sources: USGS, NOAA</span></span>
+            NATURAL<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Earthquakes · Wildfires · Storms · Sources: USGS, NOAA</span></span>
           </button>
           <button
             className={`cmap-layer-btn${isLeaflet && showPiracy ? ' active' : ''}`}
+            style={{ background: isLeaflet && showPiracy ? 'rgba(0,212,255,0.1)' : 'transparent', border: isLeaflet && showPiracy ? '1px solid #00D4FF' : '1px solid #1E2329', borderRadius: '3px', color: isLeaflet && showPiracy ? '#00D4FF' : '#8B949E', fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', height: '22px', padding: '0 8px', cursor: 'pointer', transition: 'all 0.15s', opacity: 1, textDecoration: 'none' }}
             onClick={() => { setMapMode('leaflet'); setShowPiracy(v => !v) }}
           >
-            🚢 PIRACY<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Maritime piracy high-risk zones · Source: IMB</span></span>
+            PIRACY<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Maritime piracy high-risk zones · Source: IMB</span></span>
           </button>
           {isLeaflet && (
             <button className="cmap-update-btn" onClick={() => atlasRef.current?.refresh()} title="Re-fetch live data">⟳ Update</button>
@@ -693,21 +698,17 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
         <div className="cmap-feeds-bar">
           <button
             className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('adsbexchange') ? ' active' : ''}`}
+            style={{ background: !isLeaflet && iframeSrc.includes('adsbexchange') ? 'rgba(0,212,255,0.1)' : 'transparent', border: !isLeaflet && iframeSrc.includes('adsbexchange') ? '1px solid #00D4FF' : '1px solid #1E2329', borderRadius: '3px', color: !isLeaflet && iframeSrc.includes('adsbexchange') ? '#00D4FF' : '#8B949E', fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', height: '22px', padding: '0 8px', cursor: 'pointer', transition: 'all 0.15s', opacity: 1, textDecoration: 'none' }}
             onClick={() => switchToIframe('https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3')}
           >
-            ✈️ FLIGHTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live air traffic · Source: ADS-B Exchange</span></span>
-          </button>
-          <button
-            className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('myshiptracking') ? ' active' : ''}`}
-            onClick={() => switchToIframe('https://www.myshiptracking.com/')}
-          >
-            ⚓ MARINE<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live vessel tracking · Source: MyShipTracking</span></span>
+            FLIGHTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live air traffic · Source: ADS-B Exchange</span></span>
           </button>
           <button
             className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('checkpoint') ? ' active' : ''}`}
+            style={{ background: !isLeaflet && iframeSrc.includes('checkpoint') ? 'rgba(0,212,255,0.1)' : 'transparent', border: !isLeaflet && iframeSrc.includes('checkpoint') ? '1px solid #00D4FF' : '1px solid #1E2329', borderRadius: '3px', color: !isLeaflet && iframeSrc.includes('checkpoint') ? '#00D4FF' : '#8B949E', fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', height: '22px', padding: '0 8px', cursor: 'pointer', transition: 'all 0.15s', opacity: 1, textDecoration: 'none' }}
             onClick={() => switchToIframe('https://threatmap.checkpoint.com/')}
           >
-            🛡 CYBER<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live cyber attacks · Source: Checkpoint</span></span>
+            CYBER<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live cyber attacks · Source: Checkpoint</span></span>
           </button>
         </div>
       </div>
@@ -758,7 +759,7 @@ function FeedsWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapse
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header">
+      <div className="widget-header widget-drag-handle">
         <span className="widget-title">Feeds</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <div className="map-tabs" onPointerDownCapture={e => e.stopPropagation()}>
@@ -894,12 +895,12 @@ const KF_DEFAULT_TABS = [
   { id: 'conflicts', keyword: 'Conflicts' },
   { id: 'economy',   keyword: 'Economy'   },
 ]
-const KF_TABS_KEY = 'vigil_newssearch_tabs'
+const kfTabsKey = widgetId => `vigil_newssearch_tabs_${widgetId}`
 
 function KeywordFeed({ widgetId = 'newssearch', onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
   const [tabs, setTabs] = useState(() => {
     try {
-      const s = JSON.parse(localStorage.getItem(KF_TABS_KEY) || 'null')
+      const s = JSON.parse(localStorage.getItem(kfTabsKey(widgetId)) || 'null')
       return Array.isArray(s) && s.length ? s : KF_DEFAULT_TABS
     } catch { return KF_DEFAULT_TABS }
   })
@@ -925,7 +926,7 @@ function KeywordFeed({ widgetId = 'newssearch', onClose, onFullscreen, isFullscr
 
   function saveTabs(next) {
     setTabs(next)
-    try { localStorage.setItem(KF_TABS_KEY, JSON.stringify(next)) } catch {}
+    try { localStorage.setItem(kfTabsKey(widgetId), JSON.stringify(next)) } catch {}
   }
 
   const load = useCallback(async (tabId, keyword) => {
@@ -1015,7 +1016,7 @@ function KeywordFeed({ widgetId = 'newssearch', onClose, onFullscreen, isFullscr
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header">
+      <div className="widget-header widget-drag-handle">
         <span className="widget-title">NEWS SEARCH</span>
         <InfoTooltip wide text={
           <span>
@@ -1462,7 +1463,7 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header">
+      <div className="widget-header widget-drag-handle">
         <span className="widget-title">RSS FEED</span>
         <InfoTooltip wide text={
           <span>
@@ -2088,7 +2089,7 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header">
+      <div className="widget-header widget-drag-handle">
         <span className="widget-title">PRICE TRACKER</span>
         <div className="widget-actions">
           <span className={`widget-badge${loading ? ' inactive' : ''}`}>LIVE</span>
@@ -2215,7 +2216,7 @@ function Livestream({ initialUrl = AJ_EMBED, onUrlChange, onClose, onFullscreen,
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header">
+      <div className="widget-header widget-drag-handle">
         <span className="widget-title">LIVESTREAM</span>
         <div className="widget-actions">
           <span className={`widget-badge${embedUrl ? '' : ' inactive'}`}>
@@ -2467,15 +2468,29 @@ const DEFAULT_WORKSPACES = [
   { id: 'ws-2', name: 'MARKET IMPACT'  },
   { id: 'ws-3', name: 'TECH COLD WAR'  },
 ]
-const DEFAULT_WIDGETS    = [
-  { id: 'atlas',         type: 'map'           },
-  { id: 'feed',          type: 'feed'          },
-  { id: 'rss',           type: 'rss'           },
-  { id: 'prices',        type: 'prices'        },
-  { id: 'stream',        type: 'stream'        },
-  { id: 'weather',       type: 'weather'       },
-  { id: 'conflict', type: 'conflict' },
-]
+const DEFAULT_WIDGETS_BY_WS = {
+  'ws-1': [
+    { id: 'atlas',    type: 'map'      },
+    { id: 'feed',     type: 'feed'     },
+    { id: 'rss',      type: 'rss'      },
+    { id: 'conflict', type: 'conflict' },
+    { id: 'social',   type: 'social'   },
+    { id: 'stream',   type: 'stream'   },
+  ],
+  'ws-2': [
+    { id: 'prices',   type: 'prices'   },
+    { id: 'chart',    type: 'chart'    },
+    { id: 'feed',     type: 'feed'     },
+    { id: 'rss',      type: 'rss'      },
+  ],
+  'ws-3': [
+    { id: 'atlas',    type: 'map'      },
+    { id: 'feed',     type: 'feed'     },
+    { id: 'rss',      type: 'rss'      },
+    { id: 'prices',   type: 'prices'   },
+    { id: 'browser',  type: 'browser'  },
+  ],
+}
 
 function readWorkspacesMeta() {
   try {
@@ -2487,8 +2502,9 @@ function readWorkspacesMeta() {
 function readWidgets(wsId) {
   try {
     const raw = localStorage.getItem(widgetsKey(wsId))
-    return raw ? JSON.parse(raw) : DEFAULT_WIDGETS
-  } catch { return DEFAULT_WIDGETS }
+    if (raw) { const p = JSON.parse(raw); if (Array.isArray(p) && p.length > 0) return p }
+    return DEFAULT_WIDGETS_BY_WS[wsId] ?? []
+  } catch { return DEFAULT_WIDGETS_BY_WS[wsId] ?? [] }
 }
 
 // ─── TV Chart (TradingView AdvancedRealTimeChart) ────────────────────────────
@@ -2647,7 +2663,23 @@ const SOCIAL_DEFAULT_FOLLOWS = [
 ]
 const SOCIAL_PLAT_ORDER = ['twitter', 'reddit', 'telegram']
 const SOCIAL_PLAT_LABEL = { twitter: 'X / TWITTER', reddit: 'REDDIT', telegram: 'TELEGRAM' }
-function socialIcon(p) { return p === 'twitter' ? '🐦' : p === 'reddit' ? '🔴' : '✈️' }
+function socialIcon(p) {
+  if (p === 'twitter') return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="#E7E9EA" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.738l7.73-8.835L1.254 2.25H8.08l4.259 5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  )
+  if (p === 'reddit') return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="#FF4500" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z" />
+    </svg>
+  )
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="#2AABEE" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.96 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+    </svg>
+  )
+}
 function socialFmt(n)  { return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n) }
 function socialAge(utc) {
   const s = Math.floor(Date.now() / 1000) - utc
@@ -2776,7 +2808,7 @@ function SocialFeed({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse,
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header">
+      <div className="widget-header widget-drag-handle">
         <span className="widget-title">SOCIAL FEED</span>
         <div className="widget-actions">
           <span className={`widget-badge${loading ? ' inactive' : ''}`}>{loading ? 'LOADING' : 'LIVE'}</span>
@@ -2908,21 +2940,35 @@ function AddWidgetModal({ onAdd, onClose }) {
   )
 }
 
-// ─── Default layout ───────────────────────────────────────────────────────────
-const DEFAULT_LAYOUT = [
-  { i: 'atlas',         x: 0, y: 0,  w: 8, h: 14 },
-  { i: 'feed',          x: 8, y: 0,  w: 4, h: 14 },
-  { i: 'rss',           x: 0, y: 14, w: 3, h: 10 },
-  { i: 'prices',        x: 3, y: 14, w: 3, h: 10 },
-  { i: 'stream',        x: 6, y: 14, w: 3, h: 10 },
-  { i: 'weather',       x: 9, y: 14, w: 3, h: 10 },
-  { i: 'conflict', x: 0, y: 24, w: 12, h: 14 },
-]
+// ─── Default layouts (cols=24, rowHeight=32) ──────────────────────────────────
+const DEFAULT_LAYOUTS_BY_WS = {
+  'ws-1': [
+    { i: 'atlas',    x: 0,  y: 0,  w: 16, h: 14 },
+    { i: 'feed',     x: 16, y: 0,  w: 8,  h: 7  },
+    { i: 'rss',      x: 16, y: 7,  w: 8,  h: 7  },
+    { i: 'conflict', x: 0,  y: 14, w: 8,  h: 7  },
+    { i: 'social',   x: 8,  y: 14, w: 8,  h: 7  },
+    { i: 'stream',   x: 16, y: 14, w: 8,  h: 7  },
+  ],
+  'ws-2': [
+    { i: 'prices',   x: 0,  y: 0, w: 10, h: 9 },
+    { i: 'chart',    x: 10, y: 0, w: 14, h: 9 },
+    { i: 'feed',     x: 0,  y: 9, w: 12, h: 7 },
+    { i: 'rss',      x: 12, y: 9, w: 12, h: 7 },
+  ],
+  'ws-3': [
+    { i: 'atlas',    x: 0,  y: 0,  w: 14, h: 11 },
+    { i: 'feed',     x: 14, y: 0,  w: 10, h: 6  },
+    { i: 'rss',      x: 14, y: 6,  w: 10, h: 5  },
+    { i: 'prices',   x: 0,  y: 11, w: 10, h: 7  },
+    { i: 'browser',  x: 10, y: 11, w: 14, h: 7  },
+  ],
+}
 
 const wsKey = id => `vigil_workspace_${id.replace('ws-', '')}`
 
 // ─── Layout version — bump to force-reset all saved layouts on next load ─────
-const LAYOUT_VERSION     = 6
+const LAYOUT_VERSION     = 7
 const LAYOUT_VERSION_KEY = 'vigil_layout_version'
 ;(function initLayoutVersion() {
   try {
@@ -2931,7 +2977,7 @@ const LAYOUT_VERSION_KEY = 'vigil_layout_version'
       const toRemove = []
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)
-        if (k && (k.startsWith('vigil_workspace_') || /vigil_ws\d+_widgets/.test(k))) toRemove.push(k)
+        if (k && (k.startsWith('vigil_workspace_') || /vigil_ws\d+_widgets/.test(k) || k.startsWith('vigil_atlas_state_'))) toRemove.push(k)
       }
       toRemove.forEach(k => localStorage.removeItem(k))
       localStorage.setItem(LAYOUT_VERSION_KEY, String(LAYOUT_VERSION))
@@ -2939,11 +2985,132 @@ const LAYOUT_VERSION_KEY = 'vigil_layout_version'
   } catch {}
 })()
 
+// ─── One-time migration v2: write template widgets+layout for empty workspaces ─
+;(function applyTemplateDefaults() {
+  const FLAG = 'vigil_template_defaults_applied_v2'
+  try {
+    if (localStorage.getItem(FLAG)) return
+
+    // Maps workspace NAME → template rows. Types match renderWidgetComponent cases.
+    const TEMPLATES = {
+      'CONFLICT WATCH': [
+        { type: 'map',      x: 0,  y: 0,  w: 16, h: 14 },
+        { type: 'feed',     x: 16, y: 0,  w: 8,  h: 7  },
+        { type: 'rss',      x: 16, y: 7,  w: 8,  h: 7  },
+        { type: 'conflict', x: 0,  y: 14, w: 8,  h: 7  },
+        { type: 'social',   x: 8,  y: 14, w: 8,  h: 7  },
+        { type: 'stream',   x: 16, y: 14, w: 8,  h: 7  },
+      ],
+      'MARKET IMPACT': [
+        { type: 'prices', x: 0,  y: 0, w: 10, h: 9 },
+        { type: 'chart',  x: 10, y: 0, w: 14, h: 9 },
+        { type: 'feed',   x: 0,  y: 9, w: 12, h: 7 },
+        { type: 'rss',    x: 12, y: 9, w: 12, h: 7 },
+      ],
+      'TECH COLD WAR': [
+        { type: 'map',     x: 0,  y: 0,  w: 14, h: 11 },
+        { type: 'feed',    x: 14, y: 0,  w: 10, h: 6  },
+        { type: 'rss',     x: 14, y: 6,  w: 10, h: 5  },
+        { type: 'prices',  x: 0,  y: 11, w: 10, h: 7  },
+        { type: 'browser', x: 10, y: 11, w: 14, h: 7  },
+      ],
+    }
+
+    const workspaces = readWorkspacesMeta()
+
+    workspaces.forEach(ws => {
+      const tpl = TEMPLATES[ws.name]
+      if (!tpl) return
+
+      // Only overwrite if widgets are absent or empty
+      const rawW = localStorage.getItem(widgetsKey(ws.id))
+      let current = []
+      try { current = rawW ? JSON.parse(rawW) : [] } catch {}
+      if (Array.isArray(current) && current.length > 0) return
+
+      const now = Date.now()
+      const widgetList = []
+      const layoutList = []
+      tpl.forEach(({ type, x, y, w, h }, idx) => {
+        const id = `${type}-${now}-${idx}-${Math.random().toString(36).slice(2, 6)}`
+        widgetList.push({ id, type })
+        layoutList.push({ i: id, x, y, w, h })
+      })
+
+      localStorage.setItem(widgetsKey(ws.id), JSON.stringify(widgetList))
+      localStorage.setItem(wsKey(ws.id),      JSON.stringify(layoutList))
+    })
+
+    // Persist workspace metadata so IDs stay stable across loads
+    localStorage.setItem(WS_META_KEY, JSON.stringify(workspaces))
+    localStorage.setItem(FLAG, '1')
+  } catch {}
+})()
+
+// ─── One-time migration v3: per-workspace news search keywords + TCW defaults ──
+;(function applyTemplateDefaultsV3() {
+  const FLAG = 'vigil_template_defaults_applied_v3'
+  try {
+    if (localStorage.getItem(FLAG)) return
+    const WS_KEYWORDS = {
+      'CONFLICT WATCH': ['Gaza', 'Ukraine', 'Sudan'],
+      'MARKET IMPACT':  ['Sanctions', 'Oil', 'Federal Reserve'],
+      'TECH COLD WAR':  ['Semiconductors', 'Taiwan', 'AI regulation'],
+    }
+    const workspaces = readWorkspacesMeta()
+    workspaces.forEach(ws => {
+      let widgets = []
+      try { const r = localStorage.getItem(widgetsKey(ws.id)); if (r) widgets = JSON.parse(r) } catch {}
+      const feedWidget    = widgets.find(w => w.type === 'feed')
+      const browserWidget = widgets.find(w => w.type === 'browser')
+      const mapWidget     = widgets.find(w => w.type === 'map')
+      const kwds = WS_KEYWORDS[ws.name]
+      if (feedWidget && kwds) {
+        const tabKey = kfTabsKey(feedWidget.id)
+        if (!localStorage.getItem(tabKey)) {
+          localStorage.setItem(tabKey, JSON.stringify(kwds.map((kw, i) => ({ id: `kw-${i}`, keyword: kw }))))
+        }
+      }
+      if (ws.name === 'TECH COLD WAR') {
+        if (browserWidget && !localStorage.getItem(`vigil_browser_url_${browserWidget.id}`)) {
+          localStorage.setItem(`vigil_browser_url_${browserWidget.id}`, 'https://www.reuters.com/technology/')
+        }
+        if (mapWidget && !localStorage.getItem(`vigil_atlas_state_${mapWidget.id}`)) {
+          localStorage.setItem(`vigil_atlas_state_${mapWidget.id}`, JSON.stringify({ center: [25, 115], zoom: 3, showConflicts: true, showNatural: true, showPiracy: true, mapMode: 'leaflet', iframeSrc: '' }))
+        }
+      }
+    })
+    localStorage.setItem(FLAG, '1')
+  } catch {}
+})()
+
+;(function resetRssFeedsEnabled() {
+  const FLAG = 'vigil_rss_enabled_reset_v1'
+  try {
+    if (localStorage.getItem(FLAG)) return
+    const toUpdate = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith('vigil_rss_feeds_')) toUpdate.push(k)
+    }
+    toUpdate.forEach(k => {
+      try {
+        const feeds = JSON.parse(localStorage.getItem(k) || 'null')
+        if (Array.isArray(feeds)) {
+          localStorage.setItem(k, JSON.stringify(feeds.map(f => ({ ...f, enabled: true }))))
+        }
+      } catch {}
+    })
+    localStorage.setItem(FLAG, '1')
+  } catch {}
+})()
+
 function readLayout(wsId) {
   try {
     const raw = localStorage.getItem(wsKey(wsId))
-    return raw ? JSON.parse(raw) : DEFAULT_LAYOUT
-  } catch { return DEFAULT_LAYOUT }
+    if (raw) { const p = JSON.parse(raw); if (Array.isArray(p) && p.length > 0) return p }
+    return DEFAULT_LAYOUTS_BY_WS[wsId] ?? []
+  } catch { return DEFAULT_LAYOUTS_BY_WS[wsId] ?? [] }
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
@@ -3147,16 +3314,16 @@ export default function App() {
         onDuplicateWs={duplicateWorkspace}
         onShowAddModal={() => setShowAddModal(true)}
       />
-      <div style={{ width: '100%', height: 'calc(100vh - 48px)', overflowY: 'auto', position: 'relative' }}>
+      <div style={{ width: '100%', height: 'calc(100vh - 40px)', overflowY: 'auto', position: 'relative' }}>
         <SizedGridLayout
           layout={layout}
           onLayoutChange={handleLayoutChange}
-          cols={12}
-          rowHeight={40}
+          cols={24}
+          rowHeight={32}
           margin={[6, 6]}
-          containerPadding={[0, 0]}
+          containerPadding={[8, 8]}
           draggableHandle=".widget-header"
-          resizeHandles={['se', 's', 'e']}
+          resizeHandles={['se', 'sw', 'ne', 'nw', 's', 'e', 'n', 'w']}
           compactType="vertical"
           preventCollision={false}
           isResizable
