@@ -2558,97 +2558,127 @@ function ChartWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse
   )
 }
 
-// ─── Browser widget ──────────────────────────────────────────────────────────
-const BROWSER_DEFAULT_URL = 'https://www.google.com'
-const BROWSER_BLOCKED     = /twitter\.com|x\.com|facebook\.com|instagram\.com|linkedin\.com|reddit\.com/i
+// ─── Article Reader widget ────────────────────────────────────────────────────
+function ArticleReaderWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+  const storageKey = `vigil_reader_url_${widgetId}`
+  const legacyKey  = `vigil_browser_url_${widgetId}`
+  const initUrl = (() => {
+    try { return localStorage.getItem(storageKey) || localStorage.getItem(legacyKey) || '' } catch { return '' }
+  })()
 
-function BrowserWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
-  const storageKey = `vigil_browser_url_${widgetId}`
-  const savedUrl   = (() => { try { return localStorage.getItem(storageKey) || BROWSER_DEFAULT_URL } catch { return BROWSER_DEFAULT_URL } })()
+  const [input,      setInput]      = useState(initUrl)
+  const [url,        setUrl]        = useState(initUrl)
+  const [loading,    setLoading]    = useState(false)
+  const [article,    setArticle]    = useState(null)
+  const [error,      setError]      = useState(null)
+  const [devOffline, setDevOffline] = useState(false)
 
-  const histRef      = useRef({ stack: [savedUrl], idx: 0 })
-  const [url,        setUrl]      = useState(savedUrl)
-  const [input,      setInput]    = useState(savedUrl)
-  const [error,      setError]    = useState(false)
-  const [frameKey,   setFrameKey] = useState(0)   // bump to remount iframe (refresh)
-  const [, tick]                  = useState(0)   // force re-render for canGoBack/Forward
+  useEffect(() => {
+    if (initUrl) doFetch(initUrl)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  function load(raw) {
-    let u = raw.trim()
+  async function doFetch(rawUrl) {
+    let u = rawUrl.trim()
     if (!u) return
-    if (!/^https?:\/\//i.test(u)) {
-      if (!u.includes('.')) u += '.com'
-      u = 'https://' + u
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u
+    setUrl(u); setInput(u); setLoading(true); setError(null); setArticle(null); setDevOffline(false)
+    try { localStorage.setItem(storageKey, u) } catch {}
+    try {
+      const res = await fetch(`/api/fetch-article?url=${encodeURIComponent(u)}`)
+      let data
+      try { data = await res.json() } catch {
+        // Endpoint returned non-JSON (Vite 404 HTML) — API route not available
+        setDevOffline(true)
+        return
+      }
+      if (!res.ok) setError(data.error || `HTTP ${res.status}`)
+      else         setArticle(data)
+    } catch {
+      // fetch() itself threw — endpoint unreachable entirely
+      setDevOffline(true)
+    } finally {
+      setLoading(false)
     }
-    const h = histRef.current
-    h.stack  = h.stack.slice(0, h.idx + 1)
-    h.stack.push(u)
-    h.idx    = h.stack.length - 1
-    setUrl(u); setInput(u); setError(false); setFrameKey(0); tick(n => n + 1)
-    try { localStorage.setItem(storageKey, u) } catch {}
   }
 
-  function step(delta) {
-    const h = histRef.current
-    const next = h.idx + delta
-    if (next < 0 || next >= h.stack.length) return
-    h.idx = next
-    const u = h.stack[next]
-    setUrl(u); setInput(u); setError(false); setFrameKey(0); tick(n => n + 1)
-    try { localStorage.setItem(storageKey, u) } catch {}
+  function formatDate(str) {
+    if (!str) return null
+    try { return new Date(str).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) } catch { return str }
   }
-
-  const canBack    = histRef.current.idx > 0
-  const canForward = histRef.current.idx < histRef.current.stack.length - 1
-  const isBlocked  = BROWSER_BLOCKED.test(url)
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <WHeader title="BROWSER" onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
+      <WHeader title="READER" onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
       <form
         className="browser-bar"
-        onSubmit={e => { e.preventDefault(); load(input) }}
+        onSubmit={e => { e.preventDefault(); doFetch(input) }}
         onPointerDownCapture={e => e.stopPropagation()}
       >
-        <button type="button" className="browser-nav-btn" onClick={() => step(-1)} disabled={!canBack}    title="Back">←</button>
-        <button type="button" className="browser-nav-btn" onClick={() => step(1)}  disabled={!canForward} title="Forward">→</button>
         <input
           className="rss-input"
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder="Enter any URL…"
+          placeholder="Paste article URL…"
           spellCheck={false}
         />
-        <button className="rss-go-btn" type="submit" title="Go">GO</button>
-        <button type="button" className="rss-go-btn" onClick={() => { setError(false); setFrameKey(k => k + 1) }} title="Refresh">↻</button>
-        <button type="button" className="rss-go-btn" onClick={() => window.open(url, '_blank', 'noopener')} title="Open in new tab">↗</button>
+        <button className="rss-go-btn" type="submit" disabled={loading}>{loading ? '…' : 'GO'}</button>
+        {url && (
+          <button type="button" className="rss-go-btn" onClick={() => window.open(url, '_blank', 'noopener')} title="Open in new tab">↗</button>
+        )}
       </form>
-      {isBlocked
-        ? (
-          <div className="browser-blocked">
-            <div className="browser-blocked-icon">⚠</div>
-            <div className="browser-blocked-title">This site doesn't allow embedding.</div>
-            <button className="browser-open-btn" onClick={() => window.open(url, '_blank', 'noopener')}>↗ Open in new tab</button>
+
+      <div className="article-reader-body">
+        {loading && (
+          <div className="article-state-center">
+            <span className="article-loading-text">FETCHING ARTICLE</span>
           </div>
-        )
-        : error
-        ? (
-          <div className="browser-error">
-            This site cannot be embedded.{' '}
-            <button className="browser-error-btn" onClick={() => window.open(url, '_blank', 'noopener')}>↗ Open in new tab</button>
+        )}
+        {!loading && devOffline && (
+          <div className="article-state-center">
+            <div className="article-dev-offline">
+              <span className="article-dev-offline-icon">ℹ</span>
+              Reader requires <code>vercel dev</code> in local development. Article fetching works on the deployed site.
+            </div>
           </div>
-        ) : (
-          <iframe
-            key={url + frameKey}
-            src={url}
-            style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
-            title="Browser"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-            allow="fullscreen"
-            onError={() => setError(true)}
-          />
-        )
-      }
+        )}
+        {!loading && !devOffline && error && (
+          <div className="article-state-center">
+            <div className="article-error-line">
+              Could not fetch article.{' '}
+              {url && (
+                <button className="article-error-open" onClick={() => window.open(url, '_blank', 'noopener')}>
+                  Try opening it directly ↗
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {!loading && !devOffline && !error && !article && (
+          <div className="article-state-center article-state-empty">
+            <div className="article-empty-glyph">[ ]</div>
+            <div className="article-empty-label">Paste any article URL above</div>
+          </div>
+        )}
+        {!loading && !error && article && (
+          <div className="article-content-wrap">
+            {article.siteName && <div className="article-source">{article.siteName}</div>}
+            <h1 className="article-headline">{article.title}</h1>
+            {(article.byline || article.publishedTime) && (
+              <div className="article-meta">
+                {article.byline && <span>{article.byline}</span>}
+                {article.byline && article.publishedTime && <span className="article-meta-dot">·</span>}
+                {article.publishedTime && <span>{formatDate(article.publishedTime)}</span>}
+              </div>
+            )}
+            <div className="article-hr" />
+            {article.leadImage && (
+              <img className="article-lead-img" src={article.leadImage} alt="" loading="lazy" />
+            )}
+            <div className="article-body" dangerouslySetInnerHTML={{ __html: article.content }} />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -2882,7 +2912,7 @@ const WIDGET_CATALOG = [
   { type: 'weather',  label: 'Weather',      icon: '🌤' },
   { type: 'conflict', label: 'CONFLICT', icon: '⚔️' },
   { type: 'chart',    label: 'CHART',    icon: '📊' },
-  { type: 'browser', label: 'Browser',     icon: '🌐' },
+  { type: 'browser', label: 'Reader',      icon: '📄' },
   { type: 'social', label: 'SOCIAL FEED', icon: '📡' },
 ]
 
@@ -2913,7 +2943,7 @@ function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, on
     case 'weather':  return <Weather      {...p} widgetId={widget.id} initialCity={settings.weatherCity} onCityChange={city => updateSetting('weatherCity', city)} />
     case 'conflict': return <ConflictFeed {...p} />
     case 'chart':    return <ChartWidget  {...p} widgetId={widget.id} />
-    case 'browser': return <BrowserWidget {...p} widgetId={widget.id} />
+    case 'browser': return <ArticleReaderWidget {...p} widgetId={widget.id} />
     case 'social':  return <SocialFeed  {...p} widgetId={widget.id} />
     default:        return null
   }
