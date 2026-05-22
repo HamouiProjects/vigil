@@ -2462,7 +2462,11 @@ function readSettings(wsId) {
 const WS_META_KEY        = 'vigil_workspaces'
 const ACTIVE_WS_KEY      = 'vigil_active_workspace'
 const widgetsKey         = id => `vigil_ws${id.replace('ws-', '')}_widgets`
-const DEFAULT_WORKSPACES = [{ id: 'ws-1', name: 'Workspace 1' }]
+const DEFAULT_WORKSPACES = [
+  { id: 'ws-1', name: 'CONFLICT WATCH' },
+  { id: 'ws-2', name: 'MARKET IMPACT'  },
+  { id: 'ws-3', name: 'TECH COLD WAR'  },
+]
 const DEFAULT_WIDGETS    = [
   { id: 'atlas',         type: 'map'           },
   { id: 'feed',          type: 'feed'          },
