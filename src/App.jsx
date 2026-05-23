@@ -7,8 +7,106 @@ import { TickerTape } from 'react-ts-tradingview-widgets'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './App.css'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+)
 
 const SizedGridLayout = WidthProvider(GridLayout)
+
+// ─── Auth Screen ─────────────────────────────────────────────────────────────
+function AuthScreen({ authView, setAuthView }) {
+  const [email,    setEmail]    = useState('')
+  const [password, setPassword] = useState('')
+  const [confirm,  setConfirm]  = useState('')
+  const [error,    setError]    = useState(null)
+  const [message,  setMessage]  = useState(null)
+  const [loading,  setLoading]  = useState(false)
+
+  function clearForm() { setEmail(''); setPassword(''); setConfirm(''); setError(null); setMessage(null) }
+
+  async function handleLogin(e) {
+    e.preventDefault()
+    setError(null); setLoading(true)
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    setLoading(false)
+    if (error) setError(error.message)
+  }
+
+  async function handleSignup(e) {
+    e.preventDefault()
+    if (password !== confirm) { setError('Passwords do not match'); return }
+    if (password.length < 6)  { setError('Password must be at least 6 characters'); return }
+    setError(null); setLoading(true)
+    const { error } = await supabase.auth.signUp({ email, password })
+    setLoading(false)
+    if (error) setError(error.message)
+    else setMessage('Check your email to confirm your account.')
+  }
+
+  async function handleForgot(e) {
+    e.preventDefault()
+    setError(null); setLoading(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin })
+    setLoading(false)
+    if (error) setError(error.message)
+    else setMessage('Reset link sent. Check your inbox.')
+  }
+
+  function switchView(v) { clearForm(); setAuthView(v) }
+
+  return (
+    <div className="auth-screen">
+      <div className="auth-card">
+        <div className="auth-logo">
+          <span className="auth-logo-text">VIGIL</span>
+          <span className="auth-tagline">Build your own situation room.</span>
+        </div>
+
+        {authView !== 'forgot' && (
+          <div className="auth-tabs">
+            <button className={`auth-tab${authView === 'login' ? ' active' : ''}`} onClick={() => switchView('login')}>LOGIN</button>
+            <button className={`auth-tab${authView === 'signup' ? ' active' : ''}`} onClick={() => switchView('signup')}>SIGN UP</button>
+          </div>
+        )}
+
+        {authView === 'login' && (
+          <form className="auth-form" onSubmit={handleLogin}>
+            <input className="auth-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" required autoComplete="email" />
+            <input className="auth-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" required autoComplete="current-password" />
+            {error && <div className="auth-error">{error}</div>}
+            <button className="auth-btn" type="submit" disabled={loading}>{loading ? 'SIGNING IN…' : 'SIGN IN'}</button>
+            <button type="button" className="auth-link" onClick={() => switchView('forgot')}>Forgot password?</button>
+          </form>
+        )}
+
+        {authView === 'signup' && (
+          <form className="auth-form" onSubmit={handleSignup}>
+            <input className="auth-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" required autoComplete="email" />
+            <input className="auth-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password (min 6 chars)" required autoComplete="new-password" />
+            <input className="auth-input" type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Confirm password" required autoComplete="new-password" />
+            {error && <div className="auth-error">{error}</div>}
+            {message && <div className="auth-success">{message}</div>}
+            <button className="auth-btn" type="submit" disabled={loading || !!message}>{loading ? 'CREATING…' : 'CREATE ACCOUNT'}</button>
+          </form>
+        )}
+
+        {authView === 'forgot' && (
+          <form className="auth-form" onSubmit={handleForgot}>
+            <div className="auth-forgot-header">Reset Password</div>
+            <input className="auth-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" required autoComplete="email" />
+            {error && <div className="auth-error">{error}</div>}
+            {message && <div className="auth-success">{message}</div>}
+            <button className="auth-btn" type="submit" disabled={loading || !!message}>{loading ? 'SENDING…' : 'SEND RESET LINK'}</button>
+            <button type="button" className="auth-link" onClick={() => switchView('login')}>Back to login</button>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // ─── UTC Clock ────────────────────────────────────────────────────────────────
 function UtcClock() {
@@ -73,7 +171,7 @@ function WsTab({ ws, isActive, isEditing, nameInput, onSwitchWs, onStartRename, 
   )
 }
 
-function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRenameWs, onAddWs, onDeleteWs, onDuplicateWs, onShowAddModal }) {
+function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRenameWs, onAddWs, onDeleteWs, onDuplicateWs, onShowAddModal, user, onSignOut }) {
   const [editingId,  setEditingId]  = useState(null)
   const [nameInput,  setNameInput]  = useState('')
   const [ctxMenu,    setCtxMenu]    = useState(null)   // { x, y, ws }
@@ -165,6 +263,14 @@ function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRenameWs, onAddWs, 
         <div className="status-dot">LIVE</div>
         <UtcClock />
         <div className={`save-indicator${saved ? ' visible' : ''}`}>SAVED</div>
+        {user && (
+          <>
+            <span className="nav-user-email" title={user.email}>
+              {user.email && user.email.length > 20 ? user.email.slice(0, 20) + '…' : user.email}
+            </span>
+            <button className="nav-signout-btn" onClick={onSignOut}>SIGN OUT</button>
+          </>
+        )}
       </div>
 
       {ctxMenu && createPortal(
@@ -1910,22 +2016,6 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
   const bodyRef     = useRef(null)
   const assetsRef   = useRef(assets)
   assetsRef.current = assets
-
-  useEffect(() => {
-    try { localStorage.setItem(assetsKey, JSON.stringify(assets)) } catch {}
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    const tick = () => {
-      if (!lastRefresh) return
-      const s = Math.floor((Date.now() - lastRefresh) / 1000)
-      setTimeAgo(s < 10 ? 'just now' : s < 60 ? `${s}s ago` : `${Math.floor(s / 60)}m ago`)
-    }
-    tick()
-    const id = setInterval(tick, 5000)
-    return () => clearInterval(id)
-  }, [lastRefresh])
 
   async function fetchSparkline(id) {
     try {
@@ -4397,6 +4487,20 @@ export default function App() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [collapseMap,  setCollapseMap]  = useState({})  // { [widgetId]: savedH }
   const [saved,        setSaved]        = useState(false)
+  const [user,        setUser]        = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authView,    setAuthView]    = useState('login')
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      setAuthLoading(false)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   const saveTimer         = useRef(null)
   const savedTimer        = useRef(null)
@@ -4565,6 +4669,21 @@ export default function App() {
   const fsWidget = fullscreenId ? widgets.find(w => w.id === fullscreenId) ?? null : null
   const fsCatalog = fsWidget ? WIDGET_CATALOG.find(c => c.type === fsWidget.type) : null
 
+  if (authLoading) {
+    return (
+      <div className="auth-init-screen">
+        <div className="auth-init-inner">
+          <div className="auth-spinner" />
+          <span className="auth-init-text">INITIALIZING...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <AuthScreen authView={authView} setAuthView={setAuthView} />
+  }
+
   return (
     <div className="app">
       <NavBar
@@ -4577,6 +4696,8 @@ export default function App() {
         onDeleteWs={deleteWorkspace}
         onDuplicateWs={duplicateWorkspace}
         onShowAddModal={() => setShowAddModal(true)}
+        user={user}
+        onSignOut={() => supabase.auth.signOut()}
       />
       <div style={{ width: '100%', height: 'calc(100vh - 40px)', overflowY: 'auto', position: 'relative' }}>
         <SizedGridLayout
