@@ -571,3 +571,63 @@ body {
   border-radius: var(--radius);
   letter-spacing: 0.04em;
 }
+
+/* SnapTrade OAuth modal */
+.pf-snaptrade-modal { width: 400px; }
+.pf-snaptrade-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.pf-snaptrade-broker-display {
+  width: 100%;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.pf-snaptrade-broker-icon { font-size: 28px; line-height: 1; }
+.pf-snaptrade-broker-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+}
+.pf-snaptrade-powered {
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}
+.pf-snaptrade-step2-msg {
+  width: 100%;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.pf-snaptrade-step2-msg strong { color: var(--text-primary); }
+.pf-snaptrade-connect-btn {
+  width: 100%;
+  padding: 9px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.pf-snaptrade-connect-btn:hover:not(:disabled) { opacity: 0.88; }
+.pf-snaptrade-connect-btn:disabled { opacity: 0.5; cursor: not-allowed; }

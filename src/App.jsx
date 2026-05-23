@@ -2880,6 +2880,8 @@ const EXCH_INSTRUCTIONS = {
   kucoin:   'Go to KuCoin → Profile → API Management. Create a key with General permissions (read only). You must set a passphrase.',
 }
 
+const SNAPTRADE_BROKER_IDS = { t212: 'TRADING212', etoro: 'ETORO', ibkr: 'IBKR', degiro: 'DEGIRO' }
+
 const BROKERS = [
   { id: 'bybit',    name: 'Bybit',       icon: '⚡', active: true },
   { id: 'binance',  name: 'Binance',     icon: '🔶', active: true },
@@ -2887,9 +2889,10 @@ const BROKERS = [
   { id: 'coinbase', name: 'Coinbase',    icon: '🔵', active: true },
   { id: 'okx',      name: 'OKX',         icon: '⭕', active: true, hasPassphrase: true },
   { id: 'kucoin',   name: 'KuCoin',      icon: '🟢', active: true, hasPassphrase: true },
-  { id: 't212',     name: 'Trading 212', icon: '📊', active: false },
-  { id: 'etoro',    name: 'eToro',       icon: '🌿', active: false },
-  { id: 'ibkr',     name: 'IBKR',        icon: '🏦', active: false },
+  { id: 't212',     name: 'Trading 212', icon: '📊', active: true,  snapTrade: true },
+  { id: 'etoro',    name: 'eToro',        icon: '🌿', active: true,  snapTrade: true },
+  { id: 'ibkr',     name: 'IBKR',         icon: '🏦', active: true,  snapTrade: true },
+  { id: 'degiro',   name: 'DEGIRO',       icon: '🏛', active: true,  snapTrade: true },
 ]
 
 function pfFmt(v, currency = 'USD') {
@@ -2957,6 +2960,22 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
   const [exchLoading,  setExchLoading]  = useState({})  // { [id]: bool }
   const [exchModal,    setExchModal]    = useState(null) // shared generic connect modal state
 
+  // SnapTrade OAuth integration
+  const snaptradeStoreKey = `vigil_portfolio_snaptrade_${widgetId}`
+  const [snaptradeUserId,      setSnaptradeUserId]      = useState(() => {
+    try { return localStorage.getItem(`${snaptradeStoreKey}_userId`) || null } catch { return null }
+  })
+  const [snaptradeUserSecret,  setSnaptradeUserSecret]  = useState(() => {
+    try { return localStorage.getItem(`${snaptradeStoreKey}_userSecret`) || null } catch { return null }
+  })
+  const [snaptradeHoldings,    setSnaptradeHoldings]    = useState([])
+  const [snaptradeAccounts,    setSnaptradeAccounts]    = useState([])
+  const [snaptradeLoading,     setSnaptradeLoading]     = useState(false)
+  const [showSnaptradeModal,   setShowSnaptradeModal]   = useState(false)
+  const [snaptradeModalBroker, setSnaptradeModalBroker] = useState(null)
+  const [snaptradeStep,        setSnaptradeStep]        = useState(1)
+  const [snaptradeError,       setSnaptradeError]       = useState(null)
+
   // Bybit connect form
   const [bbApiKey,     setBbApiKey]     = useState('')
   const [bbApiSecret,  setBbApiSecret]  = useState('')
@@ -3011,6 +3030,9 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
     const id = setInterval(() => { if (!document.hidden) fetchPrices() }, 60_000)
     return () => clearInterval(id)
   }, [fetchPrices, assets, bybitBalances, exchBalances])
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (snaptradeUserId && snaptradeUserSecret) fetchSnaptradeHoldings() }, [])
 
   // ── Bybit fetch ───────────────────────────────────────────────────────────────
   async function fetchBybit(apiKey, apiSecret) {
@@ -3156,6 +3178,78 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
     setExchLoading(prev => ({ ...prev, [id]: false }))
   }
 
+  // ── SnapTrade OAuth ───────────────────────────────────────────────────────────
+  function openSnaptradeModal(broker) {
+    setSnaptradeModalBroker(broker)
+    setSnaptradeStep(1)
+    setSnaptradeError(null)
+    setShowSnaptradeModal(true)
+    setShowBrokerModal(false)
+  }
+
+  async function handleSnaptradeConnect() {
+    setSnaptradeError(null)
+    setSnaptradeLoading(true)
+    let userId     = snaptradeUserId
+    let userSecret = snaptradeUserSecret
+    if (!userId) {
+      const newId = `vigil-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+      try {
+        const res  = await fetch('/api/snaptrade-register', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: newId }), signal: AbortSignal.timeout(12000),
+        })
+        const json = await res.json()
+        if (!res.ok) { setSnaptradeError(json.error || 'Registration failed'); setSnaptradeLoading(false); return }
+        userId = json.userId; userSecret = json.userSecret
+        setSnaptradeUserId(userId); setSnaptradeUserSecret(userSecret)
+        try { localStorage.setItem(`${snaptradeStoreKey}_userId`,     userId)     } catch {}
+        try { localStorage.setItem(`${snaptradeStoreKey}_userSecret`, userSecret) } catch {}
+      } catch { setSnaptradeError('Network error. Could not reach SnapTrade.'); setSnaptradeLoading(false); return }
+    }
+    try {
+      const brokerId = SNAPTRADE_BROKER_IDS[snaptradeModalBroker.id]
+      const res      = await fetch('/api/snaptrade-connect', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, userSecret, broker: brokerId }), signal: AbortSignal.timeout(12000),
+      })
+      const json = await res.json()
+      if (!res.ok) { setSnaptradeError(json.error || 'Could not get connection link'); setSnaptradeLoading(false); return }
+      window.open(json.redirectURI, '_blank', 'noopener,noreferrer')
+      setSnaptradeStep(2)
+    } catch { setSnaptradeError('Network error. Could not reach SnapTrade.') }
+    setSnaptradeLoading(false)
+  }
+
+  async function fetchSnaptradeHoldings(closeModal = false) {
+    if (!snaptradeUserId || !snaptradeUserSecret) return
+    setSnaptradeError(null)
+    setSnaptradeLoading(true)
+    try {
+      const res  = await fetch('/api/snaptrade-holdings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: snaptradeUserId, userSecret: snaptradeUserSecret }),
+        signal: AbortSignal.timeout(15000),
+      })
+      const json = await res.json()
+      if (res.ok) {
+        setSnaptradeHoldings(json.holdings ?? [])
+        setSnaptradeAccounts(json.accounts ?? [])
+        if (closeModal) setShowSnaptradeModal(false)
+      } else {
+        setSnaptradeError(json.error || 'Could not load holdings')
+      }
+    } catch { setSnaptradeError('Network error loading holdings') }
+    setSnaptradeLoading(false)
+  }
+
+  function disconnectSnaptrade() {
+    setSnaptradeUserId(null); setSnaptradeUserSecret(null)
+    setSnaptradeHoldings([]); setSnaptradeAccounts([])
+    try { localStorage.removeItem(`${snaptradeStoreKey}_userId`)     } catch {}
+    try { localStorage.removeItem(`${snaptradeStoreKey}_userSecret`) } catch {}
+  }
+
   // ── Price helpers ─────────────────────────────────────────────────────────────
   function cgId(ticker) {
     return PORTFOLIO_TICKER_MAP[(ticker ?? '').toUpperCase()] ?? (ticker ?? '').toLowerCase()
@@ -3190,10 +3284,11 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
   }
 
   // ── Totals ────────────────────────────────────────────────────────────────────
-  const manualTotal = assets.reduce((s, a) => s + getValue(a), 0)
-  const bybitTotal  = bybitBalances.reduce((s, b) => s + getCoinValue(b), 0)
-  const exchTotal   = Object.values(exchBalances).flat().reduce((s, b) => s + getCoinValue(b), 0)
-  const totalValue  = manualTotal + bybitTotal + exchTotal
+  const manualTotal    = assets.reduce((s, a) => s + getValue(a), 0)
+  const bybitTotal     = bybitBalances.reduce((s, b) => s + getCoinValue(b), 0)
+  const exchTotal      = Object.values(exchBalances).flat().reduce((s, b) => s + getCoinValue(b), 0)
+  const snaptradeTotal = snaptradeHoldings.reduce((s, h) => s + (h.value ?? 0) * (currency === 'EUR' ? 0.92 : 1), 0)
+  const totalValue     = manualTotal + bybitTotal + exchTotal + snaptradeTotal
 
   const total24hChange = [
     ...assets.map(a => {
@@ -3213,8 +3308,9 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
 
   const allocationByType = {}
   assets.forEach(a => { allocationByType[a.type] = (allocationByType[a.type] ?? 0) + getValue(a) })
-  if (bybitTotal > 0) allocationByType['Crypto'] = (allocationByType['Crypto'] ?? 0) + bybitTotal
-  if (exchTotal  > 0) allocationByType['Crypto'] = (allocationByType['Crypto'] ?? 0) + exchTotal
+  if (bybitTotal     > 0) allocationByType['Crypto'] = (allocationByType['Crypto'] ?? 0) + bybitTotal
+  if (exchTotal      > 0) allocationByType['Crypto'] = (allocationByType['Crypto'] ?? 0) + exchTotal
+  if (snaptradeTotal > 0) allocationByType['Stock']  = (allocationByType['Stock']  ?? 0) + snaptradeTotal
   const allocTypes = Object.keys(allocationByType)
 
   function addAsset() {
@@ -3266,10 +3362,10 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
 
   const currSym         = currency === 'EUR' ? '€' : '$'
   const allExchBalFlat  = Object.values(exchBalances).flat()
-  const isEmpty         = assets.length === 0 && bybitBalances.length === 0 && allExchBalFlat.length === 0
-  const hasConn         = bybitConn != null || Object.keys(exchConnections).length > 0
-  const totalAssetCount = assets.length + bybitBalances.length + allExchBalFlat.length
-  const anyLoading      = bybitLoading || Object.values(exchLoading).some(Boolean)
+  const isEmpty         = assets.length === 0 && bybitBalances.length === 0 && allExchBalFlat.length === 0 && snaptradeHoldings.length === 0
+  const hasConn         = bybitConn != null || Object.keys(exchConnections).length > 0 || snaptradeUserId != null
+  const totalAssetCount = assets.length + bybitBalances.length + allExchBalFlat.length + snaptradeHoldings.length
+  const anyLoading      = bybitLoading || Object.values(exchLoading).some(Boolean) || snaptradeLoading
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
@@ -3324,6 +3420,15 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
             <button className="pf-account-disconnect" title="Disconnect" onClick={() => disconnectExch(id)}>✕</button>
           </div>
         ))}
+        {snaptradeUserId && (
+          <div className="pf-account-chip">
+            <span className={`pf-account-dot${snaptradeLoading ? ' loading' : ''}`} />
+            <span className="pf-account-name">SNAPTRADE</span>
+            {snaptradeAccounts.length > 0 && <span className="pf-account-ts">{snaptradeAccounts.length} acct{snaptradeAccounts.length !== 1 ? 's' : ''}</span>}
+            <button className="pf-account-refresh" title="Refresh" onClick={() => fetchSnaptradeHoldings()}>↻</button>
+            <button className="pf-account-disconnect" title="Disconnect" onClick={disconnectSnaptrade}>✕</button>
+          </div>
+        )}
         <button className="pf-connect-btn" onClick={() => setShowBrokerModal(true)}>+ Connect Broker</button>
       </div>
 
@@ -3506,6 +3611,30 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
                       }),
                     ]
                   })}
+
+                  {snaptradeHoldings.length > 0 && (
+                    <tr className="pf-section-row">
+                      <td colSpan={10}><span className="pf-section-label">SNAPTRADE</span></td>
+                    </tr>
+                  )}
+                  {snaptradeHoldings.map((h, i) => {
+                    const val = (h.value ?? 0) * (currency === 'EUR' ? 0.92 : 1)
+                    const pr  = (h.price ?? 0) * (currency === 'EUR' ? 0.92 : 1)
+                    return (
+                      <tr key={`snaptrade-${i}`}>
+                        <td className="pf-col-name">{h.name || h.ticker}</td>
+                        <td className="pf-col-ticker">{h.ticker}</td>
+                        <td><span className="pf-type-badge" style={{ color: '#00C96B', borderColor: '#00C96B' }}>Stock</span></td>
+                        <td className="pf-col-mono">{pfFmtSmall(h.qty)}</td>
+                        <td className="pf-col-mono">—</td>
+                        <td className="pf-col-mono">{pr > 0 ? `${currSym}${pfFmtSmall(pr)}` : '—'}</td>
+                        <td className="pf-col-mono">{val > 0 ? pfFmt(val, currency) : '—'}</td>
+                        <td className="pf-col-mono">—</td>
+                        <td className="pf-col-mono">—</td>
+                        <td />
+                      </tr>
+                    )
+                  })}
                 </tbody>
                 <tfoot>
                   <tr className="pf-total-row">
@@ -3587,7 +3716,7 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
                   <div
                     key={b.id}
                     className={`pf-broker-card${b.active ? ' active' : ''}`}
-                    onClick={b.active ? () => { b.id === 'bybit' ? openBybitModal() : openExchModal(b) } : undefined}
+                    onClick={b.active ? () => b.id === 'bybit' ? openBybitModal() : b.snapTrade ? openSnaptradeModal(b) : openExchModal(b) : undefined}
                     title={b.active ? `Connect ${b.name}` : 'Coming soon'}
                   >
                     <span className="pf-broker-card-icon">{b.icon}</span>
@@ -3595,9 +3724,8 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
                     {b.active ? (
                       <>
                         <span className="pf-broker-card-active-label">CONNECT</span>
-                        {b.hasPassphrase && (
-                          <span style={{ fontSize: '8px', color: 'var(--text-muted)', letterSpacing: '0.03em' }}>Passphrase req.</span>
-                        )}
+                        {b.hasPassphrase && <span style={{ fontSize: '8px', color: 'var(--text-muted)', letterSpacing: '0.03em' }}>Passphrase req.</span>}
+                        {b.snapTrade    && <span style={{ fontSize: '8px', color: 'var(--text-muted)', letterSpacing: '0.03em' }}>via SnapTrade</span>}
                       </>
                     ) : (
                       <span className="pf-broker-card-soon">soon</span>
@@ -3731,6 +3859,53 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
               >
                 {exchModal.connecting ? 'CONNECTING…' : 'CONNECT'}
               </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* SnapTrade OAuth modal */}
+      {showSnaptradeModal && snaptradeModalBroker && createPortal(
+        <div className="modal-overlay" onPointerDown={e => { if (e.target === e.currentTarget) setShowSnaptradeModal(false) }}>
+          <div className="pf-modal pf-snaptrade-modal">
+            <div className="pf-modal-header">
+              <span className="pf-modal-title">Connect {snaptradeModalBroker.name}</span>
+              <button className="widget-btn" onClick={() => setShowSnaptradeModal(false)}>✕</button>
+            </div>
+            <div className="pf-snaptrade-body" onPointerDownCapture={e => e.stopPropagation()}>
+              {snaptradeStep === 1 ? (
+                <>
+                  <div className="pf-snaptrade-broker-display">
+                    <span className="pf-snaptrade-broker-icon">{snaptradeModalBroker.icon}</span>
+                    <span className="pf-snaptrade-broker-name">{snaptradeModalBroker.name}</span>
+                    <div className="pf-snaptrade-powered">Powered by SnapTrade</div>
+                  </div>
+                  <div className="pf-bybit-instructions" style={{ width: '100%' }}>
+                    <strong>How it works:</strong><br />
+                    Click Connect below. You'll be taken to {snaptradeModalBroker.name} to authorize read-only access in a new tab.
+                    Return here and click Refresh Holdings when done.
+                  </div>
+                  <div className="pf-bybit-security-note" style={{ width: '100%' }}>
+                    SnapTrade credentials are stored locally to maintain your session. No API keys or passwords are required.
+                  </div>
+                  {snaptradeError && <div className="pf-bybit-error" style={{ width: '100%' }}>{snaptradeError}</div>}
+                  <button className="pf-snaptrade-connect-btn" onClick={handleSnaptradeConnect} disabled={snaptradeLoading}>
+                    {snaptradeLoading ? 'CONNECTING…' : `CONNECT ${snaptradeModalBroker.name.toUpperCase()} VIA SNAPTRADE`}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="pf-snaptrade-step2-msg">
+                    <strong>Authorize in the new tab</strong><br />
+                    Complete authorization on {snaptradeModalBroker.name}, then return here and click Refresh Holdings.
+                  </div>
+                  {snaptradeError && <div className="pf-bybit-error" style={{ width: '100%' }}>{snaptradeError}</div>}
+                  <button className="pf-snaptrade-connect-btn" onClick={() => fetchSnaptradeHoldings(true)} disabled={snaptradeLoading}>
+                    {snaptradeLoading ? 'LOADING…' : '↻ REFRESH HOLDINGS'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>,
