@@ -1658,6 +1658,8 @@ function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onColl
 }
 
 // ─── Price Tracker ────────────────────────────────────────────────────────────
+let cgCache = {}
+
 const COINGECKO_TO_TV = {
   'bitcoin':     'BINANCE:BTCUSDT',
   'ethereum':    'BINANCE:ETHUSDT',
@@ -1868,7 +1870,7 @@ function AssetCard({ asset, priceData, onRemove, onChartClick }) {
           <div className={`asset-change ${isUp ? 'up' : 'down'}`}>
             {chg == null ? '—' : `${isUp ? '▲' : '▼'} ${Math.abs(chg).toFixed(2)}%`}
           </div>
-          {stale && <div className="asset-stale-label">stale</div>}
+          {stale && <div className="asset-stale-label">⚠ stale</div>}
           <Sparkline points={d?.sparkline ?? null} isUp={isUp} />
         </>
       )}
@@ -1899,6 +1901,8 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
   const [fetchError,  setFetchError]  = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
   const [timeAgo,     setTimeAgo]     = useState('')
+  const [ptStale,       setPtStale]       = useState(false)
+  const [ptRetryIn,     setPtRetryIn]     = useState(null)
   const [toast,         setToast]         = useState(null)
   const [selectedAsset, setSelectedAsset] = useState(null)
   const [chartOpen,     setChartOpen]     = useState(false)
@@ -1945,17 +1949,29 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
         `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=usd&include_24hr_change=true`,
         { signal: AbortSignal.timeout(10000) }
       )
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
       cg = await r.json()
+      cgList.forEach(a => { if (cg[a.id]) cgCache[a.id] = cg[a.id] })
     } catch {
-      setFetchError('CoinGecko unavailable')
+      const fallback = cgList.some(a => cgCache[a.id])
+      if (fallback) {
+        cg = {}
+        cgList.forEach(a => { if (cgCache[a.id]) cg[a.id] = cgCache[a.id] })
+        setPtStale(true)
+        setPtRetryIn(60)
+      } else {
+        setFetchError('CoinGecko unavailable')
+      }
       setPriceData(prev => {
         const next = { ...prev }
         cgList.forEach(a => { if (next[a.id]) next[a.id] = { ...next[a.id], stale: true } })
         return next
       })
       setLoading(false)
-      return
+      if (!fallback) return
     }
+    if (cg === null) return
+    setPtStale(false)
     setFetchError(null)
 
     const updates = {}
@@ -1989,6 +2005,15 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
     setLastRefresh(Date.now())
     setLoading(false)
   }, [])
+
+  useEffect(() => {
+    if (!ptRetryIn || ptRetryIn <= 0) return
+    const t = setTimeout(() => {
+      setPtRetryIn(v => (v != null && v > 1 ? v - 1 : null))
+      if (ptRetryIn === 1) { setPtStale(false); fetchAll(false) }
+    }, 1000)
+    return () => clearTimeout(t)
+  }, [ptRetryIn, fetchAll])
 
   useEffect(() => {
     fetchAll(true)
@@ -2095,7 +2120,12 @@ function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollaps
               }
               <AssetSearch existingIds={assets.map(a => a.id)} onAdd={handleAdd} />
               <div className="pt-footer">
-                <span>{lastRefresh ? `Updated ${timeAgo}` : ''}</span>
+                <span>
+                  {ptStale
+                    ? <span style={{ color: 'var(--amber)' }}>⚠ stale{ptRetryIn ? ` · Retrying in ${ptRetryIn}s…` : ''}</span>
+                    : lastRefresh ? `Updated ${timeAgo}` : ''
+                  }
+                </span>
                 <span>via CoinGecko</span>
               </div>
             </div>
@@ -2517,7 +2547,7 @@ function ArticleReaderWidget({ widgetId, onClose, onFullscreen, isFullscreen, on
   })()
 
   const [input,      setInput]      = useState(initUrl)
-  const [url,        setUrl]        = useState(initUrl)
+  const [url,        setUrl]        = useState('')
   const [loading,    setLoading]    = useState(false)
   const [article,    setArticle]    = useState(null)
   const [error,      setError]      = useState(null)
@@ -2883,16 +2913,12 @@ const EXCH_INSTRUCTIONS = {
 const SNAPTRADE_BROKER_IDS = { t212: 'TRADING212', etoro: 'ETORO', ibkr: 'IBKR', degiro: 'DEGIRO' }
 
 const BROKERS = [
-  { id: 'bybit',    name: 'Bybit',       icon: '⚡', active: true },
-  { id: 'binance',  name: 'Binance',     icon: '🔶', active: true },
-  { id: 'kraken',   name: 'Kraken',      icon: '🐙', active: true },
-  { id: 'coinbase', name: 'Coinbase',    icon: '🔵', active: true },
-  { id: 'okx',      name: 'OKX',         icon: '⭕', active: true, hasPassphrase: true },
-  { id: 'kucoin',   name: 'KuCoin',      icon: '🟢', active: true, hasPassphrase: true },
-  { id: 't212',     name: 'Trading 212', icon: '📊', active: true,  snapTrade: true },
-  { id: 'etoro',    name: 'eToro',        icon: '🌿', active: true,  snapTrade: true },
-  { id: 'ibkr',     name: 'IBKR',         icon: '🏦', active: true,  snapTrade: true },
-  { id: 'degiro',   name: 'DEGIRO',       icon: '🏛', active: true,  snapTrade: true },
+  { id: 'bybit',    name: 'Bybit',    icon: '⚡', active: true },
+  { id: 'binance',  name: 'Binance',  icon: '🔶', active: true },
+  { id: 'kraken',   name: 'Kraken',   icon: '🐙', active: true },
+  { id: 'coinbase', name: 'Coinbase', icon: '🔵', active: true },
+  { id: 'okx',      name: 'OKX',      icon: '⭕', active: true, hasPassphrase: true },
+  { id: 'kucoin',   name: 'KuCoin',   icon: '🟢', active: true, hasPassphrase: true },
 ]
 
 function pfFmt(v, currency = 'USD') {
@@ -2909,6 +2935,17 @@ function pfFmtSmall(v) {
   if (v >= 100)   return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   if (v >= 1)     return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
   return v.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 6 })
+}
+
+function BrokerLogo({ url, name }) {
+  const [err, setErr] = useState(false)
+  if (!url || err) return (
+    <svg className="pf-broker-card-logo-fb" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="8" width="20" height="13" rx="1" stroke="#6e8098" strokeWidth="1.5"/>
+      <path d="M6 8V6a6 6 0 0 1 12 0v2" stroke="#6e8098" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )
+  return <img src={url} alt={name} className="pf-broker-card-logo" onError={() => setErr(true)} />
 }
 
 function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
@@ -2931,9 +2968,15 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
   const [prices,          setPrices]          = useState({})
   const [pricesLoading,   setPricesLoading]   = useState(false)
   const [lastUpdated,     setLastUpdated]     = useState(null)
+  const [pfStale,         setPfStale]         = useState(false)
+  const [pfRetryIn,       setPfRetryIn]       = useState(null)
   const [showAddModal,    setShowAddModal]    = useState(false)
-  const [showBrokerModal, setShowBrokerModal] = useState(false)
-  const [showBybitModal,  setShowBybitModal]  = useState(false)
+  const [showBrokerModal,    setShowBrokerModal]    = useState(false)
+  const [showBybitModal,     setShowBybitModal]     = useState(false)
+  const [snapBrokers,        setSnapBrokers]        = useState([])
+  const [snapBrokersLoading, setSnapBrokersLoading] = useState(false)
+  const [snapBrokersError,   setSnapBrokersError]   = useState(null)
+  const [snapBrokerSearch,   setSnapBrokerSearch]   = useState('')
 
   // Bybit connection — apiSecret session-only
   const [bybitConn,     setBybitConn]     = useState(() => {
@@ -3020,8 +3063,23 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
         `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids.join(','))}&vs_currencies=usd,eur&include_24hr_change=true`,
         { signal: AbortSignal.timeout(10000) }
       )
-      if (r.ok) { setPrices(await r.json()); setLastUpdated(Date.now()) }
-    } catch {}
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const data = await r.json()
+      ids.forEach(id => { if (data[id]) cgCache[id] = data[id] })
+      setPrices(data)
+      setLastUpdated(Date.now())
+      setPfStale(false)
+      setPfRetryIn(null)
+    } catch {
+      const hasCached = ids.some(id => cgCache[id])
+      if (hasCached) {
+        const fallback = {}
+        ids.forEach(id => { if (cgCache[id]) fallback[id] = cgCache[id] })
+        setPrices(prev => ({ ...prev, ...fallback }))
+        setPfStale(true)
+        setPfRetryIn(60)
+      }
+    }
     setPricesLoading(false)
   }, [])
 
@@ -3030,6 +3088,15 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
     const id = setInterval(() => { if (!document.hidden) fetchPrices() }, 60_000)
     return () => clearInterval(id)
   }, [fetchPrices, assets, bybitBalances, exchBalances])
+
+  useEffect(() => {
+    if (!pfRetryIn || pfRetryIn <= 0) return
+    const t = setTimeout(() => {
+      setPfRetryIn(v => (v != null && v > 1 ? v - 1 : null))
+      if (pfRetryIn === 1) fetchPrices()
+    }, 1000)
+    return () => clearTimeout(t)
+  }, [pfRetryIn, fetchPrices])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (snaptradeUserId && snaptradeUserSecret) fetchSnaptradeHoldings() }, [])
@@ -3179,6 +3246,26 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
   }
 
   // ── SnapTrade OAuth ───────────────────────────────────────────────────────────
+  const fetchSnapBrokers = useCallback(async () => {
+    setSnapBrokersLoading(true)
+    setSnapBrokersError(null)
+    try {
+      const r = await fetch('/api/snaptrade-brokers')
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Failed')
+      setSnapBrokers(j.brokers ?? [])
+    } catch {
+      setSnapBrokersError('Could not load brokers. Check your connection.')
+    }
+    setSnapBrokersLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (!showBrokerModal) return
+    setSnapBrokerSearch('')
+    fetchSnapBrokers()
+  }, [showBrokerModal, fetchSnapBrokers])
+
   function openSnaptradeModal(broker) {
     setSnaptradeModalBroker(broker)
     setSnaptradeStep(1)
@@ -3208,7 +3295,7 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
       } catch { setSnaptradeError('Network error. Could not reach SnapTrade.'); setSnaptradeLoading(false); return }
     }
     try {
-      const brokerId = SNAPTRADE_BROKER_IDS[snaptradeModalBroker.id]
+      const brokerId = snaptradeModalBroker.slug ?? SNAPTRADE_BROKER_IDS[snaptradeModalBroker.id]
       const res      = await fetch('/api/snaptrade-connect', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, userSecret, broker: brokerId }), signal: AbortSignal.timeout(12000),
@@ -3361,6 +3448,21 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
   }
 
   const currSym         = currency === 'EUR' ? '€' : '$'
+  const SNAP_FALLBACK = [
+    { id: 't212',   name: 'Trading 212', icon: '📊', slug: 'TRADING212' },
+    { id: 'etoro',  name: 'eToro',       icon: '🌿', slug: 'ETORO'      },
+    { id: 'ibkr',   name: 'IBKR',        icon: '🏦', slug: 'IBKR'       },
+    { id: 'degiro', name: 'DEGIRO',       icon: '🏛', slug: 'DEGIRO'     },
+  ]
+  const snapSource          = snapBrokers.length > 0 ? snapBrokers : SNAP_FALLBACK
+  const snapBrokersFiltered = snapSource.filter(b =>
+    !snapBrokerSearch.trim() || b.name.toLowerCase().includes(snapBrokerSearch.toLowerCase())
+  )
+  const pxCell = (price) => price != null
+    ? pfStale
+      ? <><span style={{ color: 'var(--amber)', fontSize: '9px' }}>⚠ </span>{currSym}{pfFmtSmall(price)}</>
+      : `${currSym}${pfFmtSmall(price)}`
+    : '—'
   const allExchBalFlat  = Object.values(exchBalances).flat()
   const isEmpty         = assets.length === 0 && bybitBalances.length === 0 && allExchBalFlat.length === 0 && snaptradeHoldings.length === 0
   const hasConn         = bybitConn != null || Object.keys(exchConnections).length > 0 || snaptradeUserId != null
@@ -3465,9 +3567,12 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
           <div className="pf-overview">
             <div className="pf-total-section">
               <div className="pf-total-label">TOTAL VALUE</div>
-              <div className="pf-total-value">{pfFmt(totalValue, currency)}</div>
+              <div className="pf-total-value">
+                {pfFmt(totalValue, currency)}
+                {pfStale && <span style={{ color: 'var(--amber)', fontSize: '10px', marginLeft: '6px' }}>⚠ stale</span>}
+              </div>
               {total24hChange !== 0 && (
-                <div className={`pf-total-change ${total24hChange >= 0 ? 'pf-pos' : 'pf-neg'}`}>
+                <div className="pf-total-change" style={{ color: total24hChange >= 0 ? '#00C96B' : '#F85149' }}>
                   {total24hChange >= 0 ? '▲' : '▼'} {pfFmt(Math.abs(total24hChange), currency)} ({Math.abs(total24hChangePct).toFixed(2)}%) 24h
                 </div>
               )}
@@ -3545,16 +3650,16 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
                         <td className="pf-col-mono">{currSym}{pfFmtSmall(avg)}</td>
                         <td className="pf-col-mono">
                           {asset.type === 'Crypto'
-                            ? (price != null ? `${currSym}${pfFmtSmall(price)}` : '—')
+                            ? pxCell(price)
                             : <span className="pf-price-na" title="Price unavailable — update manually">—</span>
                           }
                         </td>
                         <td className="pf-col-mono">{pfFmt(value, currency)}</td>
-                        <td className={`pf-col-mono${pnl == null ? '' : pnl >= 0 ? ' pf-pos' : ' pf-neg'}`}>
-                          {pnl == null ? '—' : `${pnl >= 0 ? '+' : ''}${pfFmt(pnl, currency)}`}
+                        <td className="pf-col-mono" style={{ color: pnl == null || pnl === 0 ? '#8B949E' : pnl > 0 ? '#00C96B' : '#F85149' }}>
+                          {pnl == null ? '—' : `${pnl > 0 ? '+' : ''}${pfFmt(pnl, currency)}`}
                         </td>
-                        <td className={`pf-col-mono${pnlPct == null ? '' : pnlPct >= 0 ? ' pf-pos' : ' pf-neg'}`}>
-                          {pnlPct == null ? '—' : `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`}
+                        <td className="pf-col-mono" style={{ color: pnlPct == null || pnlPct === 0 ? '#8B949E' : pnlPct > 0 ? '#00C96B' : '#F85149' }}>
+                          {pnlPct == null ? '—' : `${pnlPct > 0 ? '+' : ''}${pnlPct.toFixed(2)}%`}
                         </td>
                         <td><button className="pf-row-del" onClick={() => saveAssets(assets.filter(a => a.id !== asset.id))}>✕</button></td>
                       </tr>
@@ -3576,7 +3681,7 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
                         <td><span className="pf-type-badge" style={{ color: '#00D4FF', borderColor: '#00D4FF' }}>Crypto</span></td>
                         <td className="pf-col-mono">{pfFmtSmall(bal.qty)}</td>
                         <td className="pf-col-mono">—</td>
-                        <td className="pf-col-mono">{price != null ? `${currSym}${pfFmtSmall(price)}` : '—'}</td>
+                        <td className="pf-col-mono">{pxCell(price)}</td>
                         <td className="pf-col-mono">{pfFmt(value, currency)}</td>
                         <td className="pf-col-mono">—</td>
                         <td className="pf-col-mono">—</td>
@@ -3601,7 +3706,7 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
                             <td><span className="pf-type-badge" style={{ color: '#00D4FF', borderColor: '#00D4FF' }}>Crypto</span></td>
                             <td className="pf-col-mono">{pfFmtSmall(bal.qty)}</td>
                             <td className="pf-col-mono">—</td>
-                            <td className="pf-col-mono">{price != null ? `${currSym}${pfFmtSmall(price)}` : '—'}</td>
+                            <td className="pf-col-mono">{pxCell(price)}</td>
                             <td className="pf-col-mono">{pfFmt(value, currency)}</td>
                             <td className="pf-col-mono">—</td>
                             <td className="pf-col-mono">—</td>
@@ -3646,7 +3751,10 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
               </table>
             </div>
             <div className="pf-holdings-footer">
-              {lastUpdated && <span>Updated {fmtUpdated()}</span>}
+              {pfStale
+                ? <span style={{ color: 'var(--amber)', fontSize: '10px' }}>⚠ stale prices{pfRetryIn ? ` · Retrying in ${pfRetryIn}s…` : ''}</span>
+                : lastUpdated && <span>Updated {fmtUpdated()}</span>
+              }
               {anyLoading && <span className="pf-spinner" />}
               <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '10px' }}>via CoinGecko</span>
             </div>
@@ -3716,7 +3824,7 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
                   <div
                     key={b.id}
                     className={`pf-broker-card${b.active ? ' active' : ''}`}
-                    onClick={b.active ? () => b.id === 'bybit' ? openBybitModal() : b.snapTrade ? openSnaptradeModal(b) : openExchModal(b) : undefined}
+                    onClick={b.active ? () => b.id === 'bybit' ? openBybitModal() : openExchModal(b) : undefined}
                     title={b.active ? `Connect ${b.name}` : 'Coming soon'}
                   >
                     <span className="pf-broker-card-icon">{b.icon}</span>
@@ -3725,13 +3833,54 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
                       <>
                         <span className="pf-broker-card-active-label">CONNECT</span>
                         {b.hasPassphrase && <span style={{ fontSize: '8px', color: 'var(--text-muted)', letterSpacing: '0.03em' }}>Passphrase req.</span>}
-                        {b.snapTrade    && <span style={{ fontSize: '8px', color: 'var(--text-muted)', letterSpacing: '0.03em' }}>via SnapTrade</span>}
                       </>
                     ) : (
                       <span className="pf-broker-card-soon">soon</span>
                     )}
                   </div>
                 ))}
+              </div>
+
+              {/* SnapTrade stock brokers section */}
+              <div className="pf-broker-snap-header">
+                <span className="pf-broker-grid-label" style={{ marginBottom: 0 }}>STOCK BROKERS</span>
+                <span className="pf-broker-snap-powered">Powered by SnapTrade</span>
+              </div>
+              <input
+                className="pf-broker-snap-search"
+                value={snapBrokerSearch}
+                onChange={e => setSnapBrokerSearch(e.target.value)}
+                placeholder="Search 30+ brokers worldwide..."
+                spellCheck={false}
+              />
+              <div className="pf-broker-snap-grid">
+                {snapBrokersLoading
+                  ? Array.from({ length: 4 }, (_, i) => (
+                      <div key={i} className="pf-broker-card pf-broker-skel">
+                        <div className="skel-line pf-broker-skel-logo" />
+                        <div className="skel-line" style={{ width: '70%', height: 8, marginTop: 2 }} />
+                        <div className="skel-line" style={{ width: '45%', height: 7 }} />
+                      </div>
+                    ))
+                  : snapBrokersFiltered.length === 0 && snapBrokerSearch.trim()
+                    ? <div className="pf-broker-snap-empty">No brokers match "{snapBrokerSearch}"</div>
+                    : snapBrokersFiltered.map(b => (
+                        <div
+                          key={b.slug ?? b.id}
+                          className="pf-broker-card active"
+                          onClick={() => openSnaptradeModal(b)}
+                          title={`Connect ${b.name} via SnapTrade`}
+                        >
+                          {b.icon
+                            ? <span className="pf-broker-card-icon">{b.icon}</span>
+                            : <BrokerLogo url={b.logoUrl} name={b.name} />
+                          }
+                          <span className="pf-broker-card-name">{b.name}</span>
+                          <span className="pf-broker-card-active-label">CONNECT</span>
+                          <span style={{ fontSize: '8px', color: 'var(--text-muted)', letterSpacing: '0.03em' }}>via SnapTrade</span>
+                        </div>
+                      ))
+                }
               </div>
             </div>
           </div>
@@ -3877,7 +4026,9 @@ function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onColl
               {snaptradeStep === 1 ? (
                 <>
                   <div className="pf-snaptrade-broker-display">
-                    <span className="pf-snaptrade-broker-icon">{snaptradeModalBroker.icon}</span>
+                    {snaptradeModalBroker.logoUrl
+                      ? <BrokerLogo url={snaptradeModalBroker.logoUrl} name={snaptradeModalBroker.name} />
+                      : <span className="pf-snaptrade-broker-icon">{snaptradeModalBroker.icon}</span>}
                     <span className="pf-snaptrade-broker-name">{snaptradeModalBroker.name}</span>
                     <div className="pf-snaptrade-powered">Powered by SnapTrade</div>
                   </div>
@@ -3946,7 +4097,7 @@ const WIDGET_DEFAULTS = {
   heatmap:  { w: 6,  h: 8  },
   browser:   { w: 6,  h: 14 },
   social:    { w: 5,  h: 11 },
-  portfolio: { w: 16, h: 18, minH: 14 },
+  portfolio: { w: 24, h: 20, minH: 16 },
 }
 
 function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, onCollapse, collapsed, settings, updateSetting }) {

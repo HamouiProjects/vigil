@@ -208,8 +208,9 @@ body {
   font-family: var(--font-mono);
   font-size: 12px;
 }
-.pf-pos { color: var(--green); }
-.pf-neg { color: var(--red); }
+.pf-pos     { color: var(--green); }
+.pf-neg     { color: var(--red); }
+.pf-neutral { color: var(--text-secondary); }
 
 .pf-alloc-section { display: flex; flex-direction: column; gap: 6px; }
 .pf-alloc-label {
@@ -398,7 +399,7 @@ body {
 
 /* Broker selection modal */
 .pf-broker-modal { width: 420px; }
-.pf-broker-grid-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.pf-broker-grid-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: calc(100vh - 120px); }
 .pf-broker-grid-label {
   font-family: var(--font-mono);
   font-size: 9px;
@@ -449,6 +450,74 @@ body {
 .pf-broker-card-icon {
   font-size: 18px;
   line-height: 1;
+}
+
+/* SnapTrade broker section inside Connect Broker modal */
+.pf-broker-snap-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding-top: 4px;
+}
+.pf-broker-snap-powered {
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+.pf-broker-snap-search {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 6px 8px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.pf-broker-snap-search:focus { border-color: var(--accent); }
+.pf-broker-snap-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.pf-broker-skel { cursor: default !important; pointer-events: none; gap: 6px; }
+.pf-broker-skel-logo { width: 26px; height: 26px; border-radius: 4px; flex-shrink: 0; }
+.pf-broker-card-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+.pf-broker-card-logo-fb {
+  width: 22px;
+  height: 22px;
+  display: block;
+  flex-shrink: 0;
+}
+.pf-broker-snap-error {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--amber);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-align: center;
+  padding: 12px 8px;
+}
+.pf-broker-snap-empty {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-align: center;
+  padding: 12px 8px;
 }
 
 /* Bybit connect modal */

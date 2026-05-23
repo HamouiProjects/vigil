@@ -20,7 +20,9 @@
       "PowerShell(Get-Content *)",
       "PowerShell(Select-String -Path \"C:\\\\Users\\\\49157\\\\Projects\\\\vigil\\\\src\\\\App.jsx\" -Pattern \"Browser\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
       "Bash(curl -s \"http://localhost:3000/api/fetch-article?url=https://www.theguardian.com/technology/2025/jan/01/ai-chips\")",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(vercel dev *)",
+      "Bash(npx vercel *)"
     ]
   }
 }
