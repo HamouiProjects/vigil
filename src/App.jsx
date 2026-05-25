@@ -41,9 +41,11 @@ function AuthScreen({ authView, setAuthView }) {
     if (password.length < 6)  { setError('Password must be at least 6 characters'); return }
     setError(null); setLoading(true)
     const { error } = await supabase.auth.signUp({ email, password })
+    if (error) { setLoading(false); setError(error.message); return }
+    setMessage('Account created! Signing you in...')
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
-    if (error) setError(error.message)
-    else setMessage('Check your email to confirm your account.')
+    if (signInError) setError(signInError.message)
   }
 
   async function handleForgot(e) {
@@ -4669,20 +4671,21 @@ export default function App() {
   const fsWidget = fullscreenId ? widgets.find(w => w.id === fullscreenId) ?? null : null
   const fsCatalog = fsWidget ? WIDGET_CATALOG.find(c => c.type === fsWidget.type) : null
 
-  if (authLoading) {
-    return (
-      <div className="auth-init-screen">
-        <div className="auth-init-inner">
-          <div className="auth-spinner" />
-          <span className="auth-init-text">INITIALIZING...</span>
-        </div>
-      </div>
-    )
-  }
+  // AUTH GATE DISABLED - re-enable for production
+  // if (authLoading) {
+  //   return (
+  //     <div className="auth-init-screen">
+  //       <div className="auth-init-inner">
+  //         <div className="auth-spinner" />
+  //         <span className="auth-init-text">INITIALIZING...</span>
+  //       </div>
+  //     </div>
+  //   )
+  // }
 
-  if (!user) {
-    return <AuthScreen authView={authView} setAuthView={setAuthView} />
-  }
+  // if (!user) {
+  //   return <AuthScreen authView={authView} setAuthView={setAuthView} />
+  // }
 
   return (
     <div className="app">

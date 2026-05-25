@@ -22,7 +22,12 @@
       "Bash(curl -s \"http://localhost:3000/api/fetch-article?url=https://www.theguardian.com/technology/2025/jan/01/ai-chips\")",
       "Bash(curl *)",
       "Bash(vercel dev *)",
-      "Bash(npx vercel *)"
+      "Bash(npx vercel *)",
+      "Bash(vercel --version)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(vercel env *)",
+      "Bash(vercel *)",
+      "Bash(pkill -f \"vite\")"
     ]
   }
 }
