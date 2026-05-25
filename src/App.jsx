@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle, memo, Fragment } from 'react'
 import { createPortal } from 'react-dom'
+import Globe from 'globe.gl'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ReactGridLayout as GridLayout, WidthProvider } from 'react-grid-layout/legacy'
@@ -645,6 +646,266 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
   )
 })
 
+// ─── Globe data constants ─────────────────────────────────────────────────────
+const HOT_COUNTRIES = [
+  'Ukraine', 'Palestine', 'Israel', 'Sudan', 'Syria', 'Iraq', 'Yemen',
+  'Afghanistan', 'Myanmar', 'Ethiopia', 'Mali', 'Niger', 'Somalia',
+  'Dem. Rep. Congo', 'Lebanon', 'Iran', 'Pakistan',
+]
+
+const CLUSTER_REGIONS = [
+  { id: 'middle-east', label: 'MIDDLE EAST', lat: 29, lng: 40,
+    countries: ['Israel', 'Palestine', 'Lebanon', 'Syria', 'Iraq', 'Yemen', 'Iran', 'Jordan', 'Saudi Arabia'] },
+  { id: 'east-africa', label: 'EAST AFRICA', lat: 8,  lng: 38,
+    countries: ['Ethiopia', 'Sudan', 'Somalia', 'Eritrea'] },
+  { id: 'sahel',       label: 'SAHEL',        lat: 15, lng: 0,
+    countries: ['Mali', 'Niger', 'Burkina Faso', 'Chad'] },
+]
+
+// Name-keyed — matches GeoJSON .properties.name, used throughout GlobeView panels
+const COUNTRY_FLAGS = {
+  'Ukraine': '🇺🇦', 'Palestine': '🇵🇸', 'Israel': '🇮🇱', 'Sudan': '🇸🇩',
+  'Syria': '🇸🇾',   'Iraq': '🇮🇶',      'Yemen': '🇾🇪',  'Afghanistan': '🇦🇫',
+  'Myanmar': '🇲🇲',  'Ethiopia': '🇪🇹',  'Mali': '🇲🇱',   'Niger': '🇳🇪',
+  'Somalia': '🇸🇴',  'Dem. Rep. Congo': '🇨🇩', 'Lebanon': '🇱🇧',
+  'Iran': '🇮🇷',    'Pakistan': '🇵🇰',
+}
+
+// GeoJSON display name → CONFLICTS .country field where they differ
+const GLOBE_DISPLAY_TO_CONFLICT = { 'Dem. Rep. Congo': 'DRC' }
+
+// GeoJSON .properties.name → ISO A3 (used only for polygon layer highlighting)
+const GLOBE_NAME_TO_ISO = {
+  'Ukraine': 'UKR',       'Palestine': 'PSE',       'Israel': 'ISR',
+  'Sudan': 'SDN',         'Syria': 'SYR',           'Iraq': 'IRQ',
+  'Yemen': 'YEM',         'Afghanistan': 'AFG',     'Myanmar': 'MMR',
+  'Ethiopia': 'ETH',      'Mali': 'MLI',            'Niger': 'NER',
+  'Somalia': 'SOM',       'Dem. Rep. Congo': 'COD', 'Lebanon': 'LBN',
+  'Iran': 'IRN',          'Pakistan': 'PAK',
+}
+const GLOBE_HOT_NAMES = new Set(Object.keys(GLOBE_NAME_TO_ISO))
+
+// ─── ATLAS Globe (3D toggle inside AtlasWidget) ───────────────────────────────
+const GlobeView = forwardRef(function GlobeView({ showConflicts, showNatural, showPiracy, gdeltEvents = [] }, ref) {
+  const containerRef     = useRef(null)
+  const globeInstanceRef = useRef(null)
+  const [clusterPopup,   setClusterPopup] = useState(null)
+  const [countryPanel,   setCountryPanel] = useState(null)
+  const setClusterPopupRef = useRef(setClusterPopup)
+  const setCountryPanelRef = useRef(setCountryPanel)
+  setClusterPopupRef.current = setClusterPopup
+  setCountryPanelRef.current = setCountryPanel
+
+  useImperativeHandle(ref, () => ({
+    refresh:        () => {},
+    invalidateSize: () => {
+      if (globeInstanceRef.current && containerRef.current) {
+        globeInstanceRef.current
+          .width(containerRef.current.offsetWidth)
+          .height(containerRef.current.offsetHeight)
+      }
+    },
+    setView: () => {},
+  }))
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    if (globeInstanceRef.current) {
+      el.innerHTML = ''
+      globeInstanceRef.current = null
+    }
+
+    let ro = null
+
+    const timer = setTimeout(() => {
+      if (!containerRef.current) return
+
+      const globe = Globe({ animateIn: false })(containerRef.current)
+      globeInstanceRef.current = globe
+
+      globe
+        .width(containerRef.current.offsetWidth || 800)
+        .height(containerRef.current.offsetHeight || 450)
+        .backgroundColor('#0A0C10')
+        .showAtmosphere(false)
+        .showGraticules(true)
+
+        .globeImageUrl(null)
+        .bumpImageUrl(null)
+
+      globe.onGlobeReady(() => {
+        // Force dark sphere color
+        globe.scene().traverse(obj => {
+          if (obj.isMesh) {
+            if (obj.material && obj.material.color) {
+              obj.material.color.setHex(0x0d1f35)
+              obj.material.needsUpdate = true
+            }
+          }
+        })
+
+        globe.controls().autoRotate      = true
+        globe.controls().autoRotateSpeed = 0.4
+        globe.controls().addEventListener('start', () => {
+          if (globeInstanceRef.current) globeInstanceRef.current.controls().autoRotate = false
+        })
+
+        // Load GeoJSON polygons
+        fetch('https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson')
+          .then(r => r.json())
+          .then(geoData => {
+            if (!globeInstanceRef.current) return
+            globeInstanceRef.current
+              .polygonsData(geoData.features)
+              .polygonAltitude(f => HOT_COUNTRIES.includes(f.properties.name) ? 0.01 : 0.003)
+              .polygonCapColor(f => HOT_COUNTRIES.includes(f.properties.name) ? 'rgba(248,81,73,0.45)' : 'rgba(13,31,53,0.6)')
+              .polygonSideColor(f => HOT_COUNTRIES.includes(f.properties.name) ? 'rgba(248,81,73,0.7)' : 'rgba(20,40,70,0.3)')
+              .polygonStrokeColor(() => '#1E2329')
+              .polygonLabel(f => HOT_COUNTRIES.includes(f.properties.name)
+                ? `<div style="background:#0D1117;border:1px solid #F85149;padding:4px 8px;font-family:JetBrains Mono,monospace;font-size:11px;color:#F85149;border-radius:2px">${f.properties.name}</div>`
+                : null)
+              .onPolygonClick(polygon => {
+                const name = polygon.properties.name
+                if (HOT_COUNTRIES.includes(name)) setCountryPanelRef.current(name)
+              })
+          })
+          .catch(() => {})
+
+        // Cluster badges
+        globeInstanceRef.current
+          .htmlElementsData(CLUSTER_REGIONS)
+          .htmlLat(d => d.lat)
+          .htmlLng(d => d.lng)
+          .htmlAltitude(0.05)
+          .htmlElement(d => {
+            const count = d.countries.filter(c => HOT_COUNTRIES.includes(c)).length
+            if (count === 0) return document.createElement('div')
+            const badge = document.createElement('div')
+            badge.innerText = String(count)
+            badge.style.cssText = 'width:24px;height:24px;border-radius:50%;background:#F85149;color:white;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:bold;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:all;border:1px solid rgba(255,255,255,0.25);user-select:none;box-shadow:0 0 8px rgba(248,81,73,0.6);'
+            badge.addEventListener('click', e => {
+              e.stopPropagation()
+              setClusterPopupRef.current(d)
+            })
+            return badge
+          })
+      })
+
+      // ResizeObserver — stored outside timer so cleanup can disconnect it
+      ro = new ResizeObserver(() => {
+        if (containerRef.current && globeInstanceRef.current) {
+          globeInstanceRef.current
+            .width(containerRef.current.offsetWidth)
+            .height(containerRef.current.offsetHeight)
+        }
+      })
+      ro.observe(containerRef.current)
+    }, 100)
+
+    return () => {
+      clearTimeout(timer)
+      ro?.disconnect()
+      if (containerRef.current) containerRef.current.innerHTML = ''
+      globeInstanceRef.current = null
+    }
+  }, [])
+
+  // Update conflict points when data or layer toggles change
+  useEffect(() => {
+    if (!globeInstanceRef.current) return
+    const pts = []
+    if (showConflicts) gdeltEvents.forEach(c => pts.push({
+      lat: c.lat, lng: c.lng, name: c.name,
+      label: [c.typeStr, c.status].filter(Boolean).join(' · '),
+      color: c.category === 'conflict'   ? '#F85149'
+           : c.category === 'flood' || c.category === 'earthquake' || c.category === 'drought' ? '#D29922'
+           : '#00D4FF',
+    }))
+    if (showNatural) WILDFIRES_STATIC.forEach(w => pts.push({
+      lat: w.lat, lng: w.lng, name: w.name, label: 'Fire risk zone', color: '#FF6B35',
+    }))
+    if (showPiracy) PIRACY_ZONES.forEach(z => {
+      const lat = (z.bounds[0][0] + z.bounds[1][0]) / 2
+      const lng = (z.bounds[0][1] + z.bounds[1][1]) / 2
+      pts.push({ lat, lng, name: z.name, label: 'Piracy zone', color: '#e8294a' })
+    })
+    globeInstanceRef.current
+      .pointsData(pts)
+      .pointLat(d => d.lat)
+      .pointLng(d => d.lng)
+      .pointColor(d => d.color)
+      .pointAltitude(0.02)
+      .pointRadius(0.3)
+      .pointLabel(d => `<div style="font:10px 'JetBrains Mono',monospace;color:#E6EDF3;padding:4px 8px;background:rgba(13,17,23,0.9);border:1px solid #1E2329;border-radius:3px">${d.name}<br/><span style="color:#8B949E;font-size:9px">${d.label}</span></div>`)
+  }, [gdeltEvents, showConflicts, showNatural, showPiracy])
+
+  const getCountryEvents = name => {
+    const conflictName = GLOBE_DISPLAY_TO_CONFLICT[name] ?? name
+    return gdeltEvents.filter(e => e.country === conflictName).slice(0, 5)
+  }
+
+  const getSeverity = evt => {
+    if (evt.status === 'ongoing' && evt.category === 'conflict') return 'HIGH'
+    if (evt.status === 'past') return 'LOW'
+    return 'MEDIUM'
+  }
+
+  const SEV_STYLE = {
+    HIGH:   { background: '#F85149', color: '#fff'    },
+    MEDIUM: { background: '#D29922', color: '#0A0C10' },
+    LOW:    { background: '#161B22', color: '#8B949E' },
+  }
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#0A0C10' }}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+
+      {clusterPopup && (
+        <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', background:'#0D1117', border:'1px solid #1E2329', borderRadius:'3px', width:'300px', zIndex:100, padding:'16px', fontFamily:'JetBrains Mono,monospace' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px' }}>
+            <span style={{ color:'#E6EDF3', fontSize:'11px', letterSpacing:'0.1em' }}>{clusterPopup.label}</span>
+            <button onClick={() => setClusterPopup(null)} style={{ background:'none', border:'none', color:'#484F58', cursor:'pointer', fontSize:'16px', lineHeight:1 }}>×</button>
+          </div>
+          {clusterPopup.countries.filter(c => HOT_COUNTRIES.includes(c)).map(country => (
+            <div key={country} onClick={() => { setClusterPopup(null); setCountryPanel(country) }}
+              style={{ padding:'8px 10px', marginBottom:'4px', cursor:'pointer', background:'#111419', border:'1px solid #1E2329', borderRadius:'2px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <span style={{ color:'#E6EDF3', fontSize:'11px' }}>{COUNTRY_FLAGS[country] || '🌍'} {country}</span>
+              <span style={{ color:'#F85149', fontSize:'9px', border:'1px solid #F85149', padding:'1px 5px', borderRadius:'2px' }}>ACTIVE</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {countryPanel && (
+        <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', background:'#0D1117', border:'1px solid #1E2329', borderRadius:'3px', width:'400px', maxHeight:'460px', overflowY:'auto', zIndex:100, padding:'20px', fontFamily:'JetBrains Mono,monospace' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'16px' }}>
+            <div>
+              <div style={{ color:'#E6EDF3', fontSize:'14px', marginBottom:'6px' }}>{COUNTRY_FLAGS[countryPanel] || '🌍'} {countryPanel}</div>
+              <span style={{ color:'#F85149', fontSize:'9px', border:'1px solid #F85149', padding:'2px 6px', borderRadius:'2px', letterSpacing:'0.1em' }}>ACTIVE CONFLICT</span>
+            </div>
+            <button onClick={() => setCountryPanel(null)} style={{ background:'none', border:'none', color:'#484F58', cursor:'pointer', fontSize:'16px', lineHeight:1 }}>×</button>
+          </div>
+          <div style={{ color:'#484F58', fontSize:'9px', letterSpacing:'0.1em', marginBottom:'10px' }}>RECENT SIGNALS</div>
+          {getCountryEvents(countryPanel).length === 0
+            ? <div style={{ color:'#484F58', fontSize:'10px', textAlign:'center', padding:'20px 0' }}>No recent signals</div>
+            : getCountryEvents(countryPanel).map((evt, i) => {
+                const sev = getSeverity(evt)
+                return (
+                  <div key={i} style={{ padding:'8px 10px', marginBottom:'4px', background:'#111419', border:'1px solid #1E2329', borderRadius:'2px', display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'8px' }}>
+                    <span style={{ color:'#E6EDF3', fontSize:'10px', lineHeight:'1.4', flex:1 }}>{evt.name}</span>
+                    <span style={{ ...SEV_STYLE[sev], fontSize:'8px', padding:'1px 5px', borderRadius:'2px', whiteSpace:'nowrap', fontFamily:'JetBrains Mono,monospace', letterSpacing:'0.06em' }}>{sev}</span>
+                  </div>
+                )
+              })
+          }
+        </div>
+      )}
+    </div>
+  )
+})
+
 const ATLAS_STATE_KEY = id => `vigil_atlas_state_${id}`
 
 function readAtlasState(id) {
@@ -659,7 +920,7 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
   const [showPiracy,    setShowPiracy]    = useState(saved?.showPiracy    ?? true)
   const _savedIframeSrc = saved?.iframeSrc ?? ''
   const _isMaritime     = ['myshiptracking', 'marinetraffic', 'vesseltracker'].some(s => _savedIframeSrc.includes(s))
-  const [mapMode,       setMapMode]       = useState(_isMaritime ? 'leaflet' : (saved?.mapMode ?? 'leaflet'))
+  const [mapMode,       setMapMode]       = useState(_isMaritime ? 'leaflet' : (saved?.mapMode === 'globe' ? 'leaflet' : (saved?.mapMode ?? 'leaflet')))
   const [iframeSrc,     setIframeSrc]     = useState(_isMaritime ? ''        : _savedIframeSrc)
   const [dataLoading,   setDataLoading]   = useState(false)
   const atlasRef      = useRef(null)
@@ -722,6 +983,7 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
   function switchToIframe(src) { setMapMode('iframe'); setIframeSrc(src) }
 
   const isLeaflet = mapMode === 'leaflet'
+  const isGlobe   = mapMode === 'globe'
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
@@ -740,16 +1002,16 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
 
       {/* Single always-visible layer + feed bar */}
       <div className="cmap-layer-bar" onPointerDownCapture={e => e.stopPropagation()}>
-        <button className={`cmap-layer-btn${isLeaflet && showConflicts ? ' active' : ''}`}
-          onClick={() => { setMapMode('leaflet'); setShowConflicts(v => !v) }}>
+        <button className={`cmap-layer-btn${(isLeaflet || isGlobe) && showConflicts ? ' active' : ''}`}
+          onClick={() => { if (!isLeaflet && !isGlobe) setMapMode('leaflet'); setShowConflicts(v => !v) }}>
           CONFLICTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Armed conflict zones · Source: ReliefWeb</span></span>
         </button>
-        <button className={`cmap-layer-btn${isLeaflet && showNatural ? ' active' : ''}`}
-          onClick={() => { setMapMode('leaflet'); setShowNatural(v => !v) }}>
+        <button className={`cmap-layer-btn${(isLeaflet || isGlobe) && showNatural ? ' active' : ''}`}
+          onClick={() => { if (!isLeaflet && !isGlobe) setMapMode('leaflet'); setShowNatural(v => !v) }}>
           NATURAL<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Earthquakes · Wildfires · Storms · Sources: USGS, NOAA</span></span>
         </button>
-        <button className={`cmap-layer-btn${isLeaflet && showPiracy ? ' active' : ''}`}
-          onClick={() => { setMapMode('leaflet'); setShowPiracy(v => !v) }}>
+        <button className={`cmap-layer-btn${(isLeaflet || isGlobe) && showPiracy ? ' active' : ''}`}
+          onClick={() => { if (!isLeaflet && !isGlobe) setMapMode('leaflet'); setShowPiracy(v => !v) }}>
           PIRACY<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Maritime piracy high-risk zones · Source: IMB</span></span>
         </button>
         <button className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('vesselfinder') ? ' active' : ''}`}
@@ -764,7 +1026,12 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
           onClick={() => switchToIframe('https://threatmap.checkpoint.com/')}>
           CYBER<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live cyber attacks · Source: Checkpoint</span></span>
         </button>
-        {isLeaflet
+        <button className={`cmap-layer-btn${isGlobe ? ' active' : ''}`}
+          onClick={() => setMapMode(isGlobe ? 'leaflet' : 'globe')}
+          title="Toggle 3D globe view">
+          GLOBE
+        </button>
+        {isLeaflet || isGlobe
           ? <button className="cmap-update-btn" onClick={() => atlasRef.current?.refresh()} title="Re-fetch live data">⟳ Update</button>
           : <button className="cmap-update-btn" onClick={() => setMapMode('leaflet')} title="Back to ATLAS map">← ATLAS</button>
         }
@@ -777,7 +1044,7 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
         </div>
       )}
       <div style={{ flex: 1, minHeight: 0, width: '100%', position: 'relative', overflow: 'hidden' }}>
-        {isLeaflet ? (
+        {isLeaflet && (
           <AtlasMap
             ref={atlasRef}
             showConflicts={showConflicts}
@@ -791,7 +1058,17 @@ function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, 
               saveState({ center, zoom })
             }}
           />
-        ) : (
+        )}
+        {isGlobe && (
+          <GlobeView
+            ref={atlasRef}
+            showConflicts={showConflicts}
+            showNatural={showNatural}
+            showPiracy={showPiracy}
+            gdeltEvents={CONFLICTS}
+          />
+        )}
+        {!isLeaflet && !isGlobe && (
           <iframe
             key={iframeSrc}
             src={iframeSrc}
