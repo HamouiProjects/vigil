@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import usePageVisibility from '../../hooks/usePageVisibility'
+import { getSettings, subscribeSettings } from '../../utils/settingsStore'
 
 export const AJ_EMBED = 'https://www.youtube.com/embed/live_stream?channel=UCNye-wNBqNL5ZzHSJj3l8Bg&autoplay=0&mute=1'
 
@@ -30,14 +31,18 @@ export default function Livestream({ initialUrl = AJ_EMBED, onUrlChange, onClose
   const [embedUrl,   setEmbedUrl]   = useState(initialUrl)
   const [input,      setInput]      = useState(initialUrl)
   const [error,      setError]      = useState(null)
-  const isVisibleLs = usePageVisibility()
+  const [globalLive, setGlobalLive] = useState(() => getSettings().globalLive)
+  const savedUrlRef  = useRef(initialUrl)
+  const isVisibleLs  = usePageVisibility()
+
+  useEffect(() => subscribeSettings(s => setGlobalLive(s.globalLive)), [])
 
   useEffect(() => { setEmbedUrl(initialUrl); setInput(initialUrl) }, [initialUrl])
 
   function handleSubmit(e) {
     e.preventDefault()
     const url = toEmbedUrl(input)
-    if (url) { setEmbedUrl(url); setInput(url); setError(null); onUrlChange?.(url) }
+    if (url) { savedUrlRef.current = url; setEmbedUrl(url); setInput(url); setError(null); onUrlChange?.(url) }
     else setError('Invalid YouTube URL or video ID')
   }
 
@@ -60,14 +65,28 @@ export default function Livestream({ initialUrl = AJ_EMBED, onUrlChange, onClose
         <button className="rss-go-btn" type="submit">GO</button>
       </form>
       {error && <div className="feed-error" style={{ flexShrink: 0, height: 'auto', padding: '4px 12px' }}>{error}</div>}
-      <iframe
-        key={embedUrl}
-        src={isVisibleLs ? embedUrl : ''}
-        style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
-        title="Livestream"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        allowFullScreen
-      />
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        <iframe
+          key={embedUrl}
+          src={isVisibleLs && globalLive ? embedUrl : ''}
+          style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+          title="Livestream"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
+        {!globalLive && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'rgba(10,12,16,0.93)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+            fontFamily: 'var(--font-mono)',
+          }}>
+            <span style={{ color: 'var(--amber)', fontSize: 22 }}>⏸</span>
+            <span style={{ color: 'var(--amber)', fontSize: 11, letterSpacing: '0.12em' }}>PAUSED</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: 9, letterSpacing: '0.08em' }}>Live feed disabled</span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

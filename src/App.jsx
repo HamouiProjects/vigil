@@ -16,7 +16,7 @@ import AuthScreen from './components/layout/AuthScreen'
 import NavBar from './components/layout/NavBar'
 import AddWidgetModal from './components/layout/AddWidgetModal'
 import SettingsModal from './components/layout/SettingsModal'
-import { getSettings, subscribeSettings } from './utils/settingsStore'
+import { getSettings, saveSettings, subscribeSettings } from './utils/settingsStore'
 import AtlasWidget from './components/widgets/AtlasWidget'
 import FeedsWidget from './components/widgets/FeedsWidget'
 import ConflictFeed from './components/widgets/ConflictFeed'
@@ -31,6 +31,13 @@ import HeatmapWidget from './components/widgets/HeatmapWidget'
 import PortfolioWidget from './components/widgets/PortfolioWidget'
 
 const SizedGridLayout = WidthProvider(GridLayout)
+
+// ─── Reset globalLive to true on every page load ──────────────────────────────
+// false must not persist across sessions — it should only hold within a session.
+;(function resetGlobalLiveOnLoad() {
+  const s = getSettings()
+  if (!s.globalLive) saveSettings({ globalLive: true })
+})()
 
 // ─── Layout version — bump to force-reset all saved layouts on next load ─────
 const LAYOUT_VERSION     = 7
