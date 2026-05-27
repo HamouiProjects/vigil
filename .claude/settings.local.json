@@ -27,7 +27,8 @@
       "Bash(echo \"EXIT:$?\")",
       "Bash(vercel env *)",
       "Bash(vercel *)",
-      "Bash(pkill -f \"vite\")"
+      "Bash(pkill -f \"vite\")",
+      "PowerShell(curl *)"
     ]
   }
 }
