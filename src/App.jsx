@@ -180,8 +180,8 @@ const LAYOUT_VERSION_KEY = 'vigil_layout_version'
   } catch {}
 })()
 
-function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, onCollapse, collapsed, settings, updateSetting, isLive }) {
-  const p = { onClose, onFullscreen, isFullscreen, onCollapse, collapsed, isLive }
+function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, onCollapse, collapsed, settings, updateSetting, workspacePaused }) {
+  const p = { onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused }
   switch (widget.type) {
     case 'map':       return <AtlasWidget         {...p} widgetId={widget.id} />
     case 'feeds':     return <FeedsWidget         {...p} />
@@ -216,9 +216,13 @@ export default function App() {
   const [user,            setUser]            = useState(null)
   const [authLoading,     setAuthLoading]     = useState(true)
   const [authView,        setAuthView]        = useState('login')
-  const [inactiveTabPause, setInactiveTabPause] = useState(() => getSettings().inactiveTabPause)
+  const [inactiveTabPause,  setInactiveTabPause]  = useState(() => getSettings().inactiveTabPause)
+  const [pausedWorkspaces,  setPausedWorkspaces]  = useState(() => getSettings().pausedWorkspaces ?? [])
 
-  useEffect(() => subscribeSettings(s => setInactiveTabPause(s.inactiveTabPause)), [])
+  useEffect(() => subscribeSettings(s => {
+    setInactiveTabPause(s.inactiveTabPause)
+    setPausedWorkspaces(s.pausedWorkspaces ?? [])
+  }), [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -442,7 +446,7 @@ export default function App() {
                 collapsed:    !!collapseMap[widget.id],
                 settings,
                 updateSetting,
-                isLive:       true, // always active; inactiveTabPause applies when multi-ws rendering is added
+                workspacePaused: pausedWorkspaces.includes(activeWs),
               })}
             </div>
           ))}
@@ -471,7 +475,7 @@ export default function App() {
               collapsed:    false,
               settings,
               updateSetting,
-              isLive:       true,
+              workspacePaused: pausedWorkspaces.includes(activeWs),
             })}
           </div>
         </div>,

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { LiveBtn } from '../shared/WHeader'
 
 let cgCache = {}
 
@@ -62,7 +63,7 @@ function BrokerLogo({ url, name }) {
   return <img src={url} alt={name} className="pf-broker-card-logo" onError={() => setErr(true)} />
 }
 
-export default function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+export default function PortfolioWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   // SECURITY: apiSecret is held in React state only for the duration of the session.
   // It is sent to our Vercel proxy for signing and never stored in localStorage.
   // Only the apiKey (non-secret) is persisted for UI display purposes.
@@ -148,6 +149,7 @@ export default function PortfolioWidget({ widgetId, onClose, onFullscreen, isFul
   const [addBuyPrice, setAddBuyPrice] = useState('')
   const [addCurrency, setAddCurrency] = useState('USD')
 
+  const [isLive, setIsLive] = useState(true)
   const assetsRef     = useRef(assets)
   const bybitBalRef   = useRef(bybitBalances)
   const exchBalRef    = useRef(exchBalances)
@@ -588,10 +590,7 @@ export default function PortfolioWidget({ widgetId, onClose, onFullscreen, isFul
       <div className="widget-header widget-drag-handle">
         <span className="widget-title">PORTFOLIO</span>
         <div className="widget-actions">
-          <span className={`widget-badge${pricesLoading ? ' inactive' : ''}`}>
-            {!pricesLoading && <span className="badge-dot" />}
-            {pricesLoading ? 'LOADING' : 'LIVE'}
-          </span>
+          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
           <button className="pf-add-asset-btn" onPointerDownCapture={e => e.stopPropagation()} onClick={() => setShowAddModal(true)}>+ Add Asset</button>
           {onCollapse   && <button className="widget-btn" onClick={onCollapse}   title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
           {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}

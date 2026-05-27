@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import WHeader from '../shared/WHeader'
 
+
 const CONFLICT_REGIONS = [
   { id: 'worldwide',    label: '🌍 WORLDWIDE',     src: 'https://liveuamap.com'                    },
   { id: 'ukraine',      label: '🇺🇦 UKRAINE',      src: 'https://liveuamap.com/en/ukraine'         },
@@ -45,10 +46,12 @@ export function InfoTooltip({ text, wide }) {
   )
 }
 
-export default function ConflictFeed({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+export default function ConflictFeed({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
+  const [isLive, setIsLive] = useState(true)
+
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <WHeader title="CONFLICT" badge="LIVE" badgeActive={true} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
+      <WHeader title="CONFLICT" isLive={isLive} workspacePaused={workspacePaused} onToggleLive={() => setIsLive(v => !v)} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
       <iframe
         src="https://liveuamap.com"
         style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}

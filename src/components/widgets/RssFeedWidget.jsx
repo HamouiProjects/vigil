@@ -3,6 +3,7 @@ import usePageVisibility from '../../hooks/usePageVisibility'
 import { usePolling } from '../../hooks/usePolling'
 import { SkeletonFeedItems } from '../shared/SkeletonLoader'
 import { InfoTooltip } from './ConflictFeed'
+import { LiveBtn } from '../shared/WHeader'
 
 const RSS_DEFAULT_FEEDS = [
   { id: 'bbc',       name: 'BBC News',      url: 'https://feeds.bbci.co.uk/news/rss.xml',            enabled: true, color: '#e63946' },
@@ -53,7 +54,7 @@ function ensureFeedColor(feed, idx) {
   return feed.color ? feed : { ...feed, color: RSS_EXTRA_COLORS[idx % RSS_EXTRA_COLORS.length] }
 }
 
-export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onCollapse, collapsed, isLive = true }) {
+export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   const storageKey = `vigil_rss_feeds_${widgetId}`
 
   const [feeds, setFeeds] = useState(() => {
@@ -118,14 +119,14 @@ export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFul
   const [addingFilter, setAddingFilter] = useState(false)
   const [newFilter,    setNewFilter]    = useState('')
 
-  const [widgetLive,   setWidgetLive]   = useState(true)
+  const [isLive,       setIsLive]       = useState(true)
   const seenRef        = useRef(new Set())
   const [seenVersion,  setSeenVersion]  = useState(0)
   const filterTimerRef = useRef(null)
   const feedsRef       = useRef(feeds); feedsRef.current = feeds
   const isVisibleRss   = usePageVisibility()
 
-  const effectiveLive    = isLive && widgetLive
+  const effectiveLive    = isLive && !workspacePaused
   const effectiveLiveRef = useRef(effectiveLive)
   effectiveLiveRef.current = effectiveLive
 
@@ -344,20 +345,7 @@ export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFul
           </span>
         } />
         <div className="widget-actions">
-          <span
-            className={`widget-badge${effectiveLive ? (loading ? ' inactive' : '') : ''}`}
-            onClick={() => setWidgetLive(v => !v)}
-            role="button"
-            tabIndex={0}
-            title={effectiveLive ? 'Pause polling' : 'Resume polling'}
-            style={{
-              cursor: 'pointer',
-              ...(!effectiveLive ? { color: 'var(--amber)', background: 'rgba(210,153,34,0.08)', borderColor: 'rgba(210,153,34,0.35)' } : {}),
-            }}
-          >
-            {effectiveLive && !loading && <span className="badge-dot" />}
-            {!effectiveLive ? '⏸ PAUSED' : loading ? 'LOADING' : 'LIVE'}
-          </span>
+          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
           <button
             className="widget-btn"
             onClick={() => {

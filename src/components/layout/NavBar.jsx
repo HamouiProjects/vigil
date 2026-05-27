@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { getSettings, saveSettings, subscribeSettings } from '../../utils/settingsStore'
+import { getSettings, saveSettings, subscribeSettings, toggleWorkspacePause } from '../../utils/settingsStore'
 
 export function UtcClock() {
   const [time, setTime] = useState('')
@@ -17,7 +17,7 @@ export function UtcClock() {
   return <div className="clock"><span className="clock-label">UTC</span>{time}</div>
 }
 
-function WsTab({ ws, isActive, onSwitchWs, onStartRename, onCtxMenu }) {
+function WsTab({ ws, isActive, isPaused, onSwitchWs, onStartRename, onCtxMenu }) {
   const divRef = useRef(null)
 
   useEffect(() => {
@@ -47,24 +47,29 @@ function WsTab({ ws, isActive, onSwitchWs, onStartRename, onCtxMenu }) {
   return (
     <div
       ref={divRef}
-      className={`ws-tab${isActive ? ' active' : ''}`}
+      className={`ws-tab${isActive ? ' active' : ''}${isPaused ? ' ws-paused' : ''}`}
       onClick={() => onSwitchWs(ws.id)}
       title={ws.name}
     >
       {ws.name}
+      {isPaused && <span className="ws-tab-pause-dot" />}
     </div>
   )
 }
 
 export default function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRenameWs, onAddWs, onDeleteWs, onDuplicateWs, onShowAddModal, onOpenSettings, user, onSignOut }) {
-  const [editingId,  setEditingId]  = useState(null)
-  const [nameInput,  setNameInput]  = useState('')
-  const [ctxMenu,    setCtxMenu]    = useState(null)
-  const [globalLive, setGlobalLive] = useState(() => getSettings().globalLive)
+  const [editingId,       setEditingId]       = useState(null)
+  const [nameInput,       setNameInput]       = useState('')
+  const [ctxMenu,         setCtxMenu]         = useState(null)
+  const [globalLive,      setGlobalLive]      = useState(() => getSettings().globalLive)
+  const [pausedWorkspaces, setPausedWorkspaces] = useState(() => getSettings().pausedWorkspaces ?? [])
   const ctxMenuRef   = useRef(null)
   const editInputRef = useRef(null)
 
-  useEffect(() => subscribeSettings(s => setGlobalLive(s.globalLive)), [])
+  useEffect(() => subscribeSettings(s => {
+    setGlobalLive(s.globalLive)
+    setPausedWorkspaces(s.pausedWorkspaces ?? [])
+  }), [])
 
   useEffect(() => {
     if (editingId && editInputRef.current) {
@@ -88,7 +93,7 @@ export default function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRena
   }, [ctxMenu])
 
   function openCtxMenu(clientX, clientY, ws) {
-    const menuW = 148, menuH = workspaces.length > 1 ? 110 : 82
+    const menuW = 148, menuH = workspaces.length > 1 ? 138 : 110
     const x = Math.min(clientX, window.innerWidth  - menuW - 6)
     const y = Math.min(clientY, window.innerHeight - menuH - 6)
     setCtxMenu({ x, y, ws })
@@ -133,6 +138,7 @@ export default function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRena
                 key={ws.id}
                 ws={ws}
                 isActive={ws.id === activeWs}
+                isPaused={pausedWorkspaces.includes(ws.id)}
                 onSwitchWs={onSwitchWs}
                 onStartRename={() => startRename(ws)}
                 onCtxMenu={(x, y) => openCtxMenu(x, y, ws)}
@@ -173,6 +179,9 @@ export default function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRena
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
           onMouseDown={e => e.stopPropagation()}
         >
+          <div className="ctx-item" onMouseDown={() => { toggleWorkspacePause(ctxMenu.ws.id); setCtxMenu(null) }}>
+            {pausedWorkspaces.includes(ctxMenu.ws.id) ? '▶ Resume workspace' : '⏸ Pause workspace'}
+          </div>
           <div className="ctx-item" onMouseDown={() => startRename(ctxMenu.ws)}>✏ Rename</div>
           <div className="ctx-item" onMouseDown={() => { onDuplicateWs(ctxMenu.ws.id); setCtxMenu(null) }}>⧉ Duplicate</div>
           <div

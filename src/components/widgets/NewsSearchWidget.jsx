@@ -3,6 +3,7 @@ import usePageVisibility from '../../hooks/usePageVisibility'
 import { SkeletonFeedItems } from '../shared/SkeletonLoader'
 import { InfoTooltip } from './ConflictFeed'
 import { rssRelTime } from './RssFeedWidget'
+import { LiveBtn } from '../shared/WHeader'
 
 const GN_RSS2JSON = q =>
   `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(
@@ -42,7 +43,7 @@ const KF_DEFAULT_TABS = [
 
 export const kfTabsKey = widgetId => `vigil_newssearch_tabs_${widgetId}`
 
-export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   const [tabs, setTabs] = useState(() => {
     try {
       const s = JSON.parse(localStorage.getItem(kfTabsKey(widgetId)) || 'null')
@@ -55,6 +56,7 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
   const [error,       setError]       = useState(null)
   const [adding,      setAdding]      = useState(false)
   const [newKw,       setNewKw]       = useState('')
+  const [isLive,      setIsLive]      = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     try {
       const stored = localStorage.getItem(`vigil_newssearch_sidebar_collapsed_${widgetId}`)
@@ -176,7 +178,7 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
           </span>
         } />
         <div className="widget-actions">
-          <span className={`widget-badge${loading || error ? ' inactive' : ''}`}>{loading ? 'LOADING' : error ? 'ERROR' : 'LIVE'}</span>
+          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
           <button className="widget-btn" onClick={handleRefresh} title="Refresh">
             <span style={loading ? { display: 'inline-block', animation: 'ns-spin 0.8s linear infinite' } : undefined}>↻</span>
           </button>

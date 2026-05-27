@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { SkeletonFeedItems } from '../shared/SkeletonLoader'
+import { LiveBtn } from '../shared/WHeader'
 
 const SOCIAL_DEFAULT_FOLLOWS = [
   { id: 'sf-1', platform: 'reddit',   type: 'subreddit', value: 'worldnews',        label: 'r/worldnews' },
@@ -37,7 +38,7 @@ function socialAge(utc) {
   return `${Math.floor(s / 86400)}d ago`
 }
 
-export default function SocialFeed({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+export default function SocialFeed({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   const storageKey = `vigil_social_follows_${widgetId}`
 
   const [follows,      setFollows]      = useState(() => {
@@ -49,6 +50,7 @@ export default function SocialFeed({ widgetId, onClose, onFullscreen, isFullscre
   const [addValue,     setAddValue]     = useState('')
   const [posts,        setPosts]        = useState([])
   const [loading,      setLoading]      = useState(false)
+  const [isLive,       setIsLive]       = useState(true)
 
   const activeFollow = follows.find(f => f.id === activeId) ?? null
 
@@ -158,7 +160,7 @@ export default function SocialFeed({ widgetId, onClose, onFullscreen, isFullscre
       <div className="widget-header widget-drag-handle">
         <span className="widget-title">SOCIAL FEED</span>
         <div className="widget-actions">
-          <span className={`widget-badge${loading ? ' inactive' : ''}`}>{loading ? 'LOADING' : 'LIVE'}</span>
+          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
           {onCollapse   && <button className="widget-btn" onClick={onCollapse}   title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
           {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
           {onClose      && <button className="widget-btn" onClick={onClose}      title="Close">✕</button>}

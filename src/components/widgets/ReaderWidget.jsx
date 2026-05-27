@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import WHeader from '../shared/WHeader'
 
-export default function ArticleReaderWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+export default function ArticleReaderWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   const storageKey = `vigil_reader_url_${widgetId}`
   const legacyKey  = `vigil_browser_url_${widgetId}`
   const initUrl = (() => {
@@ -14,6 +14,7 @@ export default function ArticleReaderWidget({ widgetId, onClose, onFullscreen, i
   const [article,    setArticle]    = useState(null)
   const [error,      setError]      = useState(null)
   const [devOffline, setDevOffline] = useState(false)
+  const [isLive, setIsLive] = useState(true)
 
   async function doFetch(rawUrl) {
     let u = rawUrl.trim()
@@ -44,7 +45,7 @@ export default function ArticleReaderWidget({ widgetId, onClose, onFullscreen, i
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <WHeader title="READER" onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
+      <WHeader title="READER" isLive={isLive} workspacePaused={workspacePaused} onToggleLive={() => setIsLive(v => !v)} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
       <form
         className="browser-bar"
         onSubmit={e => { e.preventDefault(); doFetch(input) }}

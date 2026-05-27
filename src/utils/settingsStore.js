@@ -1,5 +1,5 @@
 const SETTINGS_KEY = 'vigil_global_settings'
-const DEFAULTS = { inactiveTabPause: false, globalLive: true }
+const DEFAULTS = { inactiveTabPause: false, globalLive: true, pausedWorkspaces: [] }
 let listeners = []
 
 export function getSettings() {
@@ -17,4 +17,14 @@ export function saveSettings(partial) {
 export function subscribeSettings(callback) {
   listeners.push(callback)
   return () => { listeners = listeners.filter(fn => fn !== callback) }
+}
+
+export function isWorkspacePaused(wsId) {
+  return getSettings().pausedWorkspaces.includes(wsId)
+}
+
+export function toggleWorkspacePause(wsId) {
+  const s = getSettings()
+  const paused = s.pausedWorkspaces.includes(wsId)
+  return saveSettings({ pausedWorkspaces: paused ? s.pausedWorkspaces.filter(id => id !== wsId) : [...s.pausedWorkspaces, wsId] })
 }

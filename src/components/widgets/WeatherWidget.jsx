@@ -26,7 +26,7 @@ function decodeWmo(code) {
 
 const WX_DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
-export default function Weather({ widgetId, initialCity = 'Berlin', onCityChange, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+export default function Weather({ widgetId, initialCity = 'Berlin', onCityChange, onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   const locKey = `vigil_weather_loc_${widgetId ?? 'default'}`
 
   const [latLon,    setLatLon]    = useState(() => {
@@ -42,6 +42,7 @@ export default function Weather({ widgetId, initialCity = 'Berlin', onCityChange
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState(null)
   const [fetchKey,   setFetchKey]   = useState(0)
+  const [isLive,     setIsLive]     = useState(true)
   const bodyRef                     = useRef(null)
   const [bodyH,      setBodyH]      = useState(999)
   const isVisibleWx = usePageVisibility()
@@ -132,7 +133,7 @@ export default function Weather({ widgetId, initialCity = 'Berlin', onCityChange
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <WHeader title={`WEATHER · ${locName.toUpperCase()}`} badge="LIVE" badgeActive={!loading && !error} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
+      <WHeader title={`WEATHER · ${locName.toUpperCase()}`} isLive={isLive} workspacePaused={workspacePaused} onToggleLive={() => setIsLive(v => !v)} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
 
       <form className="wx-search-bar" onSubmit={handleCitySubmit} onPointerDownCapture={e => e.stopPropagation()}>
         <input

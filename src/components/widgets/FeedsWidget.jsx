@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { FEEDS_TABS } from '../../constants/atlasData'
+import { LiveBtn } from '../shared/WHeader'
 
-export default function FeedsWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+export default function FeedsWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   const [activeTab, setActiveTab] = useState(FEEDS_TABS[0].id)
   const [loadError, setLoadError] = useState(false)
+  const [isLive,    setIsLive]    = useState(true)
 
   const tab = FEEDS_TABS.find(t => t.id === activeTab) ?? FEEDS_TABS[0]
 
@@ -14,6 +16,7 @@ export default function FeedsWidget({ onClose, onFullscreen, isFullscreen, onCol
       <div className="widget-header widget-drag-handle">
         <span className="widget-title">Feeds</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
           <div className="map-tabs" onPointerDownCapture={e => e.stopPropagation()}>
             {FEEDS_TABS.map(t => (
               <button key={t.id} className={`map-tab-btn${activeTab === t.id ? ' active' : ''}`} onClick={() => switchTab(t.id)}>

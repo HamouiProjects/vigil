@@ -3,12 +3,13 @@ import WHeader from '../shared/WHeader'
 
 const TV_DEFAULT_SYMBOL = 'BINANCE:BTCUSDT'
 
-export default function ChartWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+export default function ChartWidget({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   const storageKey = `vigil_tvchart_symbol_${widgetId ?? 'default'}`
   const [activeSymbol, setActiveSymbol] = useState(() => {
     try { return localStorage.getItem(storageKey) || TV_DEFAULT_SYMBOL } catch { return TV_DEFAULT_SYMBOL }
   })
   const [inputSymbol, setInputSymbol] = useState(activeSymbol)
+  const [isLive, setIsLive] = useState(true)
 
   function go(raw) {
     const sym = raw.trim().toUpperCase()
@@ -23,7 +24,7 @@ export default function ChartWidget({ widgetId, onClose, onFullscreen, isFullscr
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <WHeader title={<>CHART<span className="chart-tv-credit">powered by TradingView</span></>} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
+      <WHeader title={<>CHART<span className="chart-tv-credit">powered by TradingView</span></>} isLive={isLive} workspacePaused={workspacePaused} onToggleLive={() => setIsLive(v => !v)} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
       <form
         className="tvchart-bar"
         onSubmit={e => { e.preventDefault(); go(inputSymbol) }}

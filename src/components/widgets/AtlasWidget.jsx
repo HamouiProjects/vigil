@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
+import { LiveBtn } from '../shared/WHeader'
 import Globe from 'globe.gl'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -359,7 +360,7 @@ function readAtlasState(id) {
   try { return JSON.parse(localStorage.getItem(ATLAS_STATE_KEY(id)) || 'null') } catch { return null }
 }
 
-export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   const saved = readAtlasState(widgetId)
 
   const [showConflicts, setShowConflicts] = useState(saved?.showConflicts ?? true)
@@ -370,6 +371,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
   const [mapMode,       setMapMode]       = useState(_isMaritime ? 'leaflet' : (saved?.mapMode === 'globe' ? 'leaflet' : (saved?.mapMode ?? 'leaflet')))
   const [iframeSrc,     setIframeSrc]     = useState(_isMaritime ? ''        : _savedIframeSrc)
   const [dataLoading,   setDataLoading]   = useState(false)
+  const [isLive,        setIsLive]        = useState(true)
   const atlasRef      = useRef(null)
   const currentViewRef = useRef({ center: saved?.center ?? [20, 0], zoom: saved?.zoom ?? 2 })
 
@@ -432,10 +434,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
       <div className="widget-header widget-drag-handle">
         <span className="widget-title">ATLAS</span>
         <div className="widget-actions">
-          <span className={`widget-badge${dataLoading ? ' inactive' : ''}`}>
-            {!dataLoading && <span className="badge-dot" />}
-            LIVE
-          </span>
+          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
           {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
           {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
           {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}

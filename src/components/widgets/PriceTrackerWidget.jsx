@@ -3,6 +3,7 @@ import { TickerTape } from 'react-ts-tradingview-widgets'
 import usePageVisibility from '../../hooks/usePageVisibility'
 import { usePolling } from '../../hooks/usePolling'
 import { SkeletonLine, SkeletonFeedItems } from '../shared/SkeletonLoader'
+import { LiveBtn } from '../shared/WHeader'
 
 let cgCache = {}
 
@@ -214,7 +215,7 @@ function AssetCard({ asset, priceData, onRemove, onChartClick }) {
   )
 }
 
-export default function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed, isLive = true }) {
+export default function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   const assetsKey = `vigil_prices_assets_${widgetId ?? 'default'}`
   const isVisiblePt = usePageVisibility()
 
@@ -242,13 +243,13 @@ export default function PriceTracker({ widgetId, onClose, onFullscreen, isFullsc
   const [toast,         setToast]         = useState(null)
   const [selectedAsset, setSelectedAsset] = useState(null)
   const [chartOpen,     setChartOpen]     = useState(false)
-  const [widgetLive,    setWidgetLive]    = useState(true)
+  const [isLive,        setIsLive]        = useState(true)
   const toastKeyRef = useRef(0)
   const bodyRef     = useRef(null)
   const assetsRef   = useRef(assets)
   assetsRef.current = assets
 
-  const effectiveLive    = isLive && widgetLive
+  const effectiveLive    = isLive && !workspacePaused
   const effectiveLiveRef = useRef(effectiveLive)
   effectiveLiveRef.current = effectiveLive
 
@@ -386,20 +387,7 @@ export default function PriceTracker({ widgetId, onClose, onFullscreen, isFullsc
       <div className="widget-header widget-drag-handle">
         <span className="widget-title">PRICE TRACKER</span>
         <div className="widget-actions">
-          <span
-            className={`widget-badge${effectiveLive ? (loading ? ' inactive' : '') : ''}`}
-            onClick={() => setWidgetLive(v => !v)}
-            role="button"
-            tabIndex={0}
-            title={effectiveLive ? 'Pause polling' : 'Resume polling'}
-            style={{
-              cursor: 'pointer',
-              ...(!effectiveLive ? { color: 'var(--amber)', background: 'rgba(210,153,34,0.08)', borderColor: 'rgba(210,153,34,0.35)' } : {}),
-            }}
-          >
-            {effectiveLive && !loading && <span className="badge-dot" />}
-            {effectiveLive ? 'LIVE' : '⏸ PAUSED'}
-          </span>
+          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
           <button className={`widget-btn pt-mode-btn${mode === 'grid' ? ' pt-mode-active' : ''}`} onClick={() => setMode('grid')} title="Grid">⊞</button>
           <button className={`widget-btn pt-mode-btn${mode === 'tape' ? ' pt-mode-active' : ''}`} onClick={() => setMode('tape')} title="Tape">≡</button>
           {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}

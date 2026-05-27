@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import usePageVisibility from '../../hooks/usePageVisibility'
 import { getSettings, subscribeSettings } from '../../utils/settingsStore'
+import { LiveBtn } from '../shared/WHeader'
 
 export const AJ_EMBED = 'https://www.youtube.com/embed/live_stream?channel=UCNye-wNBqNL5ZzHSJj3l8Bg&autoplay=0&mute=1'
 
@@ -27,15 +28,18 @@ function toEmbedUrl(raw) {
   }
 }
 
-export default function Livestream({ initialUrl = AJ_EMBED, onUrlChange, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+export default function Livestream({ initialUrl = AJ_EMBED, onUrlChange, onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   const [embedUrl,   setEmbedUrl]   = useState(initialUrl)
   const [input,      setInput]      = useState(initialUrl)
   const [error,      setError]      = useState(null)
   const [globalLive, setGlobalLive] = useState(() => getSettings().globalLive)
+  const [isLive,     setIsLive]     = useState(true)
   const savedUrlRef  = useRef(initialUrl)
   const isVisibleLs  = usePageVisibility()
 
   useEffect(() => subscribeSettings(s => setGlobalLive(s.globalLive)), [])
+
+  const anyPaused = !globalLive || workspacePaused || !isLive
 
   useEffect(() => { setEmbedUrl(initialUrl); setInput(initialUrl) }, [initialUrl])
 
@@ -51,10 +55,7 @@ export default function Livestream({ initialUrl = AJ_EMBED, onUrlChange, onClose
       <div className="widget-header widget-drag-handle">
         <span className="widget-title">LIVESTREAM</span>
         <div className="widget-actions">
-          <span className={`widget-badge${embedUrl ? '' : ' inactive'}`}>
-            {embedUrl && <span className="badge-dot" />}
-            {embedUrl ? 'LIVE' : 'STANDBY'}
-          </span>
+          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
           {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
           {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
           {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
@@ -68,13 +69,13 @@ export default function Livestream({ initialUrl = AJ_EMBED, onUrlChange, onClose
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <iframe
           key={embedUrl}
-          src={isVisibleLs && globalLive ? embedUrl : ''}
+          src={isVisibleLs && !anyPaused ? embedUrl : ''}
           style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
           title="Livestream"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
         />
-        {!globalLive && (
+        {anyPaused && (
           <div style={{
             position: 'absolute', inset: 0,
             background: 'rgba(10,12,16,0.93)',

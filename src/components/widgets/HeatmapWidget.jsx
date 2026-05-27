@@ -1,11 +1,14 @@
+import { useState } from 'react'
 import WHeader from '../shared/WHeader'
 
 const HEATMAP_URL = "https://s.tradingview.com/embed-widget/stock-heatmap/?locale=en#%7B%22exchanges%22%3A%5B%5D%2C%22dataSource%22%3A%22SPX500%22%2C%22grouping%22%3A%22sector%22%2C%22blockSize%22%3A%22market_cap_basic%22%2C%22blockColor%22%3A%22change%22%2C%22locale%22%3A%22en%22%2C%22symbolUrl%22%3A%22%22%2C%22colorTheme%22%3A%22dark%22%2C%22hasTopBar%22%3Afalse%2C%22isDataSetEnabled%22%3Afalse%2C%22isZoomEnabled%22%3Atrue%2C%22hasSymbolTooltip%22%3Atrue%2C%22isMonoSize%22%3Afalse%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%7D"
 
-export default function HeatmapWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+export default function HeatmapWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
+  const [isLive, setIsLive] = useState(true)
+
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <WHeader title="HEATMAP" onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
+      <WHeader title="HEATMAP" isLive={isLive} workspacePaused={workspacePaused} onToggleLive={() => setIsLive(v => !v)} onCollapse={onCollapse} collapsed={collapsed} onClose={onClose} onFullscreen={onFullscreen} isFullscreen={isFullscreen} />
       <iframe src={HEATMAP_URL} style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }} title="Market Heatmap" allow="clipboard-write" />
     </div>
   )
