@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { LiveBtn } from '../shared/WHeader'
+import WHeader from '../shared/WHeader'
 
 let cgCache = {}
 
@@ -587,16 +587,9 @@ export default function PortfolioWidget({ widgetId, onClose, onFullscreen, isFul
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header widget-drag-handle">
-        <span className="widget-title">PORTFOLIO</span>
-        <div className="widget-actions">
-          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
-          <button className="pf-add-asset-btn" onPointerDownCapture={e => e.stopPropagation()} onClick={() => setShowAddModal(true)}>+ Add Asset</button>
-          {onCollapse   && <button className="widget-btn" onClick={onCollapse}   title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
-          {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
-          {onClose      && <button className="widget-btn" onClick={onClose}      title="Close">✕</button>}
-        </div>
-      </div>
+      <WHeader title="PORTFOLIO" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={onFullscreen} isFullscreen={isFullscreen} onClose={onClose}>
+        <button className="pf-add-asset-btn" onPointerDownCapture={e => e.stopPropagation()} onClick={() => setShowAddModal(true)}>+ Add Asset</button>
+      </WHeader>
 
       {/* Tab bar + currency picker */}
       <div className="pf-tab-bar" onPointerDownCapture={e => e.stopPropagation()}>

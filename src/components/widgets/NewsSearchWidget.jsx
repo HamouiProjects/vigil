@@ -3,7 +3,7 @@ import usePageVisibility from '../../hooks/usePageVisibility'
 import { SkeletonFeedItems } from '../shared/SkeletonLoader'
 import { InfoTooltip } from './ConflictFeed'
 import { rssRelTime } from './RssFeedWidget'
-import { LiveBtn } from '../shared/WHeader'
+import WHeader from '../shared/WHeader'
 
 const GN_RSS2JSON = q =>
   `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(
@@ -163,8 +163,7 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header widget-drag-handle">
-        <span className="widget-title">NEWS SEARCH</span>
+      <WHeader title="NEWS SEARCH" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={onFullscreen} isFullscreen={isFullscreen} onClose={onClose}>
         <InfoTooltip wide text={
           <span>
             <strong className="ns-tip-head">News Search</strong>
@@ -177,16 +176,10 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
             💡 <strong>Tip:</strong> More specific keywords (e.g. "Strait of Hormuz blockade") return better results than single words (e.g. "Qatar").
           </span>
         } />
-        <div className="widget-actions">
-          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
-          <button className="widget-btn" onClick={handleRefresh} title="Refresh">
-            <span style={loading ? { display: 'inline-block', animation: 'ns-spin 0.8s linear infinite' } : undefined}>↻</span>
-          </button>
-          {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
-          {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
-          {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
-        </div>
-      </div>
+        <button className="widget-btn" onClick={handleRefresh} title="Refresh">
+          <span style={loading ? { display: 'inline-block', animation: 'ns-spin 0.8s linear infinite' } : undefined}>↻</span>
+        </button>
+      </WHeader>
 
       <div className="ns-body" onPointerDownCapture={e => e.stopPropagation()}>
         {sidebarOpen ? (

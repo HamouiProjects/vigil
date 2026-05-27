@@ -24,7 +24,7 @@ export function LiveBtn({ isLive, workspacePaused, onToggle }) {
   )
 }
 
-export default function WHeader({ title, onToggleLive, isLive = true, workspacePaused = false, onRefresh, onCollapse, collapsed, onClose, onFullscreen, isFullscreen }) {
+export default function WHeader({ title, onToggleLive, isLive = true, workspacePaused = false, onRefresh, onCollapse, collapsed, onClose, onFullscreen, isFullscreen, children }) {
   return (
     <div className="widget-header widget-drag-handle">
       <div className="widget-title-group">
@@ -32,6 +32,7 @@ export default function WHeader({ title, onToggleLive, isLive = true, workspaceP
       </div>
       <div className="widget-actions">
         {onToggleLive && <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={onToggleLive} />}
+        {children}
         {onRefresh    && <button className="widget-btn" onClick={onRefresh}    title="Refresh">↻</button>}
         {onCollapse   && <button className="widget-btn" onClick={onCollapse}   title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
         {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}

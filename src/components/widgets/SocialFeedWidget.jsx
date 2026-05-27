@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { SkeletonFeedItems } from '../shared/SkeletonLoader'
-import { LiveBtn } from '../shared/WHeader'
+import WHeader from '../shared/WHeader'
 
 const SOCIAL_DEFAULT_FOLLOWS = [
   { id: 'sf-1', platform: 'reddit',   type: 'subreddit', value: 'worldnews',        label: 'r/worldnews' },
@@ -157,15 +157,7 @@ export default function SocialFeed({ widgetId, onClose, onFullscreen, isFullscre
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header widget-drag-handle">
-        <span className="widget-title">SOCIAL FEED</span>
-        <div className="widget-actions">
-          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
-          {onCollapse   && <button className="widget-btn" onClick={onCollapse}   title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
-          {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
-          {onClose      && <button className="widget-btn" onClick={onClose}      title="Close">✕</button>}
-        </div>
-      </div>
+      <WHeader title="SOCIAL FEED" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={onFullscreen} isFullscreen={isFullscreen} onClose={onClose} />
 
       <div className="rss-body">
         <div className="social-sidebar" onPointerDownCapture={e => e.stopPropagation()}>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FEEDS_TABS } from '../../constants/atlasData'
-import { LiveBtn } from '../shared/WHeader'
+import WHeader from '../shared/WHeader'
 
 export default function FeedsWidget({ onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   const [activeTab, setActiveTab] = useState(FEEDS_TABS[0].id)
@@ -13,22 +13,15 @@ export default function FeedsWidget({ onClose, onFullscreen, isFullscreen, onCol
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header widget-drag-handle">
-        <span className="widget-title">Feeds</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
-          <div className="map-tabs" onPointerDownCapture={e => e.stopPropagation()}>
-            {FEEDS_TABS.map(t => (
-              <button key={t.id} className={`map-tab-btn${activeTab === t.id ? ' active' : ''}`} onClick={() => switchTab(t.id)}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-          {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
-          {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
-          {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
+      <WHeader title="Feeds" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={onFullscreen} isFullscreen={isFullscreen} onClose={onClose}>
+        <div className="map-tabs" onPointerDownCapture={e => e.stopPropagation()}>
+          {FEEDS_TABS.map(t => (
+            <button key={t.id} className={`map-tab-btn${activeTab === t.id ? ' active' : ''}`} onClick={() => switchTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
         </div>
-      </div>
+      </WHeader>
       <div style={{ height: 'calc(100% - 36px)', width: '100%', position: 'relative', overflow: 'hidden' }}>
         <iframe
           key={tab.id}

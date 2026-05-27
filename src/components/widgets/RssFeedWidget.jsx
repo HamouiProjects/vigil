@@ -3,7 +3,7 @@ import usePageVisibility from '../../hooks/usePageVisibility'
 import { usePolling } from '../../hooks/usePolling'
 import { SkeletonFeedItems } from '../shared/SkeletonLoader'
 import { InfoTooltip } from './ConflictFeed'
-import { LiveBtn } from '../shared/WHeader'
+import WHeader from '../shared/WHeader'
 
 const RSS_DEFAULT_FEEDS = [
   { id: 'bbc',       name: 'BBC News',      url: 'https://feeds.bbci.co.uk/news/rss.xml',            enabled: true, color: '#e63946' },
@@ -330,8 +330,7 @@ export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFul
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header widget-drag-handle">
-        <span className="widget-title">RSS FEED</span>
+      <WHeader title="RSS FEED" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={onFullscreen} isFullscreen={isFullscreen} onClose={onClose}>
         <InfoTooltip wide text={
           <span>
             <strong className="ns-tip-head">RSS Feed</strong>
@@ -344,25 +343,19 @@ export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFul
             💡 <strong>Tip:</strong> Add niche sources — think-tanks, regional outlets, wire services. Any RSS URL works.
           </span>
         } />
-        <div className="widget-actions">
-          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
-          <button
-            className="widget-btn"
-            onClick={() => {
-              const next = density === 'compact' ? 'comfortable' : 'compact'
-              setDensity(next)
-              try { localStorage.setItem(`vigil_rss_density_${widgetId}`, next) } catch {}
-            }}
-            title={density === 'compact' ? 'Comfortable view' : 'Compact view'}
-          >{density === 'compact' ? '☰' : '≡'}</button>
-          <button className="widget-btn" onClick={handleRefresh} title="Refresh">
-            <span style={loading ? { display: 'inline-block', animation: 'ns-spin 0.8s linear infinite' } : undefined}>↻</span>
-          </button>
-          {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
-          {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
-          {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
-        </div>
-      </div>
+        <button
+          className="widget-btn"
+          onClick={() => {
+            const next = density === 'compact' ? 'comfortable' : 'compact'
+            setDensity(next)
+            try { localStorage.setItem(`vigil_rss_density_${widgetId}`, next) } catch {}
+          }}
+          title={density === 'compact' ? 'Comfortable view' : 'Compact view'}
+        >{density === 'compact' ? '☰' : '≡'}</button>
+        <button className="widget-btn" onClick={handleRefresh} title="Refresh">
+          <span style={loading ? { display: 'inline-block', animation: 'ns-spin 0.8s linear infinite' } : undefined}>↻</span>
+        </button>
+      </WHeader>
 
       <div className="rss-body">
         <div className="rss-sidebar" onPointerDownCapture={e => e.stopPropagation()}>

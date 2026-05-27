@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import usePageVisibility from '../../hooks/usePageVisibility'
 import { getSettings, subscribeSettings } from '../../utils/settingsStore'
-import { LiveBtn } from '../shared/WHeader'
+import WHeader from '../shared/WHeader'
 
 export const AJ_EMBED = 'https://www.youtube.com/embed/live_stream?channel=UCNye-wNBqNL5ZzHSJj3l8Bg&autoplay=0&mute=1'
 
@@ -52,15 +52,7 @@ export default function Livestream({ initialUrl = AJ_EMBED, onUrlChange, onClose
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header widget-drag-handle">
-        <span className="widget-title">LIVESTREAM</span>
-        <div className="widget-actions">
-          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
-          {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
-          {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
-          {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
-        </div>
-      </div>
+      <WHeader title="LIVESTREAM" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={onFullscreen} isFullscreen={isFullscreen} onClose={onClose} />
       <form className="rss-url-bar" onSubmit={handleSubmit} style={{ flexShrink: 0 }}>
         <input className="rss-input" value={input} onChange={e => setInput(e.target.value)} placeholder="Paste any YouTube URL or embed link…" spellCheck={false} />
         <button className="rss-go-btn" type="submit">GO</button>

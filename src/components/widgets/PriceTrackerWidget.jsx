@@ -3,7 +3,7 @@ import { TickerTape } from 'react-ts-tradingview-widgets'
 import usePageVisibility from '../../hooks/usePageVisibility'
 import { usePolling } from '../../hooks/usePolling'
 import { SkeletonLine, SkeletonFeedItems } from '../shared/SkeletonLoader'
-import { LiveBtn } from '../shared/WHeader'
+import WHeader from '../shared/WHeader'
 
 let cgCache = {}
 
@@ -384,17 +384,10 @@ export default function PriceTracker({ widgetId, onClose, onFullscreen, isFullsc
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header widget-drag-handle">
-        <span className="widget-title">PRICE TRACKER</span>
-        <div className="widget-actions">
-          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
-          <button className={`widget-btn pt-mode-btn${mode === 'grid' ? ' pt-mode-active' : ''}`} onClick={() => setMode('grid')} title="Grid">⊞</button>
-          <button className={`widget-btn pt-mode-btn${mode === 'tape' ? ' pt-mode-active' : ''}`} onClick={() => setMode('tape')} title="Tape">≡</button>
-          {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
-          {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
-          {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
-        </div>
-      </div>
+      <WHeader title="PRICE TRACKER" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={onFullscreen} isFullscreen={isFullscreen} onClose={onClose}>
+        <button className={`widget-btn pt-mode-btn${mode === 'grid' ? ' pt-mode-active' : ''}`} onClick={() => setMode('grid')} title="Grid">⊞</button>
+        <button className={`widget-btn pt-mode-btn${mode === 'tape' ? ' pt-mode-active' : ''}`} onClick={() => setMode('tape')} title="Tape">≡</button>
+      </WHeader>
 
       <div className="widget-body" ref={bodyRef} style={{ flexDirection: 'column', alignItems: 'stretch', position: 'relative' }}>
         {toast && <div key={toast.key} className="pt-toast">{toast.msg}</div>}

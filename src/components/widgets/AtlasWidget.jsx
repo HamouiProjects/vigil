@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
-import { LiveBtn } from '../shared/WHeader'
+import WHeader from '../shared/WHeader'
 import Globe from 'globe.gl'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -431,15 +431,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
-      <div className="widget-header widget-drag-handle">
-        <span className="widget-title">ATLAS</span>
-        <div className="widget-actions">
-          <LiveBtn isLive={isLive} workspacePaused={workspacePaused} onToggle={() => setIsLive(v => !v)} />
-          {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
-          {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
-          {onClose      && <button className="widget-btn" onClick={onClose} title="Close">✕</button>}
-        </div>
-      </div>
+      <WHeader title="ATLAS" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={onFullscreen} isFullscreen={isFullscreen} onClose={onClose} />
 
       <div className="cmap-layer-bar" onPointerDownCapture={e => e.stopPropagation()}>
         <button className={`cmap-layer-btn${(isLeaflet || isGlobe) && showConflicts ? ' active' : ''}`}
