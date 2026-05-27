@@ -15,6 +15,8 @@ import KeywordFeed, { kfTabsKey } from './components/widgets/NewsSearchWidget'
 import AuthScreen from './components/layout/AuthScreen'
 import NavBar from './components/layout/NavBar'
 import AddWidgetModal from './components/layout/AddWidgetModal'
+import SettingsModal from './components/layout/SettingsModal'
+import { getSettings, subscribeSettings } from './utils/settingsStore'
 import AtlasWidget from './components/widgets/AtlasWidget'
 import FeedsWidget from './components/widgets/FeedsWidget'
 import ConflictFeed from './components/widgets/ConflictFeed'
@@ -171,8 +173,8 @@ const LAYOUT_VERSION_KEY = 'vigil_layout_version'
   } catch {}
 })()
 
-function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, onCollapse, collapsed, settings, updateSetting }) {
-  const p = { onClose, onFullscreen, isFullscreen, onCollapse, collapsed }
+function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, onCollapse, collapsed, settings, updateSetting, isLive }) {
+  const p = { onClose, onFullscreen, isFullscreen, onCollapse, collapsed, isLive }
   switch (widget.type) {
     case 'map':       return <AtlasWidget         {...p} widgetId={widget.id} />
     case 'feeds':     return <FeedsWidget         {...p} />
@@ -199,13 +201,17 @@ export default function App() {
   const [layout,       setLayout]       = useState(() => readLayout(_INIT_WS))
   const [settings,     setSettings]     = useState(() => readSettings(_INIT_WS))
   const [widgets,      setWidgets]      = useState(() => readWidgets(_INIT_WS))
-  const [fullscreenId, setFullscreenId] = useState(null)
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [collapseMap,  setCollapseMap]  = useState({})
-  const [saved,        setSaved]        = useState(false)
-  const [user,         setUser]         = useState(null)
-  const [authLoading,  setAuthLoading]  = useState(true)
-  const [authView,     setAuthView]     = useState('login')
+  const [fullscreenId,    setFullscreenId]    = useState(null)
+  const [showAddModal,    setShowAddModal]    = useState(false)
+  const [showSettings,    setShowSettings]    = useState(false)
+  const [collapseMap,     setCollapseMap]     = useState({})
+  const [saved,           setSaved]           = useState(false)
+  const [user,            setUser]            = useState(null)
+  const [authLoading,     setAuthLoading]     = useState(true)
+  const [authView,        setAuthView]        = useState('login')
+  const [inactiveTabPause, setInactiveTabPause] = useState(() => getSettings().inactiveTabPause)
+
+  useEffect(() => subscribeSettings(s => setInactiveTabPause(s.inactiveTabPause)), [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -400,6 +406,7 @@ export default function App() {
         onDeleteWs={deleteWorkspace}
         onDuplicateWs={duplicateWorkspace}
         onShowAddModal={() => setShowAddModal(true)}
+        onOpenSettings={() => setShowSettings(true)}
         user={user}
         onSignOut={() => supabase.auth.signOut()}
       />
@@ -428,6 +435,7 @@ export default function App() {
                 collapsed:    !!collapseMap[widget.id],
                 settings,
                 updateSetting,
+                isLive:       true, // always active; inactiveTabPause applies when multi-ws rendering is added
               })}
             </div>
           ))}
@@ -435,7 +443,8 @@ export default function App() {
         <button className="fab-add" onClick={() => setShowAddModal(true)} title="Add widget">+</button>
       </div>
 
-      {showAddModal && <AddWidgetModal onAdd={addWidget} onClose={() => setShowAddModal(false)} />}
+      {showAddModal  && <AddWidgetModal  onAdd={addWidget} onClose={() => setShowAddModal(false)} />}
+      {showSettings  && <SettingsModal  onClose={() => setShowSettings(false)} />}
 
       {fsWidget && createPortal(
         <div className="fullscreen-overlay">
@@ -455,6 +464,7 @@ export default function App() {
               collapsed:    false,
               settings,
               updateSetting,
+              isLive:       true,
             })}
           </div>
         </div>,

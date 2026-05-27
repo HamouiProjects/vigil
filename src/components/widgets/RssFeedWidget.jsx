@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import usePageVisibility from '../../hooks/usePageVisibility'
+import { usePolling } from '../../hooks/usePolling'
 import { SkeletonFeedItems } from '../shared/SkeletonLoader'
 import { InfoTooltip } from './ConflictFeed'
 
@@ -52,7 +53,7 @@ function ensureFeedColor(feed, idx) {
   return feed.color ? feed : { ...feed, color: RSS_EXTRA_COLORS[idx % RSS_EXTRA_COLORS.length] }
 }
 
-export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFullscreen, onCollapse, collapsed, isLive = true }) {
   const storageKey = `vigil_rss_feeds_${widgetId}`
 
   const [feeds, setFeeds] = useState(() => {
@@ -117,11 +118,16 @@ export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFul
   const [addingFilter, setAddingFilter] = useState(false)
   const [newFilter,    setNewFilter]    = useState('')
 
+  const [widgetLive,   setWidgetLive]   = useState(true)
   const seenRef        = useRef(new Set())
   const [seenVersion,  setSeenVersion]  = useState(0)
   const filterTimerRef = useRef(null)
   const feedsRef       = useRef(feeds); feedsRef.current = feeds
   const isVisibleRss   = usePageVisibility()
+
+  const effectiveLive    = isLive && widgetLive
+  const effectiveLiveRef = useRef(effectiveLive)
+  effectiveLiveRef.current = effectiveLive
 
   useEffect(() => {
     const saved = localStorage.getItem(`vigil_rss_active_source_${widgetId}`)
@@ -216,13 +222,10 @@ export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFul
     fetchAll()
   }
 
-  useEffect(() => {
-    fetchAll()
-    const id = setInterval(() => { if (!document.hidden) fetchAll() }, 5 * 60_000)
-    return () => clearInterval(id)
-  }, [fetchAll, feeds])
+  usePolling(fetchAll, 5 * 60_000, { isLive: effectiveLive })
 
-  useEffect(() => { if (isVisibleRss) fetchAll() }, [isVisibleRss])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (isVisibleRss && effectiveLiveRef.current) fetchAll() }, [isVisibleRss])
 
   useEffect(() => {
     const tick = () => {
@@ -341,7 +344,20 @@ export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFul
           </span>
         } />
         <div className="widget-actions">
-          <span className={`widget-badge${loading ? ' inactive' : ''}`}>{loading ? 'LOADING' : 'LIVE'}</span>
+          <span
+            className={`widget-badge${effectiveLive ? (loading ? ' inactive' : '') : ''}`}
+            onClick={() => setWidgetLive(v => !v)}
+            role="button"
+            tabIndex={0}
+            title={effectiveLive ? 'Pause polling' : 'Resume polling'}
+            style={{
+              cursor: 'pointer',
+              ...(!effectiveLive ? { color: 'var(--amber)', background: 'rgba(210,153,34,0.08)', borderColor: 'rgba(210,153,34,0.35)' } : {}),
+            }}
+          >
+            {effectiveLive && !loading && <span className="badge-dot" />}
+            {!effectiveLive ? '⏸ PAUSED' : loading ? 'LOADING' : 'LIVE'}
+          </span>
           <button
             className="widget-btn"
             onClick={() => {

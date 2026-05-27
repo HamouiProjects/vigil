@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { TickerTape } from 'react-ts-tradingview-widgets'
 import usePageVisibility from '../../hooks/usePageVisibility'
+import { usePolling } from '../../hooks/usePolling'
 import { SkeletonLine, SkeletonFeedItems } from '../shared/SkeletonLoader'
 
 let cgCache = {}
@@ -213,7 +214,7 @@ function AssetCard({ asset, priceData, onRemove, onChartClick }) {
   )
 }
 
-export default function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed }) {
+export default function PriceTracker({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed, isLive = true }) {
   const assetsKey = `vigil_prices_assets_${widgetId ?? 'default'}`
   const isVisiblePt = usePageVisibility()
 
@@ -241,10 +242,15 @@ export default function PriceTracker({ widgetId, onClose, onFullscreen, isFullsc
   const [toast,         setToast]         = useState(null)
   const [selectedAsset, setSelectedAsset] = useState(null)
   const [chartOpen,     setChartOpen]     = useState(false)
+  const [widgetLive,    setWidgetLive]    = useState(true)
   const toastKeyRef = useRef(0)
   const bodyRef     = useRef(null)
   const assetsRef   = useRef(assets)
   assetsRef.current = assets
+
+  const effectiveLive    = isLive && widgetLive
+  const effectiveLiveRef = useRef(effectiveLive)
+  effectiveLiveRef.current = effectiveLive
 
   async function fetchSparkline(id) {
     try {
@@ -334,16 +340,11 @@ export default function PriceTracker({ widgetId, onClose, onFullscreen, isFullsc
     return () => clearTimeout(t)
   }, [ptRetryIn, fetchAll])
 
-  useEffect(() => {
-    fetchAll(true)
-    const p = setInterval(() => { if (!document.hidden) fetchAll(false) }, 60_000)
-    const s = setInterval(() => { if (!document.hidden) fetchAll(true)  }, 5 * 60_000)
-    return () => { clearInterval(p); clearInterval(s) }
-  }, [fetchAll, assets])
+  usePolling(useCallback(() => fetchAll(false), [fetchAll]), 60_000,        { isLive: effectiveLive })
+  usePolling(useCallback(() => fetchAll(true),  [fetchAll]), 5 * 60_000,   { isLive: effectiveLive })
 
-  useEffect(() => {
-    if (isVisiblePt) fetchAll(false)
-  }, [isVisiblePt]) // fetchAll is stable
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (isVisiblePt && effectiveLiveRef.current) fetchAll(false) }, [isVisiblePt])
 
   function saveAssets(list) {
     const clean = list.map(a => ({ id: a.id, ticker: a.ticker ?? a.symbol ?? a.id.slice(0, 6).toUpperCase() }))
@@ -385,7 +386,20 @@ export default function PriceTracker({ widgetId, onClose, onFullscreen, isFullsc
       <div className="widget-header widget-drag-handle">
         <span className="widget-title">PRICE TRACKER</span>
         <div className="widget-actions">
-          <span className={`widget-badge${loading ? ' inactive' : ''}`}>LIVE</span>
+          <span
+            className={`widget-badge${effectiveLive ? (loading ? ' inactive' : '') : ''}`}
+            onClick={() => setWidgetLive(v => !v)}
+            role="button"
+            tabIndex={0}
+            title={effectiveLive ? 'Pause polling' : 'Resume polling'}
+            style={{
+              cursor: 'pointer',
+              ...(!effectiveLive ? { color: 'var(--amber)', background: 'rgba(210,153,34,0.08)', borderColor: 'rgba(210,153,34,0.35)' } : {}),
+            }}
+          >
+            {effectiveLive && !loading && <span className="badge-dot" />}
+            {effectiveLive ? 'LIVE' : '⏸ PAUSED'}
+          </span>
           <button className={`widget-btn pt-mode-btn${mode === 'grid' ? ' pt-mode-active' : ''}`} onClick={() => setMode('grid')} title="Grid">⊞</button>
           <button className={`widget-btn pt-mode-btn${mode === 'tape' ? ' pt-mode-active' : ''}`} onClick={() => setMode('tape')} title="Tape">≡</button>
           {onCollapse   && <button className="widget-btn" onClick={onCollapse} title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}

@@ -112,6 +112,16 @@
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.4; }
 }
+button.status-dot { background: none; border: none; cursor: pointer; padding: 0; }
+button.status-dot:hover { opacity: 0.8; }
+.status-dot.paused { color: var(--text-muted); }
+.status-dot.paused::before { background: var(--text-muted); box-shadow: none; animation: none; }
+.nav-settings-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 14px; line-height: 1; padding: 2px 4px;
+  transition: color 0.15s;
+}
+.nav-settings-btn:hover { color: var(--text-secondary); }
 
 .clock {
   font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;

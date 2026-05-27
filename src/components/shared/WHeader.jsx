@@ -1,4 +1,4 @@
-﻿export default function WHeader({ title, badge, badgeActive, onRefresh, onCollapse, collapsed, onClose, onFullscreen, isFullscreen }) {
+﻿export default function WHeader({ title, badge, badgeActive, badgePaused, onBadgeClick, onRefresh, onCollapse, collapsed, onClose, onFullscreen, isFullscreen }) {
   return (
     <div className="widget-header widget-drag-handle">
       <div className="widget-title-group">
@@ -6,8 +6,18 @@
       </div>
       <div className="widget-actions">
         {badge && (
-          <span className={`widget-badge${badgeActive ? '' : ' inactive'}`}>
-            {badgeActive && <span className="badge-dot" />}
+          <span
+            className={`widget-badge${badgePaused ? '' : badgeActive ? '' : ' inactive'}`}
+            onClick={onBadgeClick}
+            role={onBadgeClick ? 'button' : undefined}
+            tabIndex={onBadgeClick ? 0 : undefined}
+            title={onBadgeClick ? (badgePaused ? 'Resume polling' : 'Pause polling') : undefined}
+            style={{
+              ...(onBadgeClick ? { cursor: 'pointer' } : {}),
+              ...(badgePaused ? { color: 'var(--amber)', background: 'rgba(210,153,34,0.08)', borderColor: 'rgba(210,153,34,0.35)' } : {}),
+            }}
+          >
+            {badgeActive && !badgePaused && <span className="badge-dot" />}
             {badge}
           </span>
         )}

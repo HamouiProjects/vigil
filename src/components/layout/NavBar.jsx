@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { getSettings, saveSettings, subscribeSettings } from '../../utils/settingsStore'
 
 export function UtcClock() {
   const [time, setTime] = useState('')
@@ -55,12 +56,15 @@ function WsTab({ ws, isActive, onSwitchWs, onStartRename, onCtxMenu }) {
   )
 }
 
-export default function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRenameWs, onAddWs, onDeleteWs, onDuplicateWs, onShowAddModal, user, onSignOut }) {
+export default function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRenameWs, onAddWs, onDeleteWs, onDuplicateWs, onShowAddModal, onOpenSettings, user, onSignOut }) {
   const [editingId,  setEditingId]  = useState(null)
   const [nameInput,  setNameInput]  = useState('')
   const [ctxMenu,    setCtxMenu]    = useState(null)
+  const [globalLive, setGlobalLive] = useState(() => getSettings().globalLive)
   const ctxMenuRef   = useRef(null)
   const editInputRef = useRef(null)
+
+  useEffect(() => subscribeSettings(s => setGlobalLive(s.globalLive)), [])
 
   useEffect(() => {
     if (editingId && editInputRef.current) {
@@ -142,7 +146,14 @@ export default function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRena
       </div>
       <div className="navbar-right">
         <button className="nav-add-btn" onClick={onShowAddModal}>+ Add Widget</button>
-        <div className="status-dot">LIVE</div>
+        <button
+          className={`status-dot${globalLive ? '' : ' paused'}`}
+          onClick={() => saveSettings({ globalLive: !globalLive })}
+          title={globalLive ? 'Click to pause all live feeds' : 'Click to resume all live feeds'}
+        >
+          {globalLive ? 'LIVE' : 'PAUSED'}
+        </button>
+        <button className="nav-settings-btn" onClick={onOpenSettings} title="Settings">⚙</button>
         <UtcClock />
         <div className={`save-indicator${saved ? ' visible' : ''}`}>SAVED</div>
         {user && (
