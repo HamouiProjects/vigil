@@ -125,17 +125,29 @@ button.status-dot:hover { opacity: 0.8; }
 
 /* ── Widget live button ── */
 .widget-live-btn {
-  display: inline-flex; align-items: center; gap: 3px;
-  background: none; border: 1px solid transparent; cursor: pointer; padding: 1px 6px;
-  font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
-  font-family: var(--font-mono); border-radius: 2px; transition: opacity 0.15s;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: opacity 0.15s;
 }
-.widget-live-btn.is-live  { color: var(--green); border-color: rgba(0,201,107,0.3); }
-.widget-live-btn.is-paused { color: var(--amber); border-color: rgba(210,153,34,0.35); background: rgba(210,153,34,0.08); }
-.widget-live-btn.is-overridden { opacity: 0.4; cursor: not-allowed; }
-.live-pulse {
-  width: 5px; height: 5px; border-radius: 50%; background: var(--green); flex-shrink: 0;
-  animation: pulse-live 2s ease-in-out infinite;
+.widget-live-btn.is-live {
+  color: #009750;
+}
+.widget-live-btn.is-paused {
+  color: #970047;
+}
+.widget-live-btn.is-overridden {
+  color: #970047;
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.widget-live-btn:hover:not(.is-overridden) {
+  opacity: 0.7;
 }
 
 /* ── Workspace paused tab ── */

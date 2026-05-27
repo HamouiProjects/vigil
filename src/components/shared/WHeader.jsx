@@ -1,28 +1,36 @@
 import { useState, useEffect } from 'react'
 import { getSettings, subscribeSettings } from '../../utils/settingsStore'
 
-export function LiveBtn({ isLive, workspacePaused, onToggle }) {
-  const [globalLive, setGlobalLive] = useState(() => getSettings().globalLive)
-  useEffect(() => subscribeSettings(s => setGlobalLive(s.globalLive)), [])
-
-  const overridden = !globalLive || workspacePaused
-  const paused = overridden || !isLive
+const LiveBtn = ({ isLive, workspacePaused, onToggle }) => {
+  const [globalLive, setGlobalLive] = useState(() => getSettings().globalLive);
+  useEffect(() => subscribeSettings((s) => setGlobalLive(s.globalLive)), []);
+  const overridden = !globalLive || workspacePaused;
+  const paused = overridden || !isLive;
 
   return (
     <button
       className={`widget-live-btn${paused ? ' is-paused' : ' is-live'}${overridden ? ' is-overridden' : ''}`}
       onClick={overridden ? undefined : onToggle}
       title={
-        !globalLive     ? 'Global live feed is paused — manage in Settings' :
-        workspacePaused ? 'Workspace is paused — right-click the tab to resume' :
-        isLive          ? 'Click to pause this widget' : 'Click to resume this widget'
+        !globalLive ? 'Global live feed is paused — manage in Settings'
+        : workspacePaused ? 'Workspace is paused — right-click the tab to resume'
+        : isLive ? 'Pause this widget'
+        : 'Resume this widget'
       }
     >
-      {!paused && <span className="live-pulse" />}
-      {paused ? '⏸ PAUSED' : 'LIVE'}
+      {paused ? (
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="1.5" y="1" width="3" height="8" fill="currentColor"/>
+          <rect x="5.5" y="1" width="3" height="8" fill="currentColor"/>
+        </svg>
+      ) : (
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="2,1 9,5 2,9" fill="currentColor"/>
+        </svg>
+      )}
     </button>
-  )
-}
+  );
+};
 
 export default function WHeader({ title, onToggleLive, isLive = true, workspacePaused = false, onRefresh, onCollapse, collapsed, onClose, onFullscreen, isFullscreen, children }) {
   return (
