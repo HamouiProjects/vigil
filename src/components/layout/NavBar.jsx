@@ -17,7 +17,7 @@ export function UtcClock() {
   return <div className="clock"><span className="clock-label">UTC</span>{time}</div>
 }
 
-function WsTab({ ws, isActive, isPaused, globalLive, onSwitchWs, onStartRename, onCtxMenu, onTogglePause }) {
+function WsTab({ ws, isActive, isPaused, globalLive, inactiveTabPause, onSwitchWs, onStartRename, onCtxMenu, onTogglePause }) {
   const divRef = useRef(null)
 
   useEffect(() => {
@@ -51,9 +51,9 @@ function WsTab({ ws, isActive, isPaused, globalLive, onSwitchWs, onStartRename, 
       onClick={() => onSwitchWs(ws.id)}
       title={ws.name}
     >
-      {ws.name}
+      <span className="ws-tab-name">{ws.name}</span>
       <button
-        className={`ws-power-btn${isPaused ? ' is-paused' : ' is-live'}`}
+        className={`ws-power-btn${(isPaused || (inactiveTabPause && !isActive)) ? ' is-paused' : ' is-live'}`}
         onClick={(e) => { e.stopPropagation(); onTogglePause(); }}
         title={isPaused ? 'Resume workspace' : 'Pause workspace'}
         style={!globalLive ? { color: '#970047', opacity: 0.25, pointerEvents: 'none' } : undefined}
@@ -71,14 +71,16 @@ export default function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRena
   const [editingId,       setEditingId]       = useState(null)
   const [nameInput,       setNameInput]       = useState('')
   const [ctxMenu,         setCtxMenu]         = useState(null)
-  const [globalLive,      setGlobalLive]      = useState(() => getSettings().globalLive)
+  const [globalLive,       setGlobalLive]       = useState(() => getSettings().globalLive)
   const [pausedWorkspaces, setPausedWorkspaces] = useState(() => getSettings().pausedWorkspaces ?? [])
+  const [inactiveTabPause, setInactiveTabPause] = useState(() => getSettings().inactiveTabPause)
   const ctxMenuRef   = useRef(null)
   const editInputRef = useRef(null)
 
   useEffect(() => subscribeSettings(s => {
     setGlobalLive(s.globalLive)
     setPausedWorkspaces(s.pausedWorkspaces ?? [])
+    setInactiveTabPause(s.inactiveTabPause)
   }), [])
 
   useEffect(() => {
@@ -150,6 +152,7 @@ export default function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRena
                 isActive={ws.id === activeWs}
                 isPaused={pausedWorkspaces.includes(ws.id)}
                 globalLive={globalLive}
+                inactiveTabPause={inactiveTabPause}
                 onSwitchWs={onSwitchWs}
                 onStartRename={() => startRename(ws)}
                 onCtxMenu={(x, y) => openCtxMenu(x, y, ws)}

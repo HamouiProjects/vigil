@@ -26,16 +26,17 @@
 .ws-tabs { display: flex; align-items: center; gap: 2px; }
 .ws-tab {
   position: relative;
+  display: flex; align-items: center;
   font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   padding: 5px 14px; border-radius: 2px; cursor: pointer;
   border-bottom: 2px solid transparent;
-  max-width: 160px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 160px; overflow: hidden;
   transition: color 0.12s, background 0.12s, border-color 0.12s;
   user-select: none;
 }
+.ws-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .ws-tab:hover { color: var(--text-primary); background: var(--surface-hover); }
 .ws-tab.active {
   color: var(--text-primary); background: var(--accent-dim);
@@ -152,9 +153,9 @@ button.status-dot:hover { opacity: 0.8; }
 
 /* ── Workspace paused tab ── */
 .ws-tab.ws-paused { opacity: 0.65; }
-.ws-power-btn { background: none; border: none; padding: 0 0 0 7px; cursor: pointer; display: inline-flex; align-items: center; opacity: 0.55; transition: opacity 0.15s; }
+.ws-power-btn { background: none; border: none; padding: 0 0 0 7px; cursor: pointer; display: inline-flex; align-items: center; flex-shrink: 0; opacity: 0.55; transition: opacity 0.15s; }
 .ws-power-btn:hover { opacity: 1; }
-.ws-power-btn.is-live { color: #009750; }
+.ws-power-btn.is-live { color: #00C96B; opacity: 1; }
 .ws-power-btn.is-paused { color: #970047; }
 
 .clock {
