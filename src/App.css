@@ -36,7 +36,7 @@
   transition: color 0.12s, background 0.12s, border-color 0.12s;
   user-select: none;
 }
-.ws-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ws-tab-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .ws-tab:hover { color: var(--text-primary); background: var(--surface-hover); }
 .ws-tab.active {
   color: var(--text-primary); background: var(--accent-dim);
