@@ -152,10 +152,10 @@ button.status-dot:hover { opacity: 0.8; }
 
 /* ── Workspace paused tab ── */
 .ws-tab.ws-paused { opacity: 0.65; }
-.ws-tab-pause-dot {
-  display: inline-block; width: 4px; height: 4px; border-radius: 50%;
-  background: var(--amber); margin-left: 3px; vertical-align: middle; flex-shrink: 0;
-}
+.ws-power-btn { background: none; border: none; padding: 0 0 0 7px; cursor: pointer; display: inline-flex; align-items: center; opacity: 0.55; transition: opacity 0.15s; }
+.ws-power-btn:hover { opacity: 1; }
+.ws-power-btn.is-live { color: #009750; }
+.ws-power-btn.is-paused { color: #970047; }
 
 .clock {
   font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;

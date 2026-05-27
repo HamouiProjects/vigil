@@ -17,7 +17,7 @@ export function UtcClock() {
   return <div className="clock"><span className="clock-label">UTC</span>{time}</div>
 }
 
-function WsTab({ ws, isActive, isPaused, onSwitchWs, onStartRename, onCtxMenu }) {
+function WsTab({ ws, isActive, isPaused, globalLive, onSwitchWs, onStartRename, onCtxMenu, onTogglePause }) {
   const divRef = useRef(null)
 
   useEffect(() => {
@@ -52,7 +52,17 @@ function WsTab({ ws, isActive, isPaused, onSwitchWs, onStartRename, onCtxMenu })
       title={ws.name}
     >
       {ws.name}
-      {isPaused && <span className="ws-tab-pause-dot" />}
+      <button
+        className={`ws-power-btn${isPaused ? ' is-paused' : ' is-live'}`}
+        onClick={(e) => { e.stopPropagation(); onTogglePause(); }}
+        title={isPaused ? 'Resume workspace' : 'Pause workspace'}
+        style={!globalLive ? { color: '#970047', opacity: 0.25, pointerEvents: 'none' } : undefined}
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+          <path d="M12 3v9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+          <path d="M6.3 5.7a9 9 0 1 0 11.4 0" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+        </svg>
+      </button>
     </div>
   )
 }
@@ -139,9 +149,11 @@ export default function NavBar({ saved, workspaces, activeWs, onSwitchWs, onRena
                 ws={ws}
                 isActive={ws.id === activeWs}
                 isPaused={pausedWorkspaces.includes(ws.id)}
+                globalLive={globalLive}
                 onSwitchWs={onSwitchWs}
                 onStartRename={() => startRename(ws)}
                 onCtxMenu={(x, y) => openCtxMenu(x, y, ws)}
+                onTogglePause={() => toggleWorkspacePause(ws.id)}
               />
             )
           )}
