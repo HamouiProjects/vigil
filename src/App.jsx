@@ -215,6 +215,7 @@ export default function App() {
   const [authView,        setAuthView]        = useState('login')
   const [inactiveTabPause,  setInactiveTabPause]  = useState(() => getSettings().inactiveTabPause)
   const [pausedWorkspaces,  setPausedWorkspaces]  = useState(() => getSettings().pausedWorkspaces ?? [])
+  const [globalLive,        setGlobalLive]        = useState(() => getSettings().globalLive)
 
   // Per-workspace state — data pre-loaded upfront, React trees mounted on first visit only
   const [mountedWs,  setMountedWs]  = useState(() => new Set([_INIT_WS]))
@@ -243,6 +244,7 @@ export default function App() {
   useEffect(() => subscribeSettings(s => {
     setInactiveTabPause(s.inactiveTabPause)
     setPausedWorkspaces(s.pausedWorkspaces ?? [])
+    setGlobalLive(s.globalLive)
   }), [])
 
   useEffect(() => {
@@ -536,7 +538,7 @@ export default function App() {
                     collapsed:    !!(wsCollapse[wsId] ?? {})[widget.id],
                     settings:     wsSettings[wsId] ?? {},
                     updateSetting,
-                    workspacePaused: pausedWorkspaces.includes(wsId),
+                    workspacePaused: pausedWorkspaces.includes(wsId) || !globalLive || wsId !== activeWs,
                   })}
                 </div>
               ))}
@@ -567,7 +569,7 @@ export default function App() {
               collapsed:    false,
               settings:     wsSettings[fsWsId] ?? {},
               updateSetting,
-              workspacePaused: pausedWorkspaces.includes(fsWsId),
+              workspacePaused: pausedWorkspaces.includes(fsWsId) || !globalLive,
             })}
           </div>
         </div>,

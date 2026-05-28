@@ -10,11 +10,12 @@ import {
   quakeSize, quakeTimeAgo,
   fetchNOAAStorms, fetchUSGS,
 } from '../../utils/atlasHelpers'
-const CONFLICT_SRC = 'https://liveuamap.com/'
-
-const MARINE_SRC  = 'https://www.shipfinder.com/?mmsi=&imo='
-const FLIGHTS_SRC = 'https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3'
-const CYBER_SRC   = 'https://threatmap.checkpoint.com/'
+const IFRAME_URLS = {
+  conflict: 'https://liveuamap.com/',
+  marine:   'https://www.shipfinder.com/?mmsi=&imo=',
+  flights:  'https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3',
+  cyber:    'https://threatmap.checkpoint.com/',
+}
 
 function migrateMapMode(saved) {
   if (!saved) return 'conflict'
@@ -402,6 +403,9 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
   const isGlobe    = mapMode === 'globe'
   const isIframe   = !isLeaflet && !isGlobe
 
+  const anyPaused = !isLive || workspacePaused
+  const getSrc = (tabKey) => activeTab === tabKey && !anyPaused ? IFRAME_URLS[tabKey] : 'about:blank'
+
   function saveState(patch) {
     try {
       const cur = JSON.parse(localStorage.getItem(ATLAS_STATE_KEY(widgetId)) || '{}')
@@ -530,7 +534,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
 
         <div style={{ display: activeTab === 'conflict' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <iframe
-            src={CONFLICT_SRC}
+            src={getSrc('conflict')}
             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
             title="CONFLICT — Liveuamap"
             allowFullScreen
@@ -538,7 +542,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
         </div>
         <div style={{ display: activeTab === 'marine' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <iframe
-            src={MARINE_SRC}
+            src={getSrc('marine')}
             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
             title="MARINE — MarineTraffic"
             allowFullScreen
@@ -546,7 +550,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
         </div>
         <div style={{ display: activeTab === 'flights' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <iframe
-            src={FLIGHTS_SRC}
+            src={getSrc('flights')}
             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
             title="FLIGHTS — ADS-B Exchange"
             allowFullScreen
@@ -554,12 +558,26 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
         </div>
         <div style={{ display: activeTab === 'cyber' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <iframe
-            src={CYBER_SRC}
+            src={getSrc('cyber')}
             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
             title="CYBER — Checkpoint"
             allowFullScreen
           />
         </div>
+
+        {anyPaused && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 10,
+            background: 'rgba(10,12,16,0.93)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+            fontFamily: 'var(--font-mono)',
+            pointerEvents: 'none',
+          }}>
+            <span style={{ color: 'var(--amber)', fontSize: 22 }}>⏸</span>
+            <span style={{ color: 'var(--amber)', fontSize: 11, letterSpacing: '0.12em' }}>PAUSED</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: 9, letterSpacing: '0.08em' }}>Live feed disabled</span>
+          </div>
+        )}
       </div>
     </div>
   )
