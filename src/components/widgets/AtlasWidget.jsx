@@ -17,7 +17,7 @@ const FLIGHTS_SRC = 'https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3'
 const CYBER_SRC   = 'https://threatmap.checkpoint.com/'
 
 function migrateMapMode(saved) {
-  if (!saved) return 'leaflet'
+  if (!saved) return 'conflict'
   if (saved.mapMode === 'iframe') {
     const src = saved.iframeSrc ?? ''
     if (src.includes('adsbexchange')) return 'flights'
@@ -397,9 +397,10 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
   const mapModeRef     = useRef(mapMode)
   mapModeRef.current   = mapMode
 
-  const isLeaflet = mapMode === 'leaflet'
-  const isGlobe   = mapMode === 'globe'
-  const isIframe  = !isLeaflet && !isGlobe
+  const activeTab  = mapMode
+  const isLeaflet  = mapMode === 'leaflet'
+  const isGlobe    = mapMode === 'globe'
+  const isIframe   = !isLeaflet && !isGlobe
 
   function saveState(patch) {
     try {
@@ -501,25 +502,23 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
       )}
 
       <div style={{ flex: 1, minHeight: 0, width: '100%', position: 'relative', overflow: 'hidden' }}>
-        {isLeaflet && (
-          <div style={{ position: 'absolute', inset: 0 }}>
-            <AtlasMap
-              ref={atlasMapRef}
-              showConflicts={true}
-              showNatural={showNatural}
-              showPiracy={showPiracy}
-              onLoadingChange={setDataLoading}
-              initialCenter={currentViewRef.current.center}
-              initialZoom={currentViewRef.current.zoom}
-              onMove={({ center, zoom }) => {
-                currentViewRef.current = { center, zoom }
-                saveState({ center, zoom })
-              }}
-            />
-          </div>
-        )}
+        <div style={{ display: activeTab === 'leaflet' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+          <AtlasMap
+            ref={atlasMapRef}
+            showConflicts={true}
+            showNatural={showNatural}
+            showPiracy={showPiracy}
+            onLoadingChange={setDataLoading}
+            initialCenter={currentViewRef.current.center}
+            initialZoom={currentViewRef.current.zoom}
+            onMove={({ center, zoom }) => {
+              currentViewRef.current = { center, zoom }
+              saveState({ center, zoom })
+            }}
+          />
+        </div>
 
-        <div style={{ display: isGlobe ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+        <div style={{ display: activeTab === 'globe' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <GlobeView
             ref={globeRef}
             showConflicts={true}
@@ -529,7 +528,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
           />
         </div>
 
-        <div style={{ display: mapMode === 'conflict' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+        <div style={{ display: activeTab === 'conflict' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <iframe
             src={CONFLICT_SRC}
             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
@@ -537,7 +536,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
             allowFullScreen
           />
         </div>
-        <div style={{ display: mapMode === 'marine' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+        <div style={{ display: activeTab === 'marine' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <iframe
             src={MARINE_SRC}
             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
@@ -545,7 +544,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
             allowFullScreen
           />
         </div>
-        <div style={{ display: mapMode === 'flights' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+        <div style={{ display: activeTab === 'flights' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <iframe
             src={FLIGHTS_SRC}
             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
@@ -553,16 +552,14 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
             allowFullScreen
           />
         </div>
-        {mapMode === 'cyber' && (
-          <div style={{ position: 'absolute', inset: 0 }}>
-            <iframe
-              src={CYBER_SRC}
-              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-              title="CYBER — Checkpoint"
-              allowFullScreen
-            />
-          </div>
-        )}
+        <div style={{ display: activeTab === 'cyber' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+          <iframe
+            src={CYBER_SRC}
+            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+            title="CYBER — Checkpoint"
+            allowFullScreen
+          />
+        </div>
       </div>
     </div>
   )
