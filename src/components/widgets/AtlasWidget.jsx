@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
+import { createPortal } from 'react-dom'
 import WHeader from '../shared/WHeader'
 import Globe from 'globe.gl'
 import L from 'leaflet'
@@ -435,8 +436,8 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
 
   const layerBarStyle = { overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }
 
-  return (
-    <div className={`widget${isFullscreen ? ' atlas-fullscreen' : ''}`} data-collapsed={collapsed || undefined}>
+  const atlasContent = (
+    <div className={`widget${isFullscreen ? ' atlas-fullscreen' : ''}`} data-collapsed={collapsed || undefined} style={isFullscreen ? {} : { height: '100%' }}>
       <WHeader title="ATLAS" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={() => setIsFullscreen(v => !v)} isFullscreen={isFullscreen} onClose={onClose} />
 
       {/* Primary layer / tab bar */}
@@ -550,4 +551,6 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
       </div>
     </div>
   )
+
+  return isFullscreen ? createPortal(atlasContent, document.body) : atlasContent
 }
