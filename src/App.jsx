@@ -205,19 +205,34 @@ const _INIT_WS = resolveInitialWs()
 export default function App() {
   const [workspaces,   setWorkspaces]   = useState(readWorkspacesMeta)
   const [activeWs,     setActiveWs]     = useState(_INIT_WS)
-  const [layout,       setLayout]       = useState(() => readLayout(_INIT_WS))
-  const [settings,     setSettings]     = useState(() => readSettings(_INIT_WS))
-  const [widgets,      setWidgets]      = useState(() => readWidgets(_INIT_WS))
   const [fullscreenId,    setFullscreenId]    = useState(null)
   const [showAddModal,    setShowAddModal]    = useState(false)
   const [showSettings,    setShowSettings]    = useState(false)
-  const [collapseMap,     setCollapseMap]     = useState({})
   const [saved,           setSaved]           = useState(false)
   const [user,            setUser]            = useState(null)
   const [authLoading,     setAuthLoading]     = useState(true)
   const [authView,        setAuthView]        = useState('login')
   const [inactiveTabPause,  setInactiveTabPause]  = useState(() => getSettings().inactiveTabPause)
   const [pausedWorkspaces,  setPausedWorkspaces]  = useState(() => getSettings().pausedWorkspaces ?? [])
+
+  // Per-workspace state — data pre-loaded upfront, React trees mounted on first visit only
+  const [mountedWs,  setMountedWs]  = useState(() => new Set([_INIT_WS]))
+  const [wsLayouts,  setWsLayouts]  = useState(() => {
+    const wss = readWorkspacesMeta()
+    return Object.fromEntries(wss.map(ws => [ws.id, readLayout(ws.id)]))
+  })
+  const [wsWidgets,  setWsWidgets]  = useState(() => {
+    const wss = readWorkspacesMeta()
+    return Object.fromEntries(wss.map(ws => [ws.id, readWidgets(ws.id)]))
+  })
+  const [wsSettings, setWsSettings] = useState(() => {
+    const wss = readWorkspacesMeta()
+    return Object.fromEntries(wss.map(ws => [ws.id, readSettings(ws.id)]))
+  })
+  const [wsCollapse, setWsCollapse] = useState(() => {
+    const wss = readWorkspacesMeta()
+    return Object.fromEntries(wss.map(ws => [ws.id, {}]))
+  })
 
   useEffect(() => subscribeSettings(s => {
     setInactiveTabPause(s.inactiveTabPause)
@@ -235,21 +250,31 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
-  const saveTimer         = useRef(null)
+  const saveTimers        = useRef({})
   const savedTimer        = useRef(null)
   const activeWsRef       = useRef(null)
   const layoutSnapshotRef = useRef(null)
-  activeWsRef.current = activeWs
+  const wsLayoutsRef      = useRef(wsLayouts)
+  activeWsRef.current  = activeWs
+  wsLayoutsRef.current = wsLayouts
+
+  // Mount workspace React tree on first visit
+  useEffect(() => {
+    setMountedWs(prev => {
+      if (prev.has(activeWs)) return prev
+      return new Set([...prev, activeWs])
+    })
+  }, [activeWs])
 
   function enterFullscreen(widgetId) {
-    layoutSnapshotRef.current = layout.map(item => ({ ...item }))
+    layoutSnapshotRef.current = (wsLayoutsRef.current[activeWsRef.current] ?? []).map(item => ({ ...item }))
     setFullscreenId(widgetId)
   }
 
   function exitFullscreen() {
     setFullscreenId(null)
     if (layoutSnapshotRef.current) {
-      handleLayoutChange(layoutSnapshotRef.current)
+      handleLayoutChange(activeWsRef.current, layoutSnapshotRef.current)
       layoutSnapshotRef.current = null
     }
     setTimeout(() => window.dispatchEvent(new Event('resize')), 100)
@@ -262,39 +287,41 @@ export default function App() {
   }, [fullscreenId])
 
   function updateSetting(key, value) {
-    setSettings(prev => {
-      const next = { ...prev, [key]: value }
-      localStorage.setItem(settingsKey(activeWsRef.current), JSON.stringify(next))
+    const wsId = activeWsRef.current
+    setWsSettings(prev => {
+      const next = { ...prev, [wsId]: { ...(prev[wsId] ?? {}), [key]: value } }
+      localStorage.setItem(settingsKey(wsId), JSON.stringify(next[wsId]))
       return next
     })
   }
 
-  function handleLayoutChange(newLayout) {
-    setLayout(newLayout)
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      localStorage.setItem(wsKey(activeWsRef.current), JSON.stringify(newLayout))
-      setSaved(true)
-      if (savedTimer.current) clearTimeout(savedTimer.current)
-      savedTimer.current = setTimeout(() => setSaved(false), 2000)
+  function handleLayoutChange(wsId, newLayout) {
+    setWsLayouts(prev => ({ ...prev, [wsId]: newLayout }))
+    if (saveTimers.current[wsId]) clearTimeout(saveTimers.current[wsId])
+    saveTimers.current[wsId] = setTimeout(() => {
+      localStorage.setItem(wsKey(wsId), JSON.stringify(newLayout))
+      delete saveTimers.current[wsId]
+      if (wsId === activeWsRef.current) {
+        setSaved(true)
+        if (savedTimer.current) clearTimeout(savedTimer.current)
+        savedTimer.current = setTimeout(() => setSaved(false), 2000)
+      }
     }, 1000)
   }
 
   function switchWorkspace(wsId) {
     if (wsId === activeWsRef.current) return
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current)
-      saveTimer.current = null
-      localStorage.setItem(wsKey(activeWsRef.current), JSON.stringify(layout))
+    const currentWs = activeWsRef.current
+    if (saveTimers.current[currentWs]) {
+      clearTimeout(saveTimers.current[currentWs])
+      delete saveTimers.current[currentWs]
+      localStorage.setItem(wsKey(currentWs), JSON.stringify(wsLayoutsRef.current[currentWs] ?? []))
     }
     setActiveWs(wsId)
     localStorage.setItem(ACTIVE_WS_KEY, wsId)
-    setLayout(readLayout(wsId))
-    setSettings(readSettings(wsId))
-    setWidgets(readWidgets(wsId))
     setFullscreenId(null)
     layoutSnapshotRef.current = null
-    setCollapseMap({})
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 100)
   }
 
   function renameWorkspace(id, name) {
@@ -319,6 +346,10 @@ export default function App() {
     localStorage.setItem(WS_META_KEY, JSON.stringify(next))
     localStorage.setItem(widgetsKey(id), JSON.stringify([]))
     localStorage.setItem(wsKey(id),      JSON.stringify([]))
+    setWsLayouts(prev  => ({ ...prev, [id]: [] }))
+    setWsWidgets(prev  => ({ ...prev, [id]: [] }))
+    setWsSettings(prev => ({ ...prev, [id]: {} }))
+    setWsCollapse(prev => ({ ...prev, [id]: {} }))
     switchWorkspace(id)
   }
 
@@ -330,75 +361,116 @@ export default function App() {
     localStorage.removeItem(wsKey(wsId))
     localStorage.removeItem(settingsKey(wsId))
     localStorage.removeItem(widgetsKey(wsId))
+    if (saveTimers.current[wsId]) { clearTimeout(saveTimers.current[wsId]); delete saveTimers.current[wsId] }
+    setMountedWs(prev  => { const s = new Set(prev); s.delete(wsId); return s })
+    setWsLayouts(prev  => { const n = { ...prev }; delete n[wsId]; return n })
+    setWsWidgets(prev  => { const n = { ...prev }; delete n[wsId]; return n })
+    setWsSettings(prev => { const n = { ...prev }; delete n[wsId]; return n })
+    setWsCollapse(prev => { const n = { ...prev }; delete n[wsId]; return n })
     if (wsId === activeWsRef.current) {
-      if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null }
       const fallback = next[0].id
       setActiveWs(fallback)
       localStorage.setItem(ACTIVE_WS_KEY, fallback)
-      setLayout(readLayout(fallback))
-      setSettings(readSettings(fallback))
-      setWidgets(readWidgets(fallback))
       setFullscreenId(null)
       layoutSnapshotRef.current = null
-      setCollapseMap({})
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 100)
     }
   }
 
   function duplicateWorkspace(wsId) {
     if (workspaces.length >= 6) return
-    const src  = workspaces.find(w => w.id === wsId)
-    const id   = `ws-${Date.now()}`
-    const next = [...workspaces, { id, name: `${src.name} (copy)` }]
+    const src         = workspaces.find(w => w.id === wsId)
+    const id          = `ws-${Date.now()}`
+    const next        = [...workspaces, { id, name: `${src.name} (copy)` }]
+    const srcLayout   = wsLayouts[wsId]  ?? readLayout(wsId)
+    const srcSettings = wsSettings[wsId] ?? readSettings(wsId)
+    const srcWidgets  = wsWidgets[wsId]  ?? readWidgets(wsId)
     setWorkspaces(next)
-    localStorage.setItem(WS_META_KEY, JSON.stringify(next))
-    localStorage.setItem(wsKey(id),       JSON.stringify(readLayout(wsId)))
-    localStorage.setItem(settingsKey(id), JSON.stringify(readSettings(wsId)))
-    localStorage.setItem(widgetsKey(id),  JSON.stringify(readWidgets(wsId)))
+    localStorage.setItem(WS_META_KEY,     JSON.stringify(next))
+    localStorage.setItem(wsKey(id),       JSON.stringify(srcLayout))
+    localStorage.setItem(settingsKey(id), JSON.stringify(srcSettings))
+    localStorage.setItem(widgetsKey(id),  JSON.stringify(srcWidgets))
+    setWsLayouts(prev  => ({ ...prev, [id]: srcLayout }))
+    setWsWidgets(prev  => ({ ...prev, [id]: [...srcWidgets] }))
+    setWsSettings(prev => ({ ...prev, [id]: { ...srcSettings } }))
+    setWsCollapse(prev => ({ ...prev, [id]: {} }))
     switchWorkspace(id)
   }
 
   function addWidget(type) {
-    const id          = `${type}-${Date.now()}`
-    const nextWidgets = [...widgets, { id, type }]
-    setWidgets(nextWidgets)
-    localStorage.setItem(widgetsKey(activeWsRef.current), JSON.stringify(nextWidgets))
-    const maxY       = layout.reduce((m, item) => Math.max(m, item.y + item.h), 0)
-    const dims       = WIDGET_DEFAULTS[type] ?? { w: 4, h: 8 }
-    const nextLayout = [...layout, { i: id, x: 0, y: maxY, ...dims }]
-    setLayout(nextLayout)
-    localStorage.setItem(wsKey(activeWsRef.current), JSON.stringify(nextLayout))
+    const wsId = activeWsRef.current
+    const id   = `${type}-${Date.now()}`
+    setWsWidgets(prev => {
+      const next = [...(prev[wsId] ?? []), { id, type }]
+      localStorage.setItem(widgetsKey(wsId), JSON.stringify(next))
+      return { ...prev, [wsId]: next }
+    })
+    setWsLayouts(prev => {
+      const cur  = prev[wsId] ?? []
+      const maxY = cur.reduce((m, item) => Math.max(m, item.y + item.h), 0)
+      const dims = WIDGET_DEFAULTS[type] ?? { w: 4, h: 8 }
+      const next = [...cur, { i: id, x: 0, y: maxY, ...dims }]
+      localStorage.setItem(wsKey(wsId), JSON.stringify(next))
+      return { ...prev, [wsId]: next }
+    })
     setShowAddModal(false)
   }
 
-  function removeWidget(widgetId) {
-    const nextWidgets = widgets.filter(w => w.id !== widgetId)
-    setWidgets(nextWidgets)
-    localStorage.setItem(widgetsKey(activeWsRef.current), JSON.stringify(nextWidgets))
-    const nextLayout = layout.filter(item => item.i !== widgetId)
-    setLayout(nextLayout)
-    localStorage.setItem(wsKey(activeWsRef.current), JSON.stringify(nextLayout))
+  function removeWidget(wsId, widgetId) {
+    setWsWidgets(prev => {
+      const next = (prev[wsId] ?? []).filter(w => w.id !== widgetId)
+      localStorage.setItem(widgetsKey(wsId), JSON.stringify(next))
+      return { ...prev, [wsId]: next }
+    })
+    setWsLayouts(prev => {
+      const next = (prev[wsId] ?? []).filter(item => item.i !== widgetId)
+      localStorage.setItem(wsKey(wsId), JSON.stringify(next))
+      return { ...prev, [wsId]: next }
+    })
     if (fullscreenId === widgetId) { setFullscreenId(null); layoutSnapshotRef.current = null }
-    setCollapseMap(prev => { const next = { ...prev }; delete next[widgetId]; return next })
+    setWsCollapse(prev => {
+      const next = { ...(prev[wsId] ?? {}) }
+      delete next[widgetId]
+      return { ...prev, [wsId]: next }
+    })
   }
 
-  function toggleCollapse(widgetId) {
+  function toggleCollapse(wsId, widgetId) {
+    const collapseMap = wsCollapse[wsId] ?? {}
     const isCollapsed = !!collapseMap[widgetId]
-    const wType    = widgets.find(w => w.id === widgetId)?.type
-    const defaultH = WIDGET_DEFAULTS[wType]?.h ?? 8
+    const wType       = (wsWidgets[wsId] ?? []).find(w => w.id === widgetId)?.type
+    const defaultH    = WIDGET_DEFAULTS[wType]?.h ?? 8
     if (isCollapsed) {
       const savedH = (collapseMap[widgetId] > 1) ? collapseMap[widgetId] : defaultH
-      setLayout(prev => prev.map(item => item.i === widgetId ? { ...item, h: savedH } : item))
-      setCollapseMap(prev => { const next = { ...prev }; delete next[widgetId]; return next })
+      setWsLayouts(prev => ({
+        ...prev,
+        [wsId]: (prev[wsId] ?? []).map(item => item.i === widgetId ? { ...item, h: savedH } : item),
+      }))
+      setWsCollapse(prev => {
+        const next = { ...(prev[wsId] ?? {}) }
+        delete next[widgetId]
+        return { ...prev, [wsId]: next }
+      })
     } else {
-      const item    = layout.find(i => i.i === widgetId)
+      const item    = (wsLayouts[wsId] ?? []).find(i => i.i === widgetId)
       const current = item?.h ?? defaultH
       const saveH   = current > 1 ? current : defaultH
-      setLayout(prev => prev.map(i => i.i === widgetId ? { ...i, h: 1 } : i))
-      setCollapseMap(prev => ({ ...prev, [widgetId]: saveH }))
+      setWsLayouts(prev => ({
+        ...prev,
+        [wsId]: (prev[wsId] ?? []).map(i => i.i === widgetId ? { ...i, h: 1 } : i),
+      }))
+      setWsCollapse(prev => ({ ...prev, [wsId]: { ...(prev[wsId] ?? {}), [widgetId]: saveH } }))
     }
   }
 
-  const fsWidget  = fullscreenId ? widgets.find(w => w.id === fullscreenId) ?? null : null
+  let fsWidget = null
+  let fsWsId   = null
+  if (fullscreenId) {
+    for (const wsId of mountedWs) {
+      const found = (wsWidgets[wsId] ?? []).find(w => w.id === fullscreenId)
+      if (found) { fsWidget = found; fsWsId = wsId; break }
+    }
+  }
   const fsCatalog = fsWidget ? WIDGET_CATALOG.find(c => c.type === fsWidget.type) : null
 
   if (authLoading) return <div className="auth-init-screen"><div className="auth-init-inner"><div className="auth-spinner" /><span className="auth-init-text">INITIALIZING...</span></div></div>
@@ -420,36 +492,48 @@ export default function App() {
         user={user}
         onSignOut={() => supabase.auth.signOut()}
       />
-      <div style={{ width: '100%', height: 'calc(100vh - 40px)', overflowY: 'auto', position: 'relative' }}>
-        <SizedGridLayout
-          layout={layout}
-          onLayoutChange={handleLayoutChange}
-          cols={24}
-          rowHeight={32}
-          margin={[6, 6]}
-          containerPadding={[8, 8]}
-          draggableHandle=".widget-header"
-          resizeHandles={['se', 'sw', 'ne', 'nw', 's', 'e', 'n', 'w']}
-          compactType="vertical"
-          preventCollision={false}
-          isResizable
-          isDraggable
-        >
-          {widgets.map(widget => (
-            <div key={widget.id} style={{ height: '100%', overflow: 'hidden' }}>
-              {renderWidgetComponent(widget, {
-                onClose:      () => removeWidget(widget.id),
-                onFullscreen: () => enterFullscreen(widget.id),
-                isFullscreen: false,
-                onCollapse:   () => toggleCollapse(widget.id),
-                collapsed:    !!collapseMap[widget.id],
-                settings,
-                updateSetting,
-                workspacePaused: pausedWorkspaces.includes(activeWs),
-              })}
-            </div>
-          ))}
-        </SizedGridLayout>
+      <div style={{ width: '100%', height: 'calc(100vh - 40px)', position: 'relative' }}>
+        {[...mountedWs].map(wsId => (
+          <div
+            key={wsId}
+            style={{
+              display:  wsId === activeWs ? 'block' : 'none',
+              position: 'absolute', top: 0, left: 0,
+              width: '100%', height: '100%',
+              overflowY: 'auto',
+            }}
+          >
+            <SizedGridLayout
+              layout={wsLayouts[wsId] ?? []}
+              onLayoutChange={newLayout => handleLayoutChange(wsId, newLayout)}
+              cols={24}
+              rowHeight={32}
+              margin={[6, 6]}
+              containerPadding={[8, 8]}
+              draggableHandle=".widget-header"
+              resizeHandles={['se', 'sw', 'ne', 'nw', 's', 'e', 'n', 'w']}
+              compactType="vertical"
+              preventCollision={false}
+              isResizable={wsId === activeWs}
+              isDraggable={wsId === activeWs}
+            >
+              {(wsWidgets[wsId] ?? []).map(widget => (
+                <div key={widget.id} style={{ height: '100%', overflow: 'hidden' }}>
+                  {renderWidgetComponent(widget, {
+                    onClose:      () => removeWidget(wsId, widget.id),
+                    onFullscreen: () => enterFullscreen(widget.id),
+                    isFullscreen: false,
+                    onCollapse:   () => toggleCollapse(wsId, widget.id),
+                    collapsed:    !!(wsCollapse[wsId] ?? {})[widget.id],
+                    settings:     wsSettings[wsId] ?? {},
+                    updateSetting,
+                    workspacePaused: pausedWorkspaces.includes(wsId),
+                  })}
+                </div>
+              ))}
+            </SizedGridLayout>
+          </div>
+        ))}
         <button className="fab-add" onClick={() => setShowAddModal(true)} title="Add widget">+</button>
       </div>
 
@@ -467,14 +551,14 @@ export default function App() {
           </div>
           <div className="fs-content">
             {renderWidgetComponent(fsWidget, {
-              onClose:      () => { removeWidget(fullscreenId) },
+              onClose:      () => { removeWidget(fsWsId, fullscreenId) },
               onFullscreen: exitFullscreen,
               isFullscreen: true,
               onCollapse:   undefined,
               collapsed:    false,
-              settings,
+              settings:     wsSettings[fsWsId] ?? {},
               updateSetting,
-              workspacePaused: pausedWorkspaces.includes(activeWs),
+              workspacePaused: pausedWorkspaces.includes(fsWsId),
             })}
           </div>
         </div>,
