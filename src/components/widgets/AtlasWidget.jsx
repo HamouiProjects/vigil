@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
-import { createPortal } from 'react-dom'
 import WHeader from '../shared/WHeader'
 import Globe from 'globe.gl'
 import L from 'leaflet'
@@ -393,6 +392,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
 
   const atlasMapRef    = useRef(null)
   const globeRef       = useRef(null)
+  const widgetRef      = useRef(null)
   const currentViewRef = useRef({ center: saved?.center ?? [20, 0], zoom: saved?.zoom ?? 2 })
   const mapModeRef     = useRef(mapMode)
   mapModeRef.current   = mapMode
@@ -412,6 +412,21 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
     saveState({ showNatural, showPiracy, mapMode })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showNatural, showPiracy, mapMode])
+
+  useEffect(() => {
+    if (!widgetRef.current) return
+    let el = widgetRef.current.parentElement
+    while (el && !el.classList.contains('react-grid-item')) {
+      el = el.parentElement
+    }
+    if (!el) return
+    if (isFullscreen) {
+      el.classList.add('atlas-grid-fullscreen')
+    } else {
+      el.classList.remove('atlas-grid-fullscreen')
+    }
+    return () => el.classList.remove('atlas-grid-fullscreen')
+  }, [isFullscreen])
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -436,8 +451,8 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
 
   const layerBarStyle = { overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }
 
-  const atlasContent = (
-    <div className={`widget${isFullscreen ? ' atlas-fullscreen' : ''}`} data-collapsed={collapsed || undefined} style={isFullscreen ? {} : { height: '100%' }}>
+  return (
+    <div className="widget" ref={widgetRef} data-collapsed={collapsed || undefined}>
       <WHeader title="ATLAS" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={() => setIsFullscreen(v => !v)} isFullscreen={isFullscreen} onClose={onClose} />
 
       {/* Primary layer / tab bar */}
@@ -551,6 +566,4 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
       </div>
     </div>
   )
-
-  return isFullscreen ? createPortal(atlasContent, document.body) : atlasContent
 }

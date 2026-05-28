@@ -59,6 +59,21 @@ body {
 *::-webkit-scrollbar-thumb:hover { background: rgba(0, 212, 255, 0.4); }
 *::-webkit-scrollbar-corner { background: transparent; }
 
+/* ─── ATLAS fullscreen — applied to .react-grid-item to escape CSS transform ── */
+.atlas-grid-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9999 !important;
+  transform: none !important;
+}
+.atlas-grid-fullscreen .widget {
+  height: 100%;
+  width: 100%;
+}
+
 /* ─── Portfolio Widget ─────────────────────────────────────────────────────── */
 .pf-tab-bar {
   display: flex;
