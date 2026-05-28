@@ -29,7 +29,7 @@ const CONFLICT_REGIONS = [
   { id: 'russia',       label: '🇷🇺 RUSSIA',       src: 'https://liveuamap.com/en/russia'       },
 ]
 
-const MARINE_SRC  = 'https://www.marinetraffic.com/en/ais/embed/zoom:4/centery:20/centerx:0/maptype:0/shownames:false/mmsi:0/shipid:0/fleet:/fleet_id:/vtypes:/showmenu:/remember:false'
+const MARINE_SRC  = 'https://www.shipfinder.com/?mmsi=&imo='
 const FLIGHTS_SRC = 'https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3'
 const CYBER_SRC   = 'https://threatmap.checkpoint.com/'
 
@@ -407,8 +407,12 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
   const [dataLoading, setDataLoading] = useState(false)
   const [isLive,      setIsLive]      = useState(true)
 
-  const atlasRef       = useRef(null)
-  const currentViewRef = useRef({ center: saved?.center ?? [20, 0], zoom: saved?.zoom ?? 2 })
+  const atlasRef            = useRef(null)
+  const currentViewRef      = useRef({ center: saved?.center ?? [20, 0], zoom: saved?.zoom ?? 2 })
+  const mapModeRef          = useRef(mapMode)
+  mapModeRef.current        = mapMode
+  const conflictRegionIdRef = useRef(conflictRegionId)
+  conflictRegionIdRef.current = conflictRegionId
 
   const isLeaflet = mapMode === 'leaflet'
   const isGlobe   = mapMode === 'globe'
@@ -432,7 +436,13 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
     if (!isFullscreen) return
     return () => {
       window.dispatchEvent(new CustomEvent('vigil:atlas-exit-fs', {
-        detail: { widgetId, center: currentViewRef.current.center, zoom: currentViewRef.current.zoom },
+        detail: {
+          widgetId,
+          center: currentViewRef.current.center,
+          zoom: currentViewRef.current.zoom,
+          mapMode: mapModeRef.current,
+          conflictRegionId: conflictRegionIdRef.current,
+        },
       }))
     }
   }, [isFullscreen, widgetId])
@@ -441,9 +451,11 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
     if (isFullscreen) return
     function onExitFs(e) {
       if (e.detail?.widgetId !== widgetId) return
-      const { center, zoom } = e.detail
+      const { center, zoom, mapMode: fsMode, conflictRegionId: fsRegionId } = e.detail
       currentViewRef.current = { center, zoom }
       saveState({ center, zoom })
+      if (fsMode)     setMapMode(fsMode)
+      if (fsRegionId) setConflictRegionId(fsRegionId)
       setTimeout(() => atlasRef.current?.setView(center, zoom), 250)
     }
     window.addEventListener('vigil:atlas-exit-fs', onExitFs)
@@ -495,7 +507,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
         </button>
         <button className={`cmap-layer-btn${mapMode === 'marine' ? ' active' : ''}`}
           onClick={() => switchTab('marine')}>
-          MARINE<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live vessel tracking · Source: VesselFinder</span></span>
+          MARINE<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live vessel tracking · Source: ShipFinder</span></span>
         </button>
         <button className={`cmap-layer-btn${mapMode === 'flights' ? ' active' : ''}`}
           onClick={() => switchTab('flights')}>
