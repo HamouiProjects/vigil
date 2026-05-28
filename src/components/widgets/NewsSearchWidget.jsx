@@ -265,7 +265,6 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
                   </a>
                 )
               })}
-              {displayArticles.length > 0 && <div className="attr-line">via Google News · rss2json</div>}
             </div>
           )}
         </div>
