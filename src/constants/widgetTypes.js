@@ -22,7 +22,7 @@ export const WIDGET_CATALOG = [
   { type: 'prices',    label: 'Price Tracker', icon: '📈'  },
   { type: 'stream',    label: 'Livestream',    icon: '📺'  },
   { type: 'weather',   label: 'Weather',       icon: '🌤'  },
-  { type: 'conflict',  label: 'CONFLICT',      icon: '⚔️'  },
+  // 'conflict' retired — functionality moved into ATLAS → CONFLICT tab
   { type: 'chart',     label: 'CHART',         icon: '📊'  },
   { type: 'heatmap',   label: 'Heatmap',       icon: '🟩'  },
   { type: 'browser',   label: 'Reader',        icon: '📄'  },

@@ -10,6 +10,41 @@ import {
   quakeSize, quakeTimeAgo,
   fetchNOAAStorms, fetchUSGS,
 } from '../../utils/atlasHelpers'
+const CONFLICT_REGIONS = [
+  { id: 'worldwide',    label: '🌍 WORLDWIDE',     src: 'https://liveuamap.com'                 },
+  { id: 'ukraine',      label: '🇺🇦 UKRAINE',      src: 'https://liveuamap.com/en/ukraine'      },
+  { id: 'middleeast',   label: '🌙 MIDDLE EAST',   src: 'https://liveuamap.com/en/middleeast'   },
+  { id: 'israel',       label: '🇮🇱 ISRAEL/GAZA',  src: 'https://liveuamap.com/en/israel'       },
+  { id: 'syria',        label: '🇸🇾 SYRIA',        src: 'https://liveuamap.com/en/syria'        },
+  { id: 'yemen',        label: '🇾🇪 YEMEN',        src: 'https://liveuamap.com/en/yemen'        },
+  { id: 'sudan',        label: '🇸🇩 SUDAN',        src: 'https://liveuamap.com/en/sudan'        },
+  { id: 'africa',       label: '🌍 AFRICA',        src: 'https://liveuamap.com/en/africa'       },
+  { id: 'libya',        label: '🇱🇾 LIBYA',        src: 'https://liveuamap.com/en/libya'        },
+  { id: 'iraq',         label: '🇮🇶 IRAQ',         src: 'https://liveuamap.com/en/iraq'         },
+  { id: 'afghanistan',  label: '🇦🇫 AFGHANISTAN',  src: 'https://liveuamap.com/en/afghanistan'  },
+  { id: 'asia',         label: '🌏 ASIA',          src: 'https://liveuamap.com/en/asia'         },
+  { id: 'myanmar',      label: '🇲🇲 MYANMAR',      src: 'https://liveuamap.com/en/myanmar'      },
+  { id: 'latinamerica', label: '🌎 LATIN AMERICA', src: 'https://liveuamap.com/en/latinamerica' },
+  { id: 'usa',          label: '🇺🇸 USA',          src: 'https://liveuamap.com/en/usa'          },
+  { id: 'russia',       label: '🇷🇺 RUSSIA',       src: 'https://liveuamap.com/en/russia'       },
+]
+
+const MARINE_SRC  = 'https://www.vesselfinder.com/aismap?zoom=4&lat=20&lon=0&width=100%25&height=100%25&names=true&mmsi=&imo=&show_track=false&fleet=&fleet_name=&fleet_timespan=1440'
+const FLIGHTS_SRC = 'https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3'
+const CYBER_SRC   = 'https://threatmap.checkpoint.com/'
+
+function migrateMapMode(saved) {
+  if (!saved) return 'leaflet'
+  if (saved.mapMode === 'iframe') {
+    const src = saved.iframeSrc ?? ''
+    if (src.includes('adsbexchange')) return 'flights'
+    if (src.includes('checkpoint'))   return 'cyber'
+    if (src.includes('liveuamap'))    return 'conflict'
+    return 'leaflet'
+  }
+  const valid = ['leaflet', 'globe', 'conflict', 'marine', 'flights', 'cyber']
+  return valid.includes(saved.mapMode) ? saved.mapMode : 'leaflet'
+}
 
 const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, showPiracy, onLoadingChange, initialCenter = [20, 0], initialZoom = 2, onMove }, ref) {
   const containerRef  = useRef(null)
@@ -363,17 +398,28 @@ function readAtlasState(id) {
 export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   const saved = readAtlasState(widgetId)
 
-  const [showConflicts, setShowConflicts] = useState(saved?.showConflicts ?? true)
-  const [showNatural,   setShowNatural]   = useState(saved?.showNatural   ?? true)
-  const [showPiracy,    setShowPiracy]    = useState(saved?.showPiracy    ?? true)
-  const _savedIframeSrc = saved?.iframeSrc ?? ''
-  const _isMaritime     = ['myshiptracking', 'marinetraffic', 'vesseltracker'].some(s => _savedIframeSrc.includes(s))
-  const [mapMode,       setMapMode]       = useState(_isMaritime ? 'leaflet' : (saved?.mapMode === 'globe' ? 'leaflet' : (saved?.mapMode ?? 'leaflet')))
-  const [iframeSrc,     setIframeSrc]     = useState(_isMaritime ? ''        : _savedIframeSrc)
-  const [dataLoading,   setDataLoading]   = useState(false)
-  const [isLive,        setIsLive]        = useState(true)
-  const atlasRef      = useRef(null)
+  const initialMode = migrateMapMode(saved)
+
+  const [showNatural,      setShowNatural]      = useState(saved?.showNatural      ?? true)
+  const [showPiracy,       setShowPiracy]        = useState(saved?.showPiracy       ?? true)
+  const [mapMode,          setMapMode]           = useState(initialMode)
+  const [conflictRegionId, setConflictRegionId]  = useState(saved?.conflictRegionId ?? 'worldwide')
+  const [mountedTabs,      setMountedTabs]       = useState(() => {
+    const s = new Set()
+    if (['conflict', 'marine', 'flights', 'cyber'].includes(initialMode)) s.add(initialMode)
+    return s
+  })
+  const [dataLoading, setDataLoading] = useState(false)
+  const [isLive,      setIsLive]      = useState(true)
+
+  const atlasRef       = useRef(null)
   const currentViewRef = useRef({ center: saved?.center ?? [20, 0], zoom: saved?.zoom ?? 2 })
+
+  const isLeaflet = mapMode === 'leaflet'
+  const isGlobe   = mapMode === 'globe'
+  const isIframe  = !isLeaflet && !isGlobe
+
+  const conflictRegion = CONFLICT_REGIONS.find(r => r.id === conflictRegionId) ?? CONFLICT_REGIONS[0]
 
   function saveState(patch) {
     try {
@@ -383,9 +429,9 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
   }
 
   useEffect(() => {
-    saveState({ showConflicts, showNatural, showPiracy, mapMode, iframeSrc })
+    saveState({ showNatural, showPiracy, mapMode, conflictRegionId })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showConflicts, showNatural, showPiracy, mapMode, iframeSrc])
+  }, [showNatural, showPiracy, mapMode, conflictRegionId])
 
   useEffect(() => {
     if (!isFullscreen) return
@@ -419,43 +465,50 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
   }, [isFullscreen])
 
   useEffect(() => {
-    if (mapMode !== 'leaflet') return
+    if (!isLeaflet) return
     const t = setTimeout(() => atlasRef.current?.invalidateSize(), 200)
     return () => clearTimeout(t)
-  }, [mapMode])
+  }, [mapMode, isLeaflet])
 
-  function switchToIframe(src) { setMapMode('iframe'); setIframeSrc(src) }
+  function switchTab(mode) {
+    setMapMode(mode)
+    setMountedTabs(prev => { const s = new Set(prev); s.add(mode); return s })
+  }
 
-  const isLeaflet = mapMode === 'leaflet'
-  const isGlobe   = mapMode === 'globe'
+  const layerBarStyle = { overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
       <WHeader title="ATLAS" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={onFullscreen} isFullscreen={isFullscreen} onClose={onClose} />
 
-      <div className="cmap-layer-bar" onPointerDownCapture={e => e.stopPropagation()}>
-        <button className={`cmap-layer-btn${(isLeaflet || isGlobe) && showConflicts ? ' active' : ''}`}
-          onClick={() => { if (!isLeaflet && !isGlobe) setMapMode('leaflet'); setShowConflicts(v => !v) }}>
-          CONFLICTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Armed conflict zones · Source: ReliefWeb</span></span>
+      {/* Primary layer / tab bar */}
+      <div className="cmap-layer-bar" style={layerBarStyle} onPointerDownCapture={e => e.stopPropagation()}>
+        <button className={`cmap-layer-btn${isLeaflet ? ' active' : ''}`}
+          onClick={() => setMapMode('leaflet')}>
+          WORLD<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">2D world map · Conflict pins, earthquakes, piracy zones</span></span>
+        </button>
+        <button className={`cmap-layer-btn${mapMode === 'conflict' ? ' active' : ''}`}
+          onClick={() => switchTab('conflict')}>
+          CONFLICT<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live conflict tracking · Source: Liveuamap</span></span>
         </button>
         <button className={`cmap-layer-btn${(isLeaflet || isGlobe) && showNatural ? ' active' : ''}`}
-          onClick={() => { if (!isLeaflet && !isGlobe) setMapMode('leaflet'); setShowNatural(v => !v) }}>
+          onClick={() => { if (isIframe) setMapMode('leaflet'); setShowNatural(v => !v) }}>
           NATURAL<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Earthquakes · Wildfires · Storms · Sources: USGS, NOAA</span></span>
         </button>
         <button className={`cmap-layer-btn${(isLeaflet || isGlobe) && showPiracy ? ' active' : ''}`}
-          onClick={() => { if (!isLeaflet && !isGlobe) setMapMode('leaflet'); setShowPiracy(v => !v) }}>
+          onClick={() => { if (isIframe) setMapMode('leaflet'); setShowPiracy(v => !v) }}>
           PIRACY<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Maritime piracy high-risk zones · Source: IMB</span></span>
         </button>
-        <button className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('vesselfinder') ? ' active' : ''}`}
-          onClick={() => switchToIframe('https://www.vesselfinder.com/embed/?usemarsden=1')}>
+        <button className={`cmap-layer-btn${mapMode === 'marine' ? ' active' : ''}`}
+          onClick={() => switchTab('marine')}>
           MARINE<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live vessel tracking · Source: VesselFinder</span></span>
         </button>
-        <button className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('adsbexchange') ? ' active' : ''}`}
-          onClick={() => switchToIframe('https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3')}>
+        <button className={`cmap-layer-btn${mapMode === 'flights' ? ' active' : ''}`}
+          onClick={() => switchTab('flights')}>
           FLIGHTS<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live air traffic · Source: ADS-B Exchange</span></span>
         </button>
-        <button className={`cmap-layer-btn${!isLeaflet && iframeSrc.includes('checkpoint') ? ' active' : ''}`}
-          onClick={() => switchToIframe('https://threatmap.checkpoint.com/')}>
+        <button className={`cmap-layer-btn${mapMode === 'cyber' ? ' active' : ''}`}
+          onClick={() => switchTab('cyber')}>
           CYBER<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live cyber attacks · Source: Checkpoint</span></span>
         </button>
         <button className={`cmap-layer-btn${isGlobe ? ' active' : ''}`}
@@ -463,11 +516,24 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
           title="Toggle 3D globe view">
           GLOBE
         </button>
-        {isLeaflet || isGlobe
+        {!isIframe
           ? <button className="cmap-update-btn" onClick={() => atlasRef.current?.refresh()} title="Re-fetch live data">⟳ Update</button>
-          : <button className="cmap-update-btn" onClick={() => setMapMode('leaflet')} title="Back to ATLAS map">← ATLAS</button>
+          : <button className="cmap-update-btn" onClick={() => setMapMode('leaflet')} title="Back to world map">← WORLD</button>
         }
       </div>
+
+      {/* Conflict region selector — shown only on conflict tab */}
+      {mapMode === 'conflict' && (
+        <div className="cmap-layer-bar" style={{ ...layerBarStyle, borderTop: 'none' }} onPointerDownCapture={e => e.stopPropagation()}>
+          {CONFLICT_REGIONS.map(r => (
+            <button
+              key={r.id}
+              className={`cmap-layer-btn${conflictRegionId === r.id ? ' active' : ''}`}
+              onClick={() => setConflictRegionId(r.id)}
+            >{r.label}</button>
+          ))}
+        </div>
+      )}
 
       {dataLoading && (
         <div className="atlas-loading-bar">
@@ -475,11 +541,13 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
           <div className="skel-line" />
         </div>
       )}
+
       <div style={{ flex: 1, minHeight: 0, width: '100%', position: 'relative', overflow: 'hidden' }}>
+        {/* Leaflet — conditionally rendered; fullscreen toggle doesn't change mapMode so it stays mounted */}
         {isLeaflet && (
           <AtlasMap
             ref={atlasRef}
-            showConflicts={showConflicts}
+            showConflicts={true}
             showNatural={showNatural}
             showPiracy={showPiracy}
             onLoadingChange={setDataLoading}
@@ -491,23 +559,58 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
             }}
           />
         )}
+
+        {/* Globe */}
         {isGlobe && (
           <GlobeView
             ref={atlasRef}
-            showConflicts={showConflicts}
+            showConflicts={true}
             showNatural={showNatural}
             showPiracy={showPiracy}
             gdeltEvents={CONFLICTS}
           />
         )}
-        {!isLeaflet && !isGlobe && (
-          <iframe
-            key={iframeSrc}
-            src={iframeSrc}
-            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-            title="ATLAS feed"
-            allowFullScreen
-          />
+
+        {/* Iframe tabs: lazy-mount then stay in DOM — CSS show/hide prevents state reset on fullscreen toggle */}
+        {mountedTabs.has('conflict') && (
+          <div style={{ display: mapMode === 'conflict' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+            <iframe
+              src={conflictRegion.src}
+              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+              title="CONFLICT — Liveuamap"
+              allowFullScreen
+            />
+          </div>
+        )}
+        {mountedTabs.has('marine') && (
+          <div style={{ display: mapMode === 'marine' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+            <iframe
+              src={MARINE_SRC}
+              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+              title="MARINE — VesselFinder"
+              allowFullScreen
+            />
+          </div>
+        )}
+        {mountedTabs.has('flights') && (
+          <div style={{ display: mapMode === 'flights' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+            <iframe
+              src={FLIGHTS_SRC}
+              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+              title="FLIGHTS — ADS-B Exchange"
+              allowFullScreen
+            />
+          </div>
+        )}
+        {mountedTabs.has('cyber') && (
+          <div style={{ display: mapMode === 'cyber' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+            <iframe
+              src={CYBER_SRC}
+              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+              title="CYBER — Checkpoint"
+              allowFullScreen
+            />
+          </div>
         )}
       </div>
     </div>
