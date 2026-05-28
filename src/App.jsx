@@ -401,9 +401,8 @@ export default function App() {
   const fsWidget  = fullscreenId ? widgets.find(w => w.id === fullscreenId) ?? null : null
   const fsCatalog = fsWidget ? WIDGET_CATALOG.find(c => c.type === fsWidget.type) : null
 
-  // AUTH GATE DISABLED — re-enable for production
-  // if (authLoading) return <div className="auth-init-screen"><div className="auth-init-inner"><div className="auth-spinner" /><span className="auth-init-text">INITIALIZING...</span></div></div>
-  // if (!user) return <AuthScreen authView={authView} setAuthView={setAuthView} />
+  if (authLoading) return <div className="auth-init-screen"><div className="auth-init-inner"><div className="auth-spinner" /><span className="auth-init-text">INITIALIZING...</span></div></div>
+  if (!user) return <AuthScreen authView={authView} setAuthView={setAuthView} />
 
   return (
     <div className="app">

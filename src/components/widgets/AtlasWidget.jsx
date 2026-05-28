@@ -378,21 +378,23 @@ function readAtlasState(id) {
   try { return JSON.parse(localStorage.getItem(ATLAS_STATE_KEY(id)) || 'null') } catch { return null }
 }
 
-export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
+export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen: _onFullscreen, isFullscreen: _isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
   const saved = readAtlasState(widgetId)
 
   const initialMode = migrateMapMode(saved)
 
-  const [showNatural,      setShowNatural]      = useState(saved?.showNatural      ?? true)
-  const [showPiracy,       setShowPiracy]        = useState(saved?.showPiracy       ?? true)
-  const [mapMode,          setMapMode]           = useState(initialMode)
-  const [dataLoading, setDataLoading] = useState(false)
-  const [isLive,      setIsLive]      = useState(true)
+  const [showNatural,  setShowNatural]  = useState(saved?.showNatural ?? true)
+  const [showPiracy,   setShowPiracy]   = useState(saved?.showPiracy  ?? true)
+  const [mapMode,      setMapMode]      = useState(initialMode)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [dataLoading,  setDataLoading]  = useState(false)
+  const [isLive,       setIsLive]       = useState(true)
 
-  const atlasRef            = useRef(null)
-  const currentViewRef      = useRef({ center: saved?.center ?? [20, 0], zoom: saved?.zoom ?? 2 })
-  const mapModeRef          = useRef(mapMode)
-  mapModeRef.current        = mapMode
+  const atlasMapRef    = useRef(null)
+  const globeRef       = useRef(null)
+  const currentViewRef = useRef({ center: saved?.center ?? [20, 0], zoom: saved?.zoom ?? 2 })
+  const mapModeRef     = useRef(mapMode)
+  mapModeRef.current   = mapMode
 
   const isLeaflet = mapMode === 'leaflet'
   const isGlobe   = mapMode === 'globe'
@@ -411,47 +413,21 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
   }, [showNatural, showPiracy, mapMode])
 
   useEffect(() => {
-    if (!isFullscreen) return
-    return () => {
-      window.dispatchEvent(new CustomEvent('vigil:atlas-exit-fs', {
-        detail: {
-          widgetId,
-          center: currentViewRef.current.center,
-          zoom: currentViewRef.current.zoom,
-          mapMode: mapModeRef.current,
-        },
-      }))
-    }
-  }, [isFullscreen, widgetId])
-
-  useEffect(() => {
-    if (isFullscreen) return
-    function onExitFs(e) {
-      if (e.detail?.widgetId !== widgetId) return
-      const { center, zoom, mapMode: fsMode } = e.detail
-      currentViewRef.current = { center, zoom }
-      saveState({ center, zoom })
-      if (fsMode) setMapMode(fsMode)
-      setTimeout(() => atlasRef.current?.setView(center, zoom), 250)
-    }
-    window.addEventListener('vigil:atlas-exit-fs', onExitFs)
-    return () => window.removeEventListener('vigil:atlas-exit-fs', onExitFs)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFullscreen, widgetId])
-
-  useEffect(() => {
     const t = setTimeout(() => {
-      atlasRef.current?.invalidateSize()
+      atlasMapRef.current?.invalidateSize()
+      globeRef.current?.invalidateSize()
       window.dispatchEvent(new Event('resize'))
     }, 200)
     return () => clearTimeout(t)
   }, [isFullscreen])
 
   useEffect(() => {
-    if (!isLeaflet) return
-    const t = setTimeout(() => atlasRef.current?.invalidateSize(), 200)
+    const t = setTimeout(() => {
+      if (mapModeRef.current === 'leaflet') atlasMapRef.current?.invalidateSize()
+      if (mapModeRef.current === 'globe')   globeRef.current?.invalidateSize()
+    }, 200)
     return () => clearTimeout(t)
-  }, [mapMode, isLeaflet])
+  }, [mapMode])
 
   function switchTab(mode) {
     setMapMode(mode)
@@ -460,8 +436,8 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
   const layerBarStyle = { overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }
 
   return (
-    <div className="widget" data-collapsed={collapsed || undefined}>
-      <WHeader title="ATLAS" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={onFullscreen} isFullscreen={isFullscreen} onClose={onClose} />
+    <div className={`widget${isFullscreen ? ' atlas-fullscreen' : ''}`} data-collapsed={collapsed || undefined}>
+      <WHeader title="ATLAS" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={() => setIsFullscreen(v => !v)} isFullscreen={isFullscreen} onClose={onClose} />
 
       {/* Primary layer / tab bar */}
       <div className="cmap-layer-bar" style={layerBarStyle} onPointerDownCapture={e => e.stopPropagation()}>
@@ -498,10 +474,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
           title="Toggle 3D globe view">
           GLOBE
         </button>
-        {!isIframe
-          ? <button className="cmap-update-btn" onClick={() => atlasRef.current?.refresh()} title="Re-fetch live data">⟳ Update</button>
-          : <button className="cmap-update-btn" onClick={() => setMapMode('leaflet')} title="Back to world map">← WORLD</button>
-        }
+        <button className="cmap-update-btn" onClick={() => atlasMapRef.current?.refresh()} title="Re-fetch live data">⟳ Update</button>
       </div>
 
       {dataLoading && (
@@ -512,10 +485,9 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
       )}
 
       <div style={{ flex: 1, minHeight: 0, width: '100%', position: 'relative', overflow: 'hidden' }}>
-        {/* Leaflet — conditionally rendered; fullscreen toggle doesn't change mapMode so it stays mounted */}
-        {isLeaflet && (
+        <div style={{ display: isLeaflet ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <AtlasMap
-            ref={atlasRef}
+            ref={atlasMapRef}
             showConflicts={true}
             showNatural={showNatural}
             showPiracy={showPiracy}
@@ -527,20 +499,18 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
               saveState({ center, zoom })
             }}
           />
-        )}
+        </div>
 
-        {/* Globe */}
-        {isGlobe && (
+        <div style={{ display: isGlobe ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <GlobeView
-            ref={atlasRef}
+            ref={globeRef}
             showConflicts={true}
             showNatural={showNatural}
             showPiracy={showPiracy}
             gdeltEvents={CONFLICTS}
           />
-        )}
+        </div>
 
-        {/* Iframe tabs: always in DOM, CSS-only show/hide — prevents state reset on fullscreen toggle */}
         <div style={{ display: mapMode === 'conflict' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <iframe
             src={CONFLICT_SRC}

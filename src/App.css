@@ -1529,6 +1529,15 @@ button.status-dot:hover { opacity: 0.8; }
 }
 .widget[data-collapsed] .widget-subtitle { display: none !important; }
 
+/* ── Atlas CSS-only fullscreen ── */
+.atlas-fullscreen {
+  position: fixed !important;
+  top: 0 !important; left: 0 !important;
+  width: 100vw !important; height: 100vh !important;
+  z-index: 9999 !important;
+  background: var(--bg, #0A0C10) !important;
+}
+
 /* ── Fullscreen overlay ── */
 .fullscreen-overlay {
   position: fixed; z-index: 1000;
