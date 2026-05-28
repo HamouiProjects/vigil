@@ -29,7 +29,7 @@ const CONFLICT_REGIONS = [
   { id: 'russia',       label: '🇷🇺 RUSSIA',       src: 'https://liveuamap.com/en/russia'       },
 ]
 
-const MARINE_SRC  = 'https://www.vesselfinder.com/aismap?zoom=4&lat=20&lon=0&width=100%25&height=100%25&names=true&mmsi=&imo=&show_track=false&fleet=&fleet_name=&fleet_timespan=1440'
+const MARINE_SRC  = 'https://www.marinetraffic.com/en/ais/embed/zoom:4/centery:20/centerx:0/maptype:0/shownames:false/mmsi:0/shipid:0/fleet:/fleet_id:/vtypes:/showmenu:/remember:false'
 const FLIGHTS_SRC = 'https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3'
 const CYBER_SRC   = 'https://threatmap.checkpoint.com/'
 
@@ -404,11 +404,6 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
   const [showPiracy,       setShowPiracy]        = useState(saved?.showPiracy       ?? true)
   const [mapMode,          setMapMode]           = useState(initialMode)
   const [conflictRegionId, setConflictRegionId]  = useState(saved?.conflictRegionId ?? 'worldwide')
-  const [mountedTabs,      setMountedTabs]       = useState(() => {
-    const s = new Set()
-    if (['conflict', 'marine', 'flights', 'cyber'].includes(initialMode)) s.add(initialMode)
-    return s
-  })
   const [dataLoading, setDataLoading] = useState(false)
   const [isLive,      setIsLive]      = useState(true)
 
@@ -472,7 +467,6 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
 
   function switchTab(mode) {
     setMapMode(mode)
-    setMountedTabs(prev => { const s = new Set(prev); s.add(mode); return s })
   }
 
   const layerBarStyle = { overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }
@@ -571,47 +565,39 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
           />
         )}
 
-        {/* Iframe tabs: lazy-mount then stay in DOM — CSS show/hide prevents state reset on fullscreen toggle */}
-        {mountedTabs.has('conflict') && (
-          <div style={{ display: mapMode === 'conflict' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
-            <iframe
-              src={conflictRegion.src}
-              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-              title="CONFLICT — Liveuamap"
-              allowFullScreen
-            />
-          </div>
-        )}
-        {mountedTabs.has('marine') && (
-          <div style={{ display: mapMode === 'marine' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
-            <iframe
-              src={MARINE_SRC}
-              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-              title="MARINE — VesselFinder"
-              allowFullScreen
-            />
-          </div>
-        )}
-        {mountedTabs.has('flights') && (
-          <div style={{ display: mapMode === 'flights' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
-            <iframe
-              src={FLIGHTS_SRC}
-              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-              title="FLIGHTS — ADS-B Exchange"
-              allowFullScreen
-            />
-          </div>
-        )}
-        {mountedTabs.has('cyber') && (
-          <div style={{ display: mapMode === 'cyber' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
-            <iframe
-              src={CYBER_SRC}
-              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-              title="CYBER — Checkpoint"
-              allowFullScreen
-            />
-          </div>
-        )}
+        {/* Iframe tabs: always in DOM, CSS-only show/hide — prevents state reset on fullscreen toggle */}
+        <div style={{ display: mapMode === 'conflict' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+          <iframe
+            src={conflictRegion.src}
+            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+            title="CONFLICT — Liveuamap"
+            allowFullScreen
+          />
+        </div>
+        <div style={{ display: mapMode === 'marine' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+          <iframe
+            src={MARINE_SRC}
+            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+            title="MARINE — MarineTraffic"
+            allowFullScreen
+          />
+        </div>
+        <div style={{ display: mapMode === 'flights' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+          <iframe
+            src={FLIGHTS_SRC}
+            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+            title="FLIGHTS — ADS-B Exchange"
+            allowFullScreen
+          />
+        </div>
+        <div style={{ display: mapMode === 'cyber' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
+          <iframe
+            src={CYBER_SRC}
+            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+            title="CYBER — Checkpoint"
+            allowFullScreen
+          />
+        </div>
       </div>
     </div>
   )
