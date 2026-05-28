@@ -10,9 +10,10 @@ const DEFAULT_SETTINGS = {
 export const WS_META_KEY   = 'vigil_workspaces'
 export const ACTIVE_WS_KEY = 'vigil_active_workspace'
 
-export const settingsKey = id => `vigil_ws${id.replace('ws-', '')}_settings`
-export const widgetsKey  = id => `vigil_ws${id.replace('ws-', '')}_widgets`
-export const wsKey       = id => `vigil_workspace_${id.replace('ws-', '')}`
+export const settingsKey  = id => `vigil_ws${id.replace('ws-', '')}_settings`
+export const widgetsKey   = id => `vigil_ws${id.replace('ws-', '')}_widgets`
+export const wsKey        = id => `vigil_workspace_${id.replace('ws-', '')}`
+export const collapseKey  = id => `vigil_ws${id.replace('ws-', '')}_collapse`
 
 export const DEFAULT_WORKSPACES = [
   { id: 'ws-1', name: 'CONFLICT WATCH' },
@@ -106,4 +107,17 @@ export function resolveInitialWs() {
     const saved  = localStorage.getItem(ACTIVE_WS_KEY)
     return (saved && wsList.some(w => w.id === saved)) ? saved : (wsList[0]?.id ?? 'ws-1')
   } catch { return 'ws-1' }
+}
+
+// Clear transient view state (atlas tab, conflict region, map center/zoom).
+// Call only on sign-out — do NOT call elsewhere.
+export function clearVigilPersistedState() {
+  try {
+    const toRemove = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith('vigil_atlas_state_')) toRemove.push(k)
+    }
+    toRemove.forEach(k => localStorage.removeItem(k))
+  } catch {}
 }

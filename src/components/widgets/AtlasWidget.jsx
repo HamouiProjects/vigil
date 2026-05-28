@@ -10,7 +10,7 @@ import {
   quakeSize, quakeTimeAgo,
   fetchNOAAStorms, fetchUSGS,
 } from '../../utils/atlasHelpers'
-const CONFLICT_SRC = 'https://liveuamap.com'
+const CONFLICT_SRC = 'https://liveuamap.com/'
 
 const MARINE_SRC  = 'https://www.shipfinder.com/?mmsi=&imo='
 const FLIGHTS_SRC = 'https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3'

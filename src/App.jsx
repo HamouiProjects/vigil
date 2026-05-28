@@ -9,7 +9,8 @@ import { DEFAULT_TEMPLATES, TEMPLATE_KEYWORDS, TEMPLATE_RSS_DEFAULTS, MIGRATION_
 import { WIDGET_CATALOG, WIDGET_DEFAULTS } from './constants/widgetTypes'
 import {
   readSettings, readWorkspacesMeta, readWidgets, readLayout, resolveInitialWs,
-  WS_META_KEY, ACTIVE_WS_KEY, settingsKey, widgetsKey, wsKey,
+  WS_META_KEY, ACTIVE_WS_KEY, settingsKey, widgetsKey, wsKey, collapseKey,
+  clearVigilPersistedState,
 } from './utils/workspaceHelpers'
 import KeywordFeed, { kfTabsKey } from './components/widgets/NewsSearchWidget'
 import AuthScreen from './components/layout/AuthScreen'
@@ -231,7 +232,12 @@ export default function App() {
   })
   const [wsCollapse, setWsCollapse] = useState(() => {
     const wss = readWorkspacesMeta()
-    return Object.fromEntries(wss.map(ws => [ws.id, {}]))
+    return Object.fromEntries(wss.map(ws => {
+      try {
+        const raw = localStorage.getItem(collapseKey(ws.id))
+        return [ws.id, raw ? JSON.parse(raw) : {}]
+      } catch { return [ws.id, {}] }
+    }))
   })
 
   useEffect(() => subscribeSettings(s => {
@@ -361,6 +367,7 @@ export default function App() {
     localStorage.removeItem(wsKey(wsId))
     localStorage.removeItem(settingsKey(wsId))
     localStorage.removeItem(widgetsKey(wsId))
+    localStorage.removeItem(collapseKey(wsId))
     if (saveTimers.current[wsId]) { clearTimeout(saveTimers.current[wsId]); delete saveTimers.current[wsId] }
     setMountedWs(prev  => { const s = new Set(prev); s.delete(wsId); return s })
     setWsLayouts(prev  => { const n = { ...prev }; delete n[wsId]; return n })
@@ -431,6 +438,7 @@ export default function App() {
     setWsCollapse(prev => {
       const next = { ...(prev[wsId] ?? {}) }
       delete next[widgetId]
+      try { localStorage.setItem(collapseKey(wsId), JSON.stringify(next)) } catch {}
       return { ...prev, [wsId]: next }
     })
   }
@@ -446,11 +454,10 @@ export default function App() {
         ...prev,
         [wsId]: (prev[wsId] ?? []).map(item => item.i === widgetId ? { ...item, h: savedH } : item),
       }))
-      setWsCollapse(prev => {
-        const next = { ...(prev[wsId] ?? {}) }
-        delete next[widgetId]
-        return { ...prev, [wsId]: next }
-      })
+      const nextCollapse = { ...collapseMap }
+      delete nextCollapse[widgetId]
+      setWsCollapse(prev => ({ ...prev, [wsId]: nextCollapse }))
+      try { localStorage.setItem(collapseKey(wsId), JSON.stringify(nextCollapse)) } catch {}
     } else {
       const item    = (wsLayouts[wsId] ?? []).find(i => i.i === widgetId)
       const current = item?.h ?? defaultH
@@ -459,7 +466,9 @@ export default function App() {
         ...prev,
         [wsId]: (prev[wsId] ?? []).map(i => i.i === widgetId ? { ...i, h: 1 } : i),
       }))
-      setWsCollapse(prev => ({ ...prev, [wsId]: { ...(prev[wsId] ?? {}), [widgetId]: saveH } }))
+      const nextCollapse = { ...collapseMap, [widgetId]: saveH }
+      setWsCollapse(prev => ({ ...prev, [wsId]: nextCollapse }))
+      try { localStorage.setItem(collapseKey(wsId), JSON.stringify(nextCollapse)) } catch {}
     }
   }
 
@@ -490,7 +499,7 @@ export default function App() {
         onShowAddModal={() => setShowAddModal(true)}
         onOpenSettings={() => setShowSettings(true)}
         user={user}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={() => { clearVigilPersistedState(); supabase.auth.signOut() }}
       />
       <div style={{ width: '100%', height: 'calc(100vh - 40px)', position: 'relative' }}>
         {[...mountedWs].map(wsId => (
