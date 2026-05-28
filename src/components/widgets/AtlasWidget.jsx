@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import WHeader from '../shared/WHeader'
+import AtlasGlobe from './AtlasGlobe'
 import Globe from 'globe.gl'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -507,19 +508,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
 
       <div style={{ flex: 1, minHeight: 0, width: '100%', position: 'relative', overflow: 'hidden' }}>
         <div style={{ display: activeTab === 'leaflet' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
-          <AtlasMap
-            ref={atlasMapRef}
-            showConflicts={true}
-            showNatural={showNatural}
-            showPiracy={showPiracy}
-            onLoadingChange={setDataLoading}
-            initialCenter={currentViewRef.current.center}
-            initialZoom={currentViewRef.current.zoom}
-            onMove={({ center, zoom }) => {
-              currentViewRef.current = { center, zoom }
-              saveState({ center, zoom })
-            }}
-          />
+          <AtlasGlobe workspacePaused={workspacePaused} />
         </div>
 
         <div style={{ display: activeTab === 'globe' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
