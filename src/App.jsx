@@ -188,7 +188,7 @@ function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, on
     case 'feed':      return <KeywordFeed         {...p} widgetId={widget.id} />
     case 'rss':       return <RssFeed             {...p} widgetId={widget.id} />
     case 'prices':    return <PriceTracker        {...p} widgetId={widget.id} />
-    case 'stream':    return <Livestream          {...p} initialUrl={settings.livestreamUrl}  onUrlChange={url  => updateSetting('livestreamUrl', url)} />
+    case 'stream':    return <Livestream          {...p} widgetId={widget.id} />
     case 'weather':   return <Weather             {...p} widgetId={widget.id} initialCity={settings.weatherCity} onCityChange={city => updateSetting('weatherCity', city)} />
     case 'conflict':  return <ConflictFeed        {...p} />
     case 'chart':     return <ChartWidget         {...p} widgetId={widget.id} />
