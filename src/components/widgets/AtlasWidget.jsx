@@ -485,21 +485,23 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
       )}
 
       <div style={{ flex: 1, minHeight: 0, width: '100%', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ display: isLeaflet ? 'block' : 'none', position: 'absolute', inset: 0 }}>
-          <AtlasMap
-            ref={atlasMapRef}
-            showConflicts={true}
-            showNatural={showNatural}
-            showPiracy={showPiracy}
-            onLoadingChange={setDataLoading}
-            initialCenter={currentViewRef.current.center}
-            initialZoom={currentViewRef.current.zoom}
-            onMove={({ center, zoom }) => {
-              currentViewRef.current = { center, zoom }
-              saveState({ center, zoom })
-            }}
-          />
-        </div>
+        {isLeaflet && (
+          <div style={{ position: 'absolute', inset: 0 }}>
+            <AtlasMap
+              ref={atlasMapRef}
+              showConflicts={true}
+              showNatural={showNatural}
+              showPiracy={showPiracy}
+              onLoadingChange={setDataLoading}
+              initialCenter={currentViewRef.current.center}
+              initialZoom={currentViewRef.current.zoom}
+              onMove={({ center, zoom }) => {
+                currentViewRef.current = { center, zoom }
+                saveState({ center, zoom })
+              }}
+            />
+          </div>
+        )}
 
         <div style={{ display: isGlobe ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <GlobeView
@@ -535,14 +537,16 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
             allowFullScreen
           />
         </div>
-        <div style={{ display: mapMode === 'cyber' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
-          <iframe
-            src={CYBER_SRC}
-            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-            title="CYBER — Checkpoint"
-            allowFullScreen
-          />
-        </div>
+        {mapMode === 'cyber' && (
+          <div style={{ position: 'absolute', inset: 0 }}>
+            <iframe
+              src={CYBER_SRC}
+              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+              title="CYBER — Checkpoint"
+              allowFullScreen
+            />
+          </div>
+        )}
       </div>
     </div>
   )
