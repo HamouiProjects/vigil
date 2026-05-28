@@ -10,24 +10,7 @@ import {
   quakeSize, quakeTimeAgo,
   fetchNOAAStorms, fetchUSGS,
 } from '../../utils/atlasHelpers'
-const CONFLICT_REGIONS = [
-  { id: 'worldwide',    label: '🌍 WORLDWIDE',     src: 'https://liveuamap.com'                 },
-  { id: 'ukraine',      label: '🇺🇦 UKRAINE',      src: 'https://liveuamap.com/en/ukraine'      },
-  { id: 'middleeast',   label: '🌙 MIDDLE EAST',   src: 'https://liveuamap.com/en/middleeast'   },
-  { id: 'israel',       label: '🇮🇱 ISRAEL/GAZA',  src: 'https://liveuamap.com/en/israel'       },
-  { id: 'syria',        label: '🇸🇾 SYRIA',        src: 'https://liveuamap.com/en/syria'        },
-  { id: 'yemen',        label: '🇾🇪 YEMEN',        src: 'https://liveuamap.com/en/yemen'        },
-  { id: 'sudan',        label: '🇸🇩 SUDAN',        src: 'https://liveuamap.com/en/sudan'        },
-  { id: 'africa',       label: '🌍 AFRICA',        src: 'https://liveuamap.com/en/africa'       },
-  { id: 'libya',        label: '🇱🇾 LIBYA',        src: 'https://liveuamap.com/en/libya'        },
-  { id: 'iraq',         label: '🇮🇶 IRAQ',         src: 'https://liveuamap.com/en/iraq'         },
-  { id: 'afghanistan',  label: '🇦🇫 AFGHANISTAN',  src: 'https://liveuamap.com/en/afghanistan'  },
-  { id: 'asia',         label: '🌏 ASIA',          src: 'https://liveuamap.com/en/asia'         },
-  { id: 'myanmar',      label: '🇲🇲 MYANMAR',      src: 'https://liveuamap.com/en/myanmar'      },
-  { id: 'latinamerica', label: '🌎 LATIN AMERICA', src: 'https://liveuamap.com/en/latinamerica' },
-  { id: 'usa',          label: '🇺🇸 USA',          src: 'https://liveuamap.com/en/usa'          },
-  { id: 'russia',       label: '🇷🇺 RUSSIA',       src: 'https://liveuamap.com/en/russia'       },
-]
+const CONFLICT_SRC = 'https://liveuamap.com'
 
 const MARINE_SRC  = 'https://www.shipfinder.com/?mmsi=&imo='
 const FLIGHTS_SRC = 'https://globe.adsbexchange.com/?lat=20&lon=0&zoom=3'
@@ -403,7 +386,6 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
   const [showNatural,      setShowNatural]      = useState(saved?.showNatural      ?? true)
   const [showPiracy,       setShowPiracy]        = useState(saved?.showPiracy       ?? true)
   const [mapMode,          setMapMode]           = useState(initialMode)
-  const [conflictRegionId, setConflictRegionId]  = useState(saved?.conflictRegionId ?? 'worldwide')
   const [dataLoading, setDataLoading] = useState(false)
   const [isLive,      setIsLive]      = useState(true)
 
@@ -411,14 +393,10 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
   const currentViewRef      = useRef({ center: saved?.center ?? [20, 0], zoom: saved?.zoom ?? 2 })
   const mapModeRef          = useRef(mapMode)
   mapModeRef.current        = mapMode
-  const conflictRegionIdRef = useRef(conflictRegionId)
-  conflictRegionIdRef.current = conflictRegionId
 
   const isLeaflet = mapMode === 'leaflet'
   const isGlobe   = mapMode === 'globe'
   const isIframe  = !isLeaflet && !isGlobe
-
-  const conflictRegion = CONFLICT_REGIONS.find(r => r.id === conflictRegionId) ?? CONFLICT_REGIONS[0]
 
   function saveState(patch) {
     try {
@@ -428,9 +406,9 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
   }
 
   useEffect(() => {
-    saveState({ showNatural, showPiracy, mapMode, conflictRegionId })
+    saveState({ showNatural, showPiracy, mapMode })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showNatural, showPiracy, mapMode, conflictRegionId])
+  }, [showNatural, showPiracy, mapMode])
 
   useEffect(() => {
     if (!isFullscreen) return
@@ -441,7 +419,6 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
           center: currentViewRef.current.center,
           zoom: currentViewRef.current.zoom,
           mapMode: mapModeRef.current,
-          conflictRegionId: conflictRegionIdRef.current,
         },
       }))
     }
@@ -451,11 +428,10 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
     if (isFullscreen) return
     function onExitFs(e) {
       if (e.detail?.widgetId !== widgetId) return
-      const { center, zoom, mapMode: fsMode, conflictRegionId: fsRegionId } = e.detail
+      const { center, zoom, mapMode: fsMode } = e.detail
       currentViewRef.current = { center, zoom }
       saveState({ center, zoom })
-      if (fsMode)     setMapMode(fsMode)
-      if (fsRegionId) setConflictRegionId(fsRegionId)
+      if (fsMode) setMapMode(fsMode)
       setTimeout(() => atlasRef.current?.setView(center, zoom), 250)
     }
     window.addEventListener('vigil:atlas-exit-fs', onExitFs)
@@ -528,19 +504,6 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
         }
       </div>
 
-      {/* Conflict region selector — shown only on conflict tab */}
-      {mapMode === 'conflict' && (
-        <div className="cmap-layer-bar" style={{ ...layerBarStyle, borderTop: 'none' }} onPointerDownCapture={e => e.stopPropagation()}>
-          {CONFLICT_REGIONS.map(r => (
-            <button
-              key={r.id}
-              className={`cmap-layer-btn${conflictRegionId === r.id ? ' active' : ''}`}
-              onClick={() => setConflictRegionId(r.id)}
-            >{r.label}</button>
-          ))}
-        </div>
-      )}
-
       {dataLoading && (
         <div className="atlas-loading-bar">
           <span style={{ fontSize: '8px', color: '#2a3a4a', letterSpacing: '0.1em', whiteSpace: 'nowrap' }}>LOADING DATA LAYERS</span>
@@ -580,7 +543,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen,
         {/* Iframe tabs: always in DOM, CSS-only show/hide — prevents state reset on fullscreen toggle */}
         <div style={{ display: mapMode === 'conflict' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <iframe
-            src={conflictRegion.src}
+            src={CONFLICT_SRC}
             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
             title="CONFLICT — Liveuamap"
             allowFullScreen
