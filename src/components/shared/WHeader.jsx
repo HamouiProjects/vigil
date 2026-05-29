@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react'
 import { getSettings, subscribeSettings } from '../../utils/settingsStore'
 
+export function InfoTooltip({ text, wide }) {
+  return (
+    <span className="info-tip-wrap">
+      <span className="info-tip-btn">?</span>
+      <span className={`info-tip-box${wide ? ' info-tip-box-wide' : ''}`}>{text}</span>
+    </span>
+  )
+}
+
 const LiveBtn = ({ isLive, workspacePaused, onToggle }) => {
   const [globalLive, setGlobalLive] = useState(() => getSettings().globalLive);
   useEffect(() => subscribeSettings((s) => setGlobalLive(s.globalLive)), []);

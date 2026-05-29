@@ -19,8 +19,6 @@ import AddWidgetModal from './components/layout/AddWidgetModal'
 import SettingsModal from './components/layout/SettingsModal'
 import { getSettings, saveSettings, subscribeSettings } from './utils/settingsStore'
 import AtlasWidget from './components/widgets/AtlasWidget'
-import FeedsWidget from './components/widgets/FeedsWidget'
-import ConflictFeed from './components/widgets/ConflictFeed'
 import RssFeed from './components/widgets/RssFeedWidget'
 import PriceTracker from './components/widgets/PriceTrackerWidget'
 import Livestream from './components/widgets/LivestreamWidget'
@@ -185,13 +183,11 @@ function renderWidgetComponent(widget, { onClose, onFullscreen, isFullscreen, on
   const p = { onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused }
   switch (widget.type) {
     case 'map':       return <AtlasWidget         {...p} widgetId={widget.id} />
-    case 'feeds':     return <FeedsWidget         {...p} />
     case 'feed':      return <KeywordFeed         {...p} widgetId={widget.id} />
     case 'rss':       return <RssFeed             {...p} widgetId={widget.id} />
     case 'prices':    return <PriceTracker        {...p} widgetId={widget.id} />
     case 'stream':    return <Livestream          {...p} widgetId={widget.id} />
     case 'weather':   return <Weather             {...p} widgetId={widget.id} initialCity={settings.weatherCity} onCityChange={city => updateSetting('weatherCity', city)} />
-    case 'conflict':  return <ConflictFeed        {...p} />
     case 'chart':     return <ChartWidget         {...p} widgetId={widget.id} />
     case 'heatmap':   return <HeatmapWidget       {...p} />
     case 'browser':   return <ArticleReaderWidget {...p} widgetId={widget.id} />
@@ -529,7 +525,7 @@ export default function App() {
               isDraggable={wsId === activeWs}
             >
               {(wsWidgets[wsId] ?? []).map(widget => (
-                <div key={widget.id} style={{ height: '100%', overflow: 'hidden' }}>
+                <div key={widget.id} style={{ height: '100%', overflow: 'hidden', visibility: fullscreenId === widget.id ? 'hidden' : undefined }}>
                   {renderWidgetComponent(widget, {
                     onClose:      () => removeWidget(wsId, widget.id),
                     onFullscreen: () => enterFullscreen(widget.id),
@@ -538,7 +534,7 @@ export default function App() {
                     collapsed:    !!(wsCollapse[wsId] ?? {})[widget.id],
                     settings:     wsSettings[wsId] ?? {},
                     updateSetting,
-                    workspacePaused: pausedWorkspaces.includes(wsId) || !globalLive || wsId !== activeWs,
+                    workspacePaused: pausedWorkspaces.includes(wsId) || !globalLive || (wsId !== activeWs && inactiveTabPause),
                   })}
                 </div>
               ))}

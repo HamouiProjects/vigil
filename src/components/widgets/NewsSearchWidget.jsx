@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import usePageVisibility from '../../hooks/usePageVisibility'
 import { SkeletonFeedItems } from '../shared/SkeletonLoader'
-import { InfoTooltip } from './ConflictFeed'
+import WHeader, { InfoTooltip } from '../shared/WHeader'
 import { rssRelTime } from './RssFeedWidget'
-import WHeader from '../shared/WHeader'
 
 const GN_RSS2JSON = q =>
   `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(
@@ -66,6 +65,8 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
 
   const tabsRef  = useRef(tabs);  tabsRef.current  = tabs
   const cacheRef = useRef(cache); cacheRef.current = cache
+  const pausedRef = useRef(workspacePaused)
+  useEffect(() => { pausedRef.current = workspacePaused }, [workspacePaused])
 
   useEffect(() => {
     try { localStorage.setItem(`vigil_newssearch_sidebar_collapsed_${widgetId}`, JSON.stringify(!sidebarOpen)) } catch {}
@@ -89,6 +90,7 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
   }, [])
 
   useEffect(() => {
+    if (pausedRef.current) return
     const tab = tabsRef.current.find(t => t.id === activeId)
     if (!tab) return
     const entry = cacheRef.current[activeId]
@@ -98,7 +100,7 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
 
   useEffect(() => {
     const id = setInterval(() => {
-      if (document.hidden) return
+      if (document.hidden || pausedRef.current) return
       const tab = tabsRef.current.find(t => t.id === activeId)
       if (tab) load(activeId, tab.keyword)
     }, 120_000)
@@ -107,7 +109,7 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
 
   const isVisible = usePageVisibility()
   useEffect(() => {
-    if (!isVisible) return
+    if (!isVisible || pausedRef.current) return
     const tab   = tabsRef.current.find(t => t.id === activeId)
     const entry = cacheRef.current[activeId]
     if (tab && (!entry || Date.now() - entry.fetchedAt > 5 * 60_000)) load(activeId, tab.keyword)

@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import usePageVisibility from '../../hooks/usePageVisibility'
 import { usePolling } from '../../hooks/usePolling'
 import { SkeletonFeedItems } from '../shared/SkeletonLoader'
-import { InfoTooltip } from './ConflictFeed'
-import WHeader from '../shared/WHeader'
+import WHeader, { InfoTooltip } from '../shared/WHeader'
 
 const RSS_DEFAULT_FEEDS = [
   { id: 'bbc',       name: 'BBC News',      url: 'https://feeds.bbci.co.uk/news/rss.xml',            enabled: true, color: '#e63946' },
@@ -121,10 +120,10 @@ export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFul
 
   const [isLive,       setIsLive]       = useState(true)
   const [sourcesCollapsed, setSourcesCollapsed] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('vigil_rss_sources_collapsed') ?? 'false') } catch { return false }
+    try { return JSON.parse(localStorage.getItem(`vigil_rss_sources_collapsed_${widgetId}`) ?? 'false') } catch { return false }
   })
   const [filtersCollapsed, setFiltersCollapsed] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('vigil_rss_filters_collapsed') ?? 'false') } catch { return false }
+    try { return JSON.parse(localStorage.getItem(`vigil_rss_filters_collapsed_${widgetId}`) ?? 'false') } catch { return false }
   })
   const seenRef        = useRef(new Set())
   const [seenVersion,  setSeenVersion]  = useState(0)
@@ -167,11 +166,8 @@ export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFul
     const results = await Promise.allSettled(
       enabled.map(f => {
         const url = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(f.url)}`
-        console.log(`[RSS] fetching ${f.name}:`, url)
         return fetch(url, { signal: AbortSignal.timeout(15000) })
           .then(r => r.json())
-          .then(json => { console.log(`[RSS] ${f.name} response:`, json.status, json.message ?? ''); return json })
-          .catch(err => { console.error(`[RSS] ${f.name} fetch error:`, err); throw err })
       })
     )
     const newErrors = {}
@@ -254,12 +250,12 @@ export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFul
   }, [activeSource, widgetId])
 
   useEffect(() => {
-    try { localStorage.setItem('vigil_rss_sources_collapsed', JSON.stringify(sourcesCollapsed)) } catch {}
-  }, [sourcesCollapsed])
+    try { localStorage.setItem(`vigil_rss_sources_collapsed_${widgetId}`, JSON.stringify(sourcesCollapsed)) } catch {}
+  }, [sourcesCollapsed, widgetId])
 
   useEffect(() => {
-    try { localStorage.setItem('vigil_rss_filters_collapsed', JSON.stringify(filtersCollapsed)) } catch {}
-  }, [filtersCollapsed])
+    try { localStorage.setItem(`vigil_rss_filters_collapsed_${widgetId}`, JSON.stringify(filtersCollapsed)) } catch {}
+  }, [filtersCollapsed, widgetId])
 
   // eslint-disable-next-line no-unused-expressions
   seenVersion

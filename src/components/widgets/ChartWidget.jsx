@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import WHeader from '../shared/WHeader'
 
 const TV_DEFAULT_SYMBOL = 'BINANCE:BTCUSDT'
@@ -10,6 +10,15 @@ export default function ChartWidget({ widgetId, onClose, onFullscreen, isFullscr
   })
   const [inputSymbol, setInputSymbol] = useState(activeSymbol)
   const [isLive, setIsLive] = useState(true)
+  const iframeRef = useRef(null)
+
+  const tvUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_vigil&symbol=${encodeURIComponent(activeSymbol)}&interval=D&theme=dark&style=1&locale=en&toolbar_bg=0a0c10&bg_color=0a0c10&enable_publishing=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0`
+
+  useEffect(() => {
+    if (iframeRef.current) {
+      iframeRef.current.src = workspacePaused ? '' : tvUrl
+    }
+  }, [workspacePaused, tvUrl])
 
   function go(raw) {
     const sym = raw.trim().toUpperCase()
@@ -20,7 +29,6 @@ export default function ChartWidget({ widgetId, onClose, onFullscreen, isFullscr
   }
 
   const displayTicker = activeSymbol.includes(':') ? activeSymbol.split(':')[1] : activeSymbol
-  const tvUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_vigil&symbol=${encodeURIComponent(activeSymbol)}&interval=D&theme=dark&style=1&locale=en&toolbar_bg=0a0c10&bg_color=0a0c10&enable_publishing=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0`
 
   return (
     <div className="widget" data-collapsed={collapsed || undefined}>
@@ -42,8 +50,9 @@ export default function ChartWidget({ widgetId, onClose, onFullscreen, isFullscr
         <button className="rss-go-btn" type="submit">GO</button>
       </form>
       <iframe
+        ref={iframeRef}
         key={activeSymbol}
-        src={tvUrl}
+        src={workspacePaused ? '' : tvUrl}
         style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
         title="TradingView Chart"
         allow="clipboard-write"

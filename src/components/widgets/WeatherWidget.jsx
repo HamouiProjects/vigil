@@ -73,6 +73,7 @@ export default function Weather({ widgetId, initialCity = 'Berlin', onCityChange
   useEffect(() => {
     let cancelled = false
     async function run() {
+      if (workspacePaused) return
       setLoading(true); setError(null)
       try {
         let lat, lon, name
@@ -106,7 +107,7 @@ export default function Weather({ widgetId, initialCity = 'Berlin', onCityChange
     run()
     const id = setInterval(() => { if (!document.hidden) run() }, 10 * 60_000)
     return () => { cancelled = true; clearInterval(id) }
-  }, [city, latLon, locKey, fetchKey])
+  }, [city, latLon, locKey, fetchKey, workspacePaused])
 
   useEffect(() => {
     if (isVisibleWx) setFetchKey(k => k + 1)

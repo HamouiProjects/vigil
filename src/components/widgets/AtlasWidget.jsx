@@ -1,15 +1,6 @@
-import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import WHeader from '../shared/WHeader'
 import AtlasGlobe from './AtlasGlobe'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import { CONFLICTS, WILDFIRES_STATIC, PIRACY_ZONES } from '../../constants/atlasData'
-import {
-  conflictIcon, wildfireIcon, stormIcon,
-  mapPopupHtml, fireMarkerEvents,
-  quakeSize, quakeTimeAgo,
-  fetchNOAAStorms, fetchUSGS,
-} from '../../utils/atlasHelpers'
 const LAYER_DEFS = [
   { key: 'conflict',    label: 'Conflict',    color: '#FF3333' },
   { key: 'wildfires',   label: 'Wildfires',   color: '#FFD700' },
@@ -40,148 +31,6 @@ function migrateMapMode(saved) {
   return valid.includes(saved.mapMode) ? saved.mapMode : 'leaflet'
 }
 
-const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, showPiracy, onLoadingChange, initialCenter = [20, 0], initialZoom = 2, onMove }, ref) {
-  const containerRef  = useRef(null)
-  const mapRef        = useRef(null)
-  const onMoveRef     = useRef(onMove)
-  onMoveRef.current   = onMove
-  const initViewRef   = useRef({ center: initialCenter, zoom: initialZoom })
-  const layerConflict = useRef(null)
-  const layerQuake    = useRef(null)
-  const layerStorm    = useRef(null)
-  const layerWildfire = useRef(null)
-  const layerPiracy   = useRef(null)
-  const [loading,   setLoading]   = useState(false)
-  const [quakeLive, setQuakeLive] = useState(false)
-
-  useEffect(() => {
-    const m = mapRef.current
-    if (!m) return
-    const sync = (lr, show) => { if (lr.current) { if (show) lr.current.addTo(m); else lr.current.remove() } }
-    sync(layerConflict, showConflicts)
-    sync(layerQuake,    showNatural)
-    sync(layerStorm,    showNatural)
-    sync(layerWildfire, showNatural)
-    sync(layerPiracy,   showPiracy)
-  }, [showConflicts, showNatural, showPiracy])
-
-  const refresh = useCallback(async () => {
-    if (!mapRef.current) return
-    setLoading(true); onLoadingChange?.(true)
-
-    try {
-      const quakes = await fetchUSGS()
-      layerQuake.current?.clearLayers()
-      quakes.forEach(q => {
-        const cm = L.circleMarker([q.lat, q.lng], {
-          radius: quakeSize(q.mag) / 2, fillColor: '#9b59b6', color: '#7d3c98',
-          weight: 1, opacity: 0.9, fillOpacity: 0.75,
-        })
-        cm.bindPopup(mapPopupHtml(`M${q.mag.toFixed(1)} — ${q.place}`, quakeTimeAgo(q.time)),
-          { className: 'cmap-popup-wrap', maxWidth: 240, minWidth: 180 })
-        cm.on('click', () => fireMarkerEvents(q.place, q.place, '', q.lat, q.lng))
-        layerQuake.current?.addLayer(cm)
-      })
-      setQuakeLive(true)
-    } catch { setQuakeLive(false) }
-
-    try {
-      const storms = await fetchNOAAStorms()
-      layerStorm.current?.clearLayers()
-      storms.forEach(s => {
-        const mk = L.marker([s.lat, s.lng], { icon: stormIcon(s.cls) })
-        mk.bindPopup(mapPopupHtml(s.name, `${s.cls} · ${s.wind} kt`),
-          { className: 'cmap-popup-wrap', maxWidth: 220, minWidth: 160 })
-        mk.on('click', () => fireMarkerEvents(`${s.name} storm`, s.name, s.country, s.lat, s.lng))
-        layerStorm.current?.addLayer(mk)
-      })
-    } catch { /* no active storms or CORS */ }
-
-    setLoading(false); onLoadingChange?.(false)
-  }, [onLoadingChange])
-
-  useImperativeHandle(ref, () => ({
-    refresh,
-    invalidateSize: () => { mapRef.current?.invalidateSize() },
-    setView: (center, zoom) => { mapRef.current?.setView(center, zoom) },
-  }), [refresh])
-
-  const showRef = useRef({ showConflicts, showNatural, showPiracy })
-  showRef.current = { showConflicts, showNatural, showPiracy }
-
-  useEffect(() => {
-    if (!containerRef.current || mapRef.current) return
-    const map = L.map(containerRef.current, { center: initViewRef.current.center, zoom: initViewRef.current.zoom, zoomControl: true })
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: 'abcd',
-      maxZoom: 19,
-    }).addTo(map)
-
-    const sv = showRef.current
-    const mkLayer = (show) => show ? L.layerGroup().addTo(map) : L.layerGroup()
-    layerConflict.current  = mkLayer(sv.showConflicts)
-    layerQuake.current     = mkLayer(sv.showNatural)
-    layerStorm.current     = mkLayer(sv.showNatural)
-    layerWildfire.current  = mkLayer(sv.showNatural)
-    layerPiracy.current    = mkLayer(sv.showPiracy)
-    mapRef.current = map
-
-    CONFLICTS.forEach(evt => {
-      const mk = L.marker([evt.lat, evt.lng], { icon: conflictIcon(evt.category) })
-      mk.bindPopup(mapPopupHtml(
-        evt.name,
-        `${evt.typeStr} · <span class="cmap-status-${evt.status}">${evt.status}</span>`
-      ), { className: 'cmap-popup-wrap', maxWidth: 220, minWidth: 170 })
-      mk.on('click', () => fireMarkerEvents(
-        `${evt.name} ${evt.country}`.trim(), evt.name, evt.country, evt.lat, evt.lng
-      ))
-      layerConflict.current.addLayer(mk)
-    })
-
-    WILDFIRES_STATIC.forEach(wf => {
-      const mk = L.marker([wf.lat, wf.lng], { icon: wildfireIcon() })
-      mk.bindPopup(mapPopupHtml(
-        wf.name,
-        'Fire risk zone <span style="color:#6e8098;font-size:9px">(reference)</span>'
-      ), { className: 'cmap-popup-wrap', maxWidth: 220, minWidth: 170 })
-      mk.on('click', () => fireMarkerEvents(
-        `${wf.name} wildfire`, wf.name, wf.country, wf.lat, wf.lng
-      ))
-      layerWildfire.current.addLayer(mk)
-    })
-
-    PIRACY_ZONES.forEach(zone => {
-      const rect = L.rectangle(zone.bounds, {
-        color: '#e8294a', weight: 1, fillColor: '#e8294a', fillOpacity: 0.1, dashArray: '4 3',
-      })
-      rect.bindTooltip(zone.name, { className: 'cmap-tooltip', sticky: false })
-      rect.on('click', () => {
-        window.dispatchEvent(new CustomEvent('vigil:search',   { detail: { keyword: `${zone.name} piracy` } }))
-        window.dispatchEvent(new CustomEvent('vigil:location', { detail: { name: zone.name, lat: 0, lon: 0, country: zone.name } }))
-        window.dispatchEvent(new CustomEvent('vigil:region',   { detail: { country: zone.name } }))
-      })
-      layerPiracy.current.addLayer(rect)
-    })
-
-    map.on('moveend', () => {
-      const c = map.getCenter()
-      onMoveRef.current?.({ center: [c.lat, c.lng], zoom: map.getZoom() })
-    })
-
-    refresh()
-    return () => { map.remove(); mapRef.current = null }
-  }, [refresh])
-
-  return (
-    <div style={{ width: '100%', height: '100%', position: 'relative', background: '#0a0e1a' }}>
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-      {loading && <div className="cmap-overlay">Fetching live data…</div>}
-      {!loading && quakeLive && <div className="cmap-badge cmap-badge-live">● USGS LIVE</div>}
-    </div>
-  )
-})
-
 
 const ATLAS_STATE_KEY = id => `vigil_atlas_state_${id}`
 
@@ -208,11 +57,9 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
     } catch { return DEFAULT_GLOBE_LAYERS }
   })
 
-  const atlasMapRef    = useRef(null)
-  const widgetRef      = useRef(null)
-  const currentViewRef = useRef({ center: saved?.center ?? [20, 0], zoom: saved?.zoom ?? 2 })
-  const mapModeRef     = useRef(mapMode)
-  mapModeRef.current   = mapMode
+  const widgetRef  = useRef(null)
+  const mapModeRef = useRef(mapMode)
+  mapModeRef.current = mapMode
 
   const activeTab  = mapMode
   const isLeaflet  = mapMode === 'leaflet'
@@ -252,21 +99,6 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
     return () => el.classList.remove('atlas-grid-fullscreen')
   }, [isFullscreen])
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      atlasMapRef.current?.invalidateSize()
-      window.dispatchEvent(new Event('resize'))
-    }, 200)
-    return () => clearTimeout(t)
-  }, [isFullscreen])
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (mapModeRef.current === 'leaflet') atlasMapRef.current?.invalidateSize()
-    }, 200)
-    return () => clearTimeout(t)
-  }, [mapMode])
-
   function switchTab(mode) {
     setMapMode(mode)
   }
@@ -275,9 +107,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
 
   return (
     <div className="widget" ref={widgetRef} data-collapsed={collapsed || undefined}>
-      <WHeader title="ATLAS" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={() => setIsFullscreen(v => !v)} isFullscreen={isFullscreen} onClose={onClose}>
-        <button className="widget-btn" onClick={() => atlasMapRef.current?.refresh()} title="Refresh">↻</button>
-      </WHeader>
+      <WHeader title="ATLAS" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={() => setIsFullscreen(v => !v)} isFullscreen={isFullscreen} onClose={onClose} />
 
       {/* Primary layer / tab bar — hidden when bars collapsed */}
       {!barsCollapsed && (

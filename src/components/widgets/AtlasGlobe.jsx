@@ -12,7 +12,6 @@ const COUNTRY_NAME_TO_ISO = {
 const DEFAULT_LAYERS = { conflict: true, wildfires: false, earthquakes: false, storms: false, piracy: false }
 
 const boundsToGeoFeature = (zone) => {
-  const [[lat1, lng1], [lat2, lng2]] = zone.bounds
   return {
     type: 'Feature',
     properties: { _piracy: true, name: zone.name },
@@ -36,6 +35,15 @@ const parseNHCCoord = (str) => {
   return (String(str).endsWith('S') || String(str).endsWith('W')) ? -Math.abs(n) : Math.abs(n)
 }
 
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const formatQuakeTime = (ms) => {
+  if (!ms) return ''
+  const d = new Date(ms)
+  const h = String(d.getUTCHours()).padStart(2, '0')
+  const m = String(d.getUTCMinutes()).padStart(2, '0')
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}, ${h}:${m} UTC`
+}
+
 export default function AtlasGlobe({ workspacePaused, layers = DEFAULT_LAYERS }) {
   const globeRef = useRef()
   const containerRef = useRef()
@@ -48,7 +56,6 @@ export default function AtlasGlobe({ workspacePaused, layers = DEFAULT_LAYERS })
   const [selectedRegion,    setSelectedRegion]    = useState(null)
   const [regionSignalHover, setRegionSignalHover] = useState(false)
   const [highConflictISOs, setHighConflictISOs] = useState(new Set())
-  const [tensionISOs,      setTensionISOs]      = useState(new Set())
   const [earthquakePoints, setEarthquakePoints] = useState([])
   const [stormPoints, setStormPoints] = useState([])
 
@@ -82,15 +89,12 @@ export default function AtlasGlobe({ workspacePaused, layers = DEFAULT_LAYERS })
   // Compute conflict tiers from static CONFLICTS data
   useEffect(() => {
     const high = new Set()
-    const tension = new Set()
     CONFLICTS.forEach(c => {
       const iso = COUNTRY_NAME_TO_ISO[c.country]
       if (!iso) return
       if (c.status === 'ongoing') high.add(iso)
-      else if (c.status === 'alert') tension.add(iso)
     })
     setHighConflictISOs(high)
-    setTensionISOs(tension)
   }, [])
 
   // Fetch earthquakes every 5 minutes
@@ -104,8 +108,11 @@ export default function AtlasGlobe({ workspacePaused, layers = DEFAULT_LAYERS })
             _type: 'earthquake',
             lat: f.geometry.coordinates[1],
             lng: f.geometry.coordinates[0],
+            depth: f.geometry.coordinates[2],
             magnitude: f.properties.mag,
             name: f.properties.title,
+            place: f.properties.place,
+            time: f.properties.time,
           })))
         })
         .catch(() => {})
@@ -210,13 +217,16 @@ export default function AtlasGlobe({ workspacePaused, layers = DEFAULT_LAYERS })
     }
   }, [stopRotation])
 
-  // Region (conflict dot) click handler
+  // Region click handler — conflict dots and earthquake dots
   const handlePointClick = useCallback((d) => {
     if (!d || !globeRef.current) return
     stopRotation()
     setSelectedCountry(null)
     setSelectedRegion(null)
     const { lat, lng } = d
+    const finalData = d._type === 'earthquake'
+      ? { ...d, _layerType: 'earthquake' }
+      : { ...d, _layerType: 'conflict' }
     const currentPov = globeRef.current.pointOfView()
     const currentAlt = currentPov.altitude || 0.6
     if (currentAlt < 1.2) {
@@ -225,12 +235,12 @@ export default function AtlasGlobe({ workspacePaused, layers = DEFAULT_LAYERS })
         globeRef.current.pointOfView({ lat, lng, altitude: 1.2 }, 1350)
         setTimeout(() => {
           globeRef.current.pointOfView({ lat, lng, altitude: 0.6 }, 1050)
-          setTimeout(() => setSelectedRegion(d), 750)
+          setTimeout(() => setSelectedRegion(finalData), 750)
         }, 1425)
       }, 930)
     } else {
       globeRef.current.pointOfView({ lat, lng, altitude: 0.6 }, 1200)
-      setTimeout(() => setSelectedRegion(d), 900)
+      setTimeout(() => setSelectedRegion(finalData), 900)
     }
   }, [stopRotation])
 
@@ -261,6 +271,16 @@ export default function AtlasGlobe({ workspacePaused, layers = DEFAULT_LAYERS })
     return [...countries, ...PIRACY_ZONES.map(boundsToGeoFeature)]
   }, [countries, layers.piracy])
 
+  // ISOs of countries with wildfire zones (for border colouring)
+  const wildfireCountryISOs = useMemo(() => {
+    const s = new Set()
+    WILDFIRES_STATIC.forEach(f => {
+      const iso = COUNTRY_NAME_TO_ISO[f.country]
+      if (iso) s.add(iso)
+    })
+    return s
+  }, [])
+
   const polyColor = useCallback((d) => {
     if (d.properties?._piracy) return 'rgba(30,107,255,0.12)'
     if (hoveredCountry === d) return 'rgba(255,255,255,0.10)'
@@ -277,18 +297,23 @@ export default function AtlasGlobe({ workspacePaused, layers = DEFAULT_LAYERS })
     if (hoveredCountry === d) return 'rgba(255,255,255,0.70)'
     const iso = d.properties?.ISO_A2
     if (iso && highConflictISOs.has(iso)) return 'rgba(255,51,51,0.40)'
+    if (iso && layers.wildfires && wildfireCountryISOs.has(iso)) return 'rgba(255,215,0,0.35)'
     return 'rgba(0,0,0,0)'
-  }, [hoveredCountry, highConflictISOs])
+  }, [hoveredCountry, highConflictISOs, layers.wildfires, wildfireCountryISOs])
 
   const polyStrokeColor = useCallback((d) => {
     if (d.properties?._piracy) return 'rgba(30,107,255,0.65)'
     return 'rgba(0,0,0,0)'
   }, [])
 
-  // Wildfire HTML element factory (stable reference — no deps)
-  const wildfireElement = useCallback(() => {
+  // Wildfire HTML element factory — receives data point d for onclick
+  const wildfireElement = useCallback((d) => {
     const wrap = document.createElement('div')
     wrap.style.cssText = 'position:relative;width:5px;height:5px;cursor:pointer;'
+    wrap.onclick = () => {
+      setSelectedRegion({ ...d, _layerType: 'wildfire' })
+      setSelectedCountry(null)
+    }
     const core = document.createElement('div')
     core.style.cssText = 'width:5px;height:5px;border-radius:50%;background:#FFD700;box-shadow:0 0 3px #FFD700;opacity:0.85;'
     const ring = document.createElement('div')
@@ -296,10 +321,119 @@ export default function AtlasGlobe({ workspacePaused, layers = DEFAULT_LAYERS })
     wrap.appendChild(core)
     wrap.appendChild(ring)
     return wrap
-  }, [])
+  }, [setSelectedRegion, setSelectedCountry])
 
-  const selIso      = selectedCountry?.properties?.ISO_A2
-  const selConflict = selIso ? CONFLICTS.find(c => COUNTRY_NAME_TO_ISO[c.country] === selIso) : null
+  // Country popup: find enriched layer data (conflict takes priority over wildfire)
+  const selIso = selectedCountry?.properties?.ISO_A2
+  const selConflict = selIso
+    ? (CONFLICTS.find(c => COUNTRY_NAME_TO_ISO[c.country] === selIso && c.status === 'ongoing')
+       || CONFLICTS.find(c => COUNTRY_NAME_TO_ISO[c.country] === selIso && c.status === 'alert')
+       || CONFLICTS.find(c => COUNTRY_NAME_TO_ISO[c.country] === selIso))
+    : null
+  const selWildfire = !selConflict && selIso
+    ? WILDFIRES_STATIC.find(f => COUNTRY_NAME_TO_ISO[f.country] === selIso)
+    : null
+  const selectedCountryLayer = selConflict
+    ? { ...selConflict, _layerType: 'conflict' }
+    : selWildfire
+    ? { ...selWildfire, _layerType: 'wildfire' }
+    : null
+
+  // ── Shared enriched block renderer ──────────────────────────────────────
+  const renderEnrichedBlock = (data) => {
+    if (!data) return null
+    const lt = data._layerType
+
+    if (lt === 'conflict') return (
+      <>
+        <div style={{ marginTop: 8 }}>
+          {data.status === 'ongoing' && <span style={{ padding: '2px 6px', background: 'rgba(255,51,51,0.15)', color: '#FF3333', fontSize: 10, letterSpacing: '1.2px', borderRadius: 2 }}>ACTIVE</span>}
+          {data.status === 'alert'   && <span style={{ padding: '2px 6px', background: 'rgba(210,153,34,0.15)', color: '#D29922', fontSize: 10, letterSpacing: '1.2px', borderRadius: 2 }}>ALERT</span>}
+          {data.status === 'past'    && <span style={{ padding: '2px 6px', background: 'rgba(139,148,158,0.15)', color: '#8B949E', fontSize: 10, letterSpacing: '1.2px', borderRadius: 2 }}>RESOLVED</span>}
+        </div>
+        {data.parties?.length >= 2 && (
+          <div style={{ marginTop: 8, fontSize: 11, color: '#8B949E' }}>
+            {data.parties[0]} vs {data.parties[1]}
+          </div>
+        )}
+        {data.description && (
+          <div style={{ marginTop: 6, fontSize: 12, color: '#8B949E', lineHeight: '1.5', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {data.description}
+          </div>
+        )}
+        {data.startYear && (
+          <div style={{ marginTop: 6, fontSize: 11, color: '#484F58' }}>Since {data.startYear}</div>
+        )}
+        {data.source && (
+          <a href={data.source} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 4, fontSize: 10, color: 'rgba(0,212,255,0.45)', textDecoration: 'none', letterSpacing: '0.5px' }}>
+            Source: ACLED ↗
+          </a>
+        )}
+      </>
+    )
+
+    if (lt === 'wildfire') return (
+      <>
+        <div style={{ marginTop: 8 }}>
+          <span style={{ padding: '2px 6px', background: 'rgba(255,215,0,0.12)', color: '#FFD700', fontSize: 10, letterSpacing: '1.2px', borderRadius: 2 }}>WILDFIRE</span>
+        </div>
+        {data.description && (
+          <div style={{ marginTop: 8, fontSize: 12, color: '#8B949E', lineHeight: '1.5', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {data.description}
+          </div>
+        )}
+        {data.season && (
+          <div style={{ marginTop: 6, fontSize: 11, color: '#484F58' }}>Season: {data.season}</div>
+        )}
+        {data.source && (
+          <a href={data.source} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 4, fontSize: 10, color: 'rgba(0,212,255,0.45)', textDecoration: 'none', letterSpacing: '0.5px' }}>
+            NASA FIRMS ↗
+          </a>
+        )}
+      </>
+    )
+
+    if (lt === 'earthquake') return (
+      <>
+        <div style={{ marginTop: 8 }}>
+          <span style={{ padding: '2px 6px', background: 'rgba(255,140,66,0.15)', color: '#FF8C42', fontSize: 10, letterSpacing: '1.2px', borderRadius: 2 }}>EARTHQUAKE</span>
+        </div>
+        {(data.magnitude != null || data.depth != null) && (
+          <div style={{ marginTop: 8, fontSize: 11, color: '#8B949E' }}>
+            {data.magnitude != null ? `M${data.magnitude.toFixed(1)}` : ''}
+            {data.magnitude != null && data.depth != null ? ' · ' : ''}
+            {data.depth != null ? `Depth ${Math.round(data.depth)} km` : ''}
+          </div>
+        )}
+        {data.time && (
+          <div style={{ marginTop: 6, fontSize: 11, color: '#484F58' }}>{formatQuakeTime(data.time)}</div>
+        )}
+        <a href="https://earthquake.usgs.gov" target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 4, fontSize: 10, color: 'rgba(0,212,255,0.45)', textDecoration: 'none', letterSpacing: '0.5px' }}>
+          USGS ↗
+        </a>
+      </>
+    )
+
+    return null
+  }
+
+  // ── Region popup title/subtitle by layer type ────────────────────────────
+  const regionTitle = (d) => {
+    if (d._layerType === 'earthquake') return d.place || d.name || ''
+    return d.name || ''
+  }
+  const regionSubtitle = (d) => {
+    if (d._layerType === 'earthquake') return null
+    return d.country || null
+  }
+  const regionFlagIso = (d) => {
+    if (d._layerType === 'earthquake') return null
+    return COUNTRY_NAME_TO_ISO[d.country] || null
+  }
+  const regionSearchKeyword = (d) => {
+    if (d._layerType === 'earthquake') return d.place || d.name || ''
+    return d.name || ''
+  }
 
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%', background: '#0A0C10', overflow: 'hidden' }}>
@@ -355,7 +489,7 @@ export default function AtlasGlobe({ workspacePaused, layers = DEFAULT_LAYERS })
           return `${d.name} — ${d.country}`
         }}
         pointResolution={12}
-        onPointClick={d => { if (d._type === 'conflict') handlePointClick(d) }}
+        onPointClick={d => { if (d._type === 'conflict' || d._type === 'earthquake') handlePointClick(d) }}
 
         ringsData={layers.conflict ? CONFLICTS.filter(d => d.status === 'ongoing') : []}
         ringLat={d => d.lat}
@@ -403,9 +537,7 @@ export default function AtlasGlobe({ workspacePaused, layers = DEFAULT_LAYERS })
             >×</button>
           </div>
 
-          {selConflict?.status === 'ongoing' && <div style={{ display: 'inline-block', marginTop: 8, padding: '2px 8px', background: 'rgba(248,81,73,0.12)', color: '#F85149', fontSize: 10, letterSpacing: '1.5px' }}>Active conflict</div>}
-          {selConflict?.status === 'alert'   && <div style={{ display: 'inline-block', marginTop: 8, padding: '2px 8px', background: 'rgba(210,153,34,0.12)', color: '#D29922', fontSize: 10, letterSpacing: '1.5px' }}>Elevated tension</div>}
-          {selConflict?.status === 'past'    && <div style={{ display: 'inline-block', marginTop: 8, padding: '2px 8px', background: 'rgba(139,148,158,0.12)', color: '#8B949E', fontSize: 10, letterSpacing: '1.5px' }}>Resolved</div>}
+          {renderEnrichedBlock(selectedCountryLayer)}
 
           <div
             onClick={() => window.dispatchEvent(new CustomEvent('vigil:search', { detail: { keyword: selectedCountry.properties.NAME } }))}
@@ -418,27 +550,31 @@ export default function AtlasGlobe({ workspacePaused, layers = DEFAULT_LAYERS })
         </div>
       )}
 
-      {/* Region popup (conflict dot click) */}
+      {/* Region popup — conflict / wildfire / earthquake */}
       {selectedRegion && (
         <div
           onClick={e => e.stopPropagation()}
           style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(13,17,23,0.92)', border: '1px solid #1E2329', boxShadow: '0 0 0 1px rgba(0,212,255,0.08), 0 8px 32px rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', width: 300, padding: 16, fontFamily: 'JetBrains Mono' }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {flagUrl(COUNTRY_NAME_TO_ISO[selectedRegion.country]) && (
-              <img src={flagUrl(COUNTRY_NAME_TO_ISO[selectedRegion.country])} width={22} height={22} style={{ borderRadius: '50%', flexShrink: 0 }} onError={e => { e.target.style.display = 'none' }} />
+            {regionFlagIso(selectedRegion) && (
+              <img src={flagUrl(regionFlagIso(selectedRegion))} width={22} height={22} style={{ borderRadius: '50%', flexShrink: 0 }} onError={e => { e.target.style.display = 'none' }} />
             )}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: '#E6EDF3', letterSpacing: '0.3px' }}>{selectedRegion.name}</div>
-              <div style={{ fontSize: 11, color: '#8B949E', marginTop: 1 }}>{selectedRegion.country}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#E6EDF3', letterSpacing: '0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {regionTitle(selectedRegion)}
+              </div>
+              {regionSubtitle(selectedRegion) && (
+                <div style={{ fontSize: 11, color: '#8B949E', marginTop: 1 }}>{regionSubtitle(selectedRegion)}</div>
+              )}
             </div>
-            <button onClick={() => setSelectedRegion(null)} style={{ background: 'none', border: 'none', color: '#484F58', cursor: 'pointer', fontSize: 18, padding: 0, lineHeight: 1 }}>×</button>
+            <button onClick={() => setSelectedRegion(null)} style={{ background: 'none', border: 'none', color: '#484F58', cursor: 'pointer', fontSize: 18, padding: 0, lineHeight: 1, flexShrink: 0 }}>×</button>
           </div>
-          {selectedRegion.status === 'ongoing' && <div style={{ display: 'inline-block', marginTop: 8, padding: '2px 8px', background: 'rgba(248,81,73,0.12)', color: '#F85149', fontSize: 10, letterSpacing: '1.5px' }}>Active conflict</div>}
-          {selectedRegion.status === 'alert'   && <div style={{ display: 'inline-block', marginTop: 8, padding: '2px 8px', background: 'rgba(210,153,34,0.12)', color: '#D29922', fontSize: 10, letterSpacing: '1.5px' }}>Elevated tension</div>}
-          {selectedRegion.status === 'past'    && <div style={{ display: 'inline-block', marginTop: 8, padding: '2px 8px', background: 'rgba(139,148,158,0.12)', color: '#8B949E', fontSize: 10, letterSpacing: '1.5px' }}>Resolved</div>}
+
+          {renderEnrichedBlock(selectedRegion)}
+
           <div
-            onClick={() => window.dispatchEvent(new CustomEvent('vigil:search', { detail: { keyword: selectedRegion.name } }))}
+            onClick={() => window.dispatchEvent(new CustomEvent('vigil:search', { detail: { keyword: regionSearchKeyword(selectedRegion) } }))}
             style={{ borderTop: '1px solid #1E2329', marginTop: 12, paddingTop: 10, color: regionSignalHover ? '#00D4FF' : 'rgba(0,212,255,0.5)', fontSize: 10, letterSpacing: '1px', cursor: 'pointer', transition: 'color 0.15s' }}
             onMouseEnter={() => setRegionSignalHover(true)}
             onMouseLeave={() => setRegionSignalHover(false)}

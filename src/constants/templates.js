@@ -3,12 +3,11 @@
 // Widget rows per named workspace (types match renderWidgetComponent cases)
 export const DEFAULT_TEMPLATES = {
   'CONFLICT WATCH': [
-    { type: 'map',      x: 0,  y: 0,  w: 16, h: 14 },
-    { type: 'feed',     x: 16, y: 0,  w: 8,  h: 7  },
-    { type: 'rss',      x: 16, y: 7,  w: 8,  h: 7  },
-    { type: 'conflict', x: 0,  y: 14, w: 8,  h: 7  },
-    { type: 'social',   x: 8,  y: 14, w: 8,  h: 7  },
-    { type: 'stream',   x: 16, y: 14, w: 8,  h: 7  },
+    { type: 'map',    x: 0,  y: 0,  w: 16, h: 14 },
+    { type: 'feed',   x: 16, y: 0,  w: 8,  h: 7  },
+    { type: 'rss',    x: 16, y: 7,  w: 8,  h: 7  },
+    { type: 'social', x: 8,  y: 14, w: 8,  h: 7  },
+    { type: 'stream', x: 16, y: 14, w: 8,  h: 7  },
   ],
   'MARKET IMPACT': [
     { type: 'prices',  x: 0,  y: 0,  w: 12, h: 8 },

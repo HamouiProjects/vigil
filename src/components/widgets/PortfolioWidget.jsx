@@ -200,10 +200,11 @@ export default function PortfolioWidget({ widgetId, onClose, onFullscreen, isFul
   }, [])
 
   useEffect(() => {
+    if (workspacePaused) return
     fetchPrices()
     const id = setInterval(() => { if (!document.hidden) fetchPrices() }, 60_000)
     return () => clearInterval(id)
-  }, [fetchPrices, assets, bybitBalances, exchBalances])
+  }, [fetchPrices, assets, bybitBalances, exchBalances, workspacePaused])
 
   useEffect(() => {
     if (!pfRetryIn || pfRetryIn <= 0) return
@@ -221,16 +222,10 @@ export default function PortfolioWidget({ widgetId, onClose, onFullscreen, isFul
   async function fetchBybit(apiKey, apiSecret) {
     setBybitLoading(true)
     try {
-      const [walletRes] = await Promise.all([
-        fetch('/api/bybit-portfolio', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiKey, apiSecret }), signal: AbortSignal.timeout(12000),
-        }),
-        fetch('/api/bybit-positions', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiKey, apiSecret }), signal: AbortSignal.timeout(12000),
-        }),
-      ])
+      const walletRes = await fetch('/api/bybit-portfolio', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey, apiSecret }), signal: AbortSignal.timeout(12000),
+      })
       if (walletRes.status === 429) {
         setBybitConn(c => ({ ...c, status: 'error', error: 'rate-limit' }))
         setBybitLoading(false); return { ok: false, error: 'rate-limit' }
