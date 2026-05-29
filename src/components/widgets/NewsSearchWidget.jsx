@@ -139,9 +139,8 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
 
   function removeTab(id) {
     const next = tabs.filter(t => t.id !== id)
-    if (!next.length) return
     saveTabs(next)
-    if (activeId === id) setActiveId(next[0].id)
+    if (activeId === id) setActiveId(next[0]?.id ?? null)
   }
 
   function handleRefresh() {
@@ -196,9 +195,7 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
                   onClick={() => setActiveId(t.id)}
                 >
                   <span className="ns-kw-text">{t.keyword}</span>
-                  {tabs.length > 1 && (
-                    <button className="ns-kw-del" onClick={e => { e.stopPropagation(); removeTab(t.id) }}>×</button>
-                  )}
+                  <button className="ns-kw-del" onClick={e => { e.stopPropagation(); removeTab(t.id) }}>×</button>
                 </div>
               ))}
             </div>
@@ -227,9 +224,8 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
 
         <div className="ns-results">
           {tabs.length === 0 ? (
-            <div className="empty-state">
-              <span className="empty-state-icon">📡</span>
-              Add a keyword above to start monitoring
+            <div style={{ margin: 'auto', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '1px', textTransform: 'uppercase', textAlign: 'center' }}>
+              Add a keyword to start monitoring
             </div>
           ) : loading && rawArticles.length === 0 ? (
             <SkeletonFeedItems count={8} />

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import WHeader from '../shared/WHeader'
 import AtlasGlobe from './AtlasGlobe'
-import Globe from 'globe.gl'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { CONFLICTS, WILDFIRES_STATIC, PIRACY_ZONES } from '../../constants/atlasData'
@@ -27,7 +26,7 @@ function migrateMapMode(saved) {
     if (src.includes('liveuamap'))    return 'conflict'
     return 'leaflet'
   }
-  const valid = ['leaflet', 'globe', 'conflict', 'marine', 'flights', 'cyber']
+  const valid = ['leaflet', 'conflict', 'marine', 'flights', 'cyber']
   return valid.includes(saved.mapMode) ? saved.mapMode : 'leaflet'
 }
 
@@ -173,206 +172,6 @@ const AtlasMap = forwardRef(function AtlasMap({ showConflicts, showNatural, show
   )
 })
 
-const CONFLICT_TO_GEO = { 'DRC': 'Dem. Rep. Congo' }
-
-function countryFlag(name) {
-  const f = {
-    'Ukraine':'🇺🇦','Palestine':'🇵🇸','Israel':'🇮🇱','Sudan':'🇸🇩','Syria':'🇸🇾',
-    'Iraq':'🇮🇶','Yemen':'🇾🇪','Afghanistan':'🇦🇫','Myanmar':'🇲🇲','Ethiopia':'🇪🇹',
-    'Mali':'🇲🇱','Niger':'🇳🇪','Somalia':'🇸🇴','Dem. Rep. Congo':'🇨🇩','Lebanon':'🇱🇧',
-    'Iran':'🇮🇷','Pakistan':'🇵🇰','Nigeria':'🇳🇬','Mozambique':'🇲🇿',
-    'India':'🇮🇳','Azerbaijan':'🇦🇿','Philippines':'🇵🇭',
-  }
-  return f[name] || '🌍'
-}
-
-const GlobeView = forwardRef(function GlobeView({ showConflicts, showNatural, showPiracy, gdeltEvents = [] }, ref) {
-  const containerRef      = useRef(null)
-  const globeInstanceRef  = useRef(null)
-  const [countryPanel,    setCountryPanel] = useState(null)
-  const setCountryPanelRef = useRef(setCountryPanel)
-  setCountryPanelRef.current = setCountryPanel
-
-  const hotGeoNamesRef = useRef(new Set())
-  hotGeoNamesRef.current = new Set(gdeltEvents.map(e => CONFLICT_TO_GEO[e.country] ?? e.country))
-
-  useImperativeHandle(ref, () => ({
-    refresh:        () => {},
-    invalidateSize: () => {
-      if (globeInstanceRef.current && containerRef.current) {
-        globeInstanceRef.current
-          .width(containerRef.current.offsetWidth)
-          .height(containerRef.current.offsetHeight)
-      }
-    },
-    setView: () => {},
-  }))
-
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-
-    if (globeInstanceRef.current) {
-      el.innerHTML = ''
-      globeInstanceRef.current = null
-    }
-
-    let ro = null
-
-    const timer = setTimeout(() => {
-      if (!containerRef.current) return
-
-      const globe = Globe({ animateIn: false })(containerRef.current)
-      globeInstanceRef.current = globe
-
-      globe
-        .width(containerRef.current.offsetWidth || 800)
-        .height(containerRef.current.offsetHeight || 450)
-        .backgroundColor('#0A0C10')
-        .showAtmosphere(false)
-        .showGraticules(true)
-        .globeImageUrl(null)
-        .bumpImageUrl(null)
-
-      globe.onGlobeReady(() => {
-        globe.scene().traverse(obj => {
-          if (obj.isMesh) {
-            if (obj.material && obj.material.color) {
-              obj.material.color.setHex(0x0d1f35)
-              obj.material.needsUpdate = true
-            }
-          }
-        })
-
-        globe.controls().autoRotate      = true
-        globe.controls().autoRotateSpeed = 0.4
-        globe.controls().addEventListener('start', () => {
-          if (globeInstanceRef.current) globeInstanceRef.current.controls().autoRotate = false
-        })
-
-        fetch('https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson')
-          .then(r => r.json())
-          .then(geoData => {
-            if (!globeInstanceRef.current) return
-            globeInstanceRef.current
-              .polygonsData(geoData.features)
-              .polygonAltitude(f => hotGeoNamesRef.current.has(f.properties.name) ? 0.01 : 0.003)
-              .polygonCapColor(f => hotGeoNamesRef.current.has(f.properties.name) ? 'rgba(248,81,73,0.45)' : 'rgba(13,31,53,0.6)')
-              .polygonSideColor(f => hotGeoNamesRef.current.has(f.properties.name) ? 'rgba(248,81,73,0.7)'  : 'rgba(20,40,70,0.3)')
-              .polygonStrokeColor(() => '#1E2329')
-              .polygonLabel(f => hotGeoNamesRef.current.has(f.properties.name)
-                ? `<div style="background:#0D1117;border:1px solid #F85149;padding:4px 8px;font-family:JetBrains Mono,monospace;font-size:11px;color:#F85149;border-radius:2px">${f.properties.name}</div>`
-                : null)
-              .onPolygonClick(polygon => {
-                const name = polygon.properties.name
-                if (hotGeoNamesRef.current.has(name)) setCountryPanelRef.current(name)
-              })
-          })
-          .catch(() => {})
-      })
-
-      ro = new ResizeObserver(() => {
-        if (containerRef.current && globeInstanceRef.current) {
-          globeInstanceRef.current
-            .width(containerRef.current.offsetWidth)
-            .height(containerRef.current.offsetHeight)
-        }
-      })
-      ro.observe(containerRef.current)
-    }, 100)
-
-    return () => {
-      clearTimeout(timer)
-      ro?.disconnect()
-      if (containerRef.current) containerRef.current.innerHTML = ''
-      globeInstanceRef.current = null
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!globeInstanceRef.current) return
-    const pts = []
-    if (showConflicts) gdeltEvents.forEach(c => pts.push({
-      lat: c.lat, lng: c.lng, name: c.name,
-      label: [c.typeStr, c.status].filter(Boolean).join(' · '),
-      color: c.category === 'conflict' ? '#F85149'
-           : c.category === 'flood' || c.category === 'earthquake' || c.category === 'drought' ? '#D29922'
-           : '#00D4FF',
-    }))
-    if (showNatural) WILDFIRES_STATIC.forEach(w => pts.push({
-      lat: w.lat, lng: w.lng, name: w.name, label: 'Fire risk zone', color: '#FF6B35',
-    }))
-    if (showPiracy) PIRACY_ZONES.forEach(z => {
-      const lat = (z.bounds[0][0] + z.bounds[1][0]) / 2
-      const lng = (z.bounds[0][1] + z.bounds[1][1]) / 2
-      pts.push({ lat, lng, name: z.name, label: 'Piracy zone', color: '#e8294a' })
-    })
-    globeInstanceRef.current
-      .pointsData(pts)
-      .pointLat(d => d.lat)
-      .pointLng(d => d.lng)
-      .pointColor(d => d.color)
-      .pointAltitude(0.02)
-      .pointRadius(0.3)
-      .pointLabel(d => `<div style="font:10px 'JetBrains Mono',monospace;color:#E6EDF3;padding:4px 8px;background:rgba(13,17,23,0.9);border:1px solid #1E2329;border-radius:3px">${d.name}<br/><span style="color:#8B949E;font-size:9px">${d.label}</span></div>`)
-  }, [gdeltEvents, showConflicts, showNatural, showPiracy])
-
-  const panelEvents = countryPanel
-    ? gdeltEvents.filter(e => (CONFLICT_TO_GEO[e.country] ?? e.country) === countryPanel)
-    : []
-
-  return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#0A0C10' }}>
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-
-      {countryPanel && (
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-          width: '420px', maxHeight: '480px', overflowY: 'auto',
-          background: '#0D1117',
-          borderLeft: '3px solid #F85149', borderTop: '1px solid #1E2329',
-          borderRight: '1px solid #1E2329', borderBottom: '1px solid #1E2329',
-          borderRadius: '3px', zIndex: 100, fontFamily: 'JetBrains Mono,monospace',
-        }}>
-          <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid #1E2329', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div style={{ color: '#E6EDF3', fontSize: '15px', fontWeight: 'bold', marginBottom: '6px' }}>
-                {countryFlag(countryPanel)} {countryPanel}
-              </div>
-              {panelEvents.length > 0 && (
-                <span style={{ color: '#F85149', fontSize: '9px', border: '1px solid #F85149', padding: '2px 7px', borderRadius: '2px', letterSpacing: '0.1em' }}>
-                  ACTIVE CONFLICT
-                </span>
-              )}
-            </div>
-            <button onClick={() => setCountryPanel(null)}
-              style={{ background: 'none', border: 'none', color: '#484F58', cursor: 'pointer', fontSize: '18px', lineHeight: 1, paddingTop: '2px' }}>×</button>
-          </div>
-          <div style={{ padding: '8px 0' }}>
-            {panelEvents.length === 0
-              ? <div style={{ color: '#484F58', fontSize: '10px', textAlign: 'center', padding: '24px 0' }}>No signals found</div>
-              : panelEvents.slice(0, 6).map((evt, i) => (
-                  <div key={i} style={{ padding: '10px 20px', borderBottom: i < panelEvents.length - 1 ? '1px solid rgba(30,35,41,0.5)' : 'none' }}>
-                    <div style={{ color: '#E6EDF3', fontSize: '11px', lineHeight: '1.45', marginBottom: '5px' }}>{evt.name}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ color: '#484F58', fontSize: '9px', letterSpacing: '0.06em' }}>{evt.typeStr}</span>
-                      <span style={{ color: '#30363D', fontSize: '9px' }}>·</span>
-                      <span style={{
-                        fontSize: '8px', padding: '1px 5px', borderRadius: '2px', letterSpacing: '0.06em',
-                        background: evt.status === 'ongoing' ? 'rgba(248,81,73,0.15)' : 'rgba(72,79,88,0.2)',
-                        color:      evt.status === 'ongoing' ? '#F85149'              : '#484F58',
-                        border:     `1px solid ${evt.status === 'ongoing' ? 'rgba(248,81,73,0.3)' : 'rgba(72,79,88,0.3)'}`,
-                      }}>{evt.status.toUpperCase()}</span>
-                    </div>
-                  </div>
-                ))
-            }
-          </div>
-        </div>
-      )}
-    </div>
-  )
-})
 
 const ATLAS_STATE_KEY = id => `vigil_atlas_state_${id}`
 
@@ -393,7 +192,6 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
   const [isLive,       setIsLive]       = useState(true)
 
   const atlasMapRef    = useRef(null)
-  const globeRef       = useRef(null)
   const widgetRef      = useRef(null)
   const currentViewRef = useRef({ center: saved?.center ?? [20, 0], zoom: saved?.zoom ?? 2 })
   const mapModeRef     = useRef(mapMode)
@@ -401,8 +199,7 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
 
   const activeTab  = mapMode
   const isLeaflet  = mapMode === 'leaflet'
-  const isGlobe    = mapMode === 'globe'
-  const isIframe   = !isLeaflet && !isGlobe
+  const isIframe   = !isLeaflet
 
   const anyPaused = !isLive || workspacePaused
   const getSrc = (tabKey) => activeTab === tabKey && !anyPaused ? IFRAME_URLS[tabKey] : 'about:blank'
@@ -437,7 +234,6 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
   useEffect(() => {
     const t = setTimeout(() => {
       atlasMapRef.current?.invalidateSize()
-      globeRef.current?.invalidateSize()
       window.dispatchEvent(new Event('resize'))
     }, 200)
     return () => clearTimeout(t)
@@ -446,7 +242,6 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
   useEffect(() => {
     const t = setTimeout(() => {
       if (mapModeRef.current === 'leaflet') atlasMapRef.current?.invalidateSize()
-      if (mapModeRef.current === 'globe')   globeRef.current?.invalidateSize()
     }, 200)
     return () => clearTimeout(t)
   }, [mapMode])
@@ -459,25 +254,19 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
 
   return (
     <div className="widget" ref={widgetRef} data-collapsed={collapsed || undefined}>
-      <WHeader title="ATLAS" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={() => setIsFullscreen(v => !v)} isFullscreen={isFullscreen} onClose={onClose} />
+      <WHeader title="ATLAS" onToggleLive={() => setIsLive(v => !v)} isLive={isLive} workspacePaused={workspacePaused} onCollapse={onCollapse} collapsed={collapsed} onFullscreen={() => setIsFullscreen(v => !v)} isFullscreen={isFullscreen} onClose={onClose}>
+        <button className="widget-btn" onClick={() => atlasMapRef.current?.refresh()} title="Refresh">↻</button>
+      </WHeader>
 
       {/* Primary layer / tab bar */}
       <div className="cmap-layer-bar" style={layerBarStyle} onPointerDownCapture={e => e.stopPropagation()}>
         <button className={`cmap-layer-btn${isLeaflet ? ' active' : ''}`}
           onClick={() => setMapMode('leaflet')}>
-          WORLD<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">2D world map · Conflict pins, earthquakes, piracy zones</span></span>
+          WORLD<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Country alerts are curated from open-source conflict tracking. Red = ongoing conflicts. Amber = elevated tension zones. Cyan = countries you are watching in News Search. Updated regularly.</span></span>
         </button>
         <button className={`cmap-layer-btn${mapMode === 'conflict' ? ' active' : ''}`}
           onClick={() => switchTab('conflict')}>
           CONFLICT<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live conflict tracking · Source: Liveuamap</span></span>
-        </button>
-        <button className={`cmap-layer-btn${(isLeaflet || isGlobe) && showNatural ? ' active' : ''}`}
-          onClick={() => { if (isIframe) setMapMode('leaflet'); setShowNatural(v => !v) }}>
-          NATURAL<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Earthquakes · Wildfires · Storms · Sources: USGS, NOAA</span></span>
-        </button>
-        <button className={`cmap-layer-btn${(isLeaflet || isGlobe) && showPiracy ? ' active' : ''}`}
-          onClick={() => { if (isIframe) setMapMode('leaflet'); setShowPiracy(v => !v) }}>
-          PIRACY<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Maritime piracy high-risk zones · Source: IMB</span></span>
         </button>
         <button className={`cmap-layer-btn${mapMode === 'marine' ? ' active' : ''}`}
           onClick={() => switchTab('marine')}>
@@ -491,12 +280,6 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
           onClick={() => switchTab('cyber')}>
           CYBER<span className="layer-tip"><span className="layer-tip-icon">?</span><span className="layer-tip-text">Live cyber attacks · Source: Checkpoint</span></span>
         </button>
-        <button className={`cmap-layer-btn${isGlobe ? ' active' : ''}`}
-          onClick={() => setMapMode(isGlobe ? 'leaflet' : 'globe')}
-          title="Toggle 3D globe view">
-          GLOBE
-        </button>
-        <button className="cmap-update-btn" onClick={() => atlasMapRef.current?.refresh()} title="Re-fetch live data">⟳ Update</button>
       </div>
 
       {dataLoading && (
@@ -509,16 +292,6 @@ export default function AtlasWidget({ widgetId = 'atlas', onClose, onFullscreen:
       <div style={{ flex: 1, minHeight: 0, width: '100%', position: 'relative', overflow: 'hidden' }}>
         <div style={{ display: activeTab === 'leaflet' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <AtlasGlobe workspacePaused={workspacePaused} />
-        </div>
-
-        <div style={{ display: activeTab === 'globe' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
-          <GlobeView
-            ref={globeRef}
-            showConflicts={true}
-            showNatural={showNatural}
-            showPiracy={showPiracy}
-            gdeltEvents={CONFLICTS}
-          />
         </div>
 
         <div style={{ display: activeTab === 'conflict' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
