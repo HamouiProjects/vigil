@@ -1,6 +1,6 @@
 import Globe from 'react-globe.gl'
-import { useRef, useState, useEffect, useCallback } from 'react'
-import { CONFLICTS } from '../../constants/atlasData'
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import { CONFLICTS, WILDFIRES_STATIC, PIRACY_ZONES } from '../../constants/atlasData'
 
 const COUNTRY_NAME_TO_ISO = {
   'Palestine': 'PS', 'Ukraine': 'UA', 'Sudan': 'SD', 'Mozambique': 'MZ',
@@ -9,7 +9,34 @@ const COUNTRY_NAME_TO_ISO = {
   'India': 'IN', 'Azerbaijan': 'AZ', 'Philippines': 'PH',
 }
 
-export default function AtlasGlobe({ workspacePaused }) {
+const DEFAULT_LAYERS = { conflict: true, wildfires: false, earthquakes: false, storms: false, piracy: false }
+
+const boundsToGeoFeature = (zone) => {
+  const [[lat1, lng1], [lat2, lng2]] = zone.bounds
+  return {
+    type: 'Feature',
+    properties: { _piracy: true, name: zone.name },
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[
+        [zone.bounds[0][1], zone.bounds[0][0]],
+        [zone.bounds[0][1], zone.bounds[1][0]],
+        [zone.bounds[1][1], zone.bounds[1][0]],
+        [zone.bounds[1][1], zone.bounds[0][0]],
+        [zone.bounds[0][1], zone.bounds[0][0]],
+      ]],
+    },
+  }
+}
+
+const parseNHCCoord = (str) => {
+  if (str == null) return 0
+  const n = parseFloat(str)
+  if (isNaN(n)) return 0
+  return (String(str).endsWith('S') || String(str).endsWith('W')) ? -Math.abs(n) : Math.abs(n)
+}
+
+export default function AtlasGlobe({ workspacePaused, layers = DEFAULT_LAYERS }) {
   const globeRef = useRef()
   const containerRef = useRef()
   const rotateTimerRef = useRef()
@@ -22,6 +49,16 @@ export default function AtlasGlobe({ workspacePaused }) {
   const [regionSignalHover, setRegionSignalHover] = useState(false)
   const [highConflictISOs, setHighConflictISOs] = useState(new Set())
   const [tensionISOs,      setTensionISOs]      = useState(new Set())
+  const [earthquakePoints, setEarthquakePoints] = useState([])
+  const [stormPoints, setStormPoints] = useState([])
+
+  // Inject wildfire pulse keyframe once on mount
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.textContent = '@keyframes wf-pulse { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(2.0); opacity: 0; } }'
+    document.head.appendChild(style)
+    return () => document.head.removeChild(style)
+  }, [])
 
   // Resize observer
   useEffect(() => {
@@ -56,6 +93,50 @@ export default function AtlasGlobe({ workspacePaused }) {
     setTensionISOs(tension)
   }, [])
 
+  // Fetch earthquakes every 5 minutes
+  useEffect(() => {
+    if (!layers.earthquakes || workspacePaused) return
+    const fetchQuakes = () => {
+      fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_week.geojson')
+        .then(r => r.json())
+        .then(d => {
+          setEarthquakePoints((d.features || []).map(f => ({
+            _type: 'earthquake',
+            lat: f.geometry.coordinates[1],
+            lng: f.geometry.coordinates[0],
+            magnitude: f.properties.mag,
+            name: f.properties.title,
+          })))
+        })
+        .catch(() => {})
+    }
+    fetchQuakes()
+    const id = setInterval(fetchQuakes, 5 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [layers.earthquakes, workspacePaused])
+
+  // Fetch storms every 10 minutes
+  useEffect(() => {
+    if (!layers.storms || workspacePaused) return
+    const fetchStorms = () => {
+      fetch('https://www.nhc.noaa.gov/CurrentStorms.json')
+        .then(r => r.json())
+        .then(d => {
+          setStormPoints((d.activeStorms || []).map(s => ({
+            _type: 'storm',
+            lat: s.latitudeNumeric ?? parseNHCCoord(s.latitude),
+            lng: s.longitudeNumeric ?? parseNHCCoord(s.longitude),
+            name: s.name,
+            category: s.classification,
+          })))
+        })
+        .catch(() => {})
+    }
+    fetchStorms()
+    const id = setInterval(fetchStorms, 10 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [layers.storms, workspacePaused])
+
   // Auto-rotate setup
   useEffect(() => {
     if (!globeRef.current || workspacePaused) return
@@ -68,7 +149,7 @@ export default function AtlasGlobe({ workspacePaused }) {
       ctrl.dampingFactor = 0.1
     }, 400)
     return () => clearTimeout(timer)
-  }, [countries.length, workspacePaused]) // re-run once countries load
+  }, [countries.length, workspacePaused])
 
   // Stop rotation on interaction
   const stopRotation = useCallback(() => {
@@ -88,7 +169,7 @@ export default function AtlasGlobe({ workspacePaused }) {
       canvas.removeEventListener('mousedown', stopRotation)
       canvas.removeEventListener('touchstart', stopRotation)
     }
-  }, [countries.length, stopRotation]) // re-attach once canvas exists
+  }, [countries.length, stopRotation])
 
   // Country click handler
   const handleCountryClick = useCallback((d) => {
@@ -114,21 +195,16 @@ export default function AtlasGlobe({ workspacePaused }) {
     const currentPov = globeRef.current.pointOfView()
     const currentAlt = currentPov.altitude || 0.6
 
-    // If already zoomed in, do cinematic: pull back → fly → zoom in
     if (currentAlt < 1.2) {
-      // Step 1: zoom out
-      globeRef.current.pointOfView({ lat: currentPov.lat, lng: currentPov.lng, altitude: 1.8 }, 600)
-      // Step 2: after zoom out, fly to new country
+      globeRef.current.pointOfView({ lat: currentPov.lat, lng: currentPov.lng, altitude: 1.2 }, 900)
       setTimeout(() => {
-        globeRef.current.pointOfView({ lat, lng, altitude: 1.8 }, 900)
-        // Step 3: after arriving, zoom in
+        globeRef.current.pointOfView({ lat, lng, altitude: 1.2 }, 1350)
         setTimeout(() => {
-          globeRef.current.pointOfView({ lat, lng, altitude: 0.6 }, 700)
-          setTimeout(() => setSelectedCountry(d), 500)
-        }, 950)
-      }, 620)
+          globeRef.current.pointOfView({ lat, lng, altitude: 0.6 }, 1050)
+          setTimeout(() => setSelectedCountry(d), 750)
+        }, 1425)
+      }, 930)
     } else {
-      // Already zoomed out — just fly in directly
       globeRef.current.pointOfView({ lat, lng, altitude: 0.6 }, 1200)
       setTimeout(() => setSelectedCountry(d), 900)
     }
@@ -144,47 +220,84 @@ export default function AtlasGlobe({ workspacePaused }) {
     const currentPov = globeRef.current.pointOfView()
     const currentAlt = currentPov.altitude || 0.6
     if (currentAlt < 1.2) {
-      globeRef.current.pointOfView({ lat: currentPov.lat, lng: currentPov.lng, altitude: 1.8 }, 600)
+      globeRef.current.pointOfView({ lat: currentPov.lat, lng: currentPov.lng, altitude: 1.2 }, 900)
       setTimeout(() => {
-        globeRef.current.pointOfView({ lat, lng, altitude: 1.8 }, 900)
+        globeRef.current.pointOfView({ lat, lng, altitude: 1.2 }, 1350)
         setTimeout(() => {
-          globeRef.current.pointOfView({ lat, lng, altitude: 0.6 }, 700)
-          setTimeout(() => setSelectedRegion(d), 500)
-        }, 950)
-      }, 620)
+          globeRef.current.pointOfView({ lat, lng, altitude: 0.6 }, 1050)
+          setTimeout(() => setSelectedRegion(d), 750)
+        }, 1425)
+      }, 930)
     } else {
       globeRef.current.pointOfView({ lat, lng, altitude: 0.6 }, 1200)
       setTimeout(() => setSelectedRegion(d), 900)
     }
   }, [stopRotation])
 
-  // Flag URL helper
   const flagUrl = (iso) => {
     if (!iso || iso === '-99') return null
     return `https://hatscripts.github.io/circle-flags/flags/${iso.toLowerCase()}.svg`
   }
 
-  const polyColor = useCallback((d) => {
-    if (hoveredCountry === d) return 'rgba(255,255,255,0.10)'
-    if (!d?.properties) return 'rgba(0,0,0,0)'
-    const iso = d.properties.ISO_A2
-    if (highConflictISOs.has(iso)) return 'rgba(248,81,73,0.08)'
-    if (tensionISOs.has(iso)) return 'rgba(210,153,34,0.06)'
-    return 'rgba(0,0,0,0)'
-  }, [hoveredCountry, highConflictISOs, tensionISOs])
+  // Combined points: conflict + earthquakes (wildfires handled via htmlElementsData)
+  const combinedPoints = useMemo(() => {
+    const base = layers.conflict
+      ? CONFLICTS.filter(d => d.status !== 'past').map(d => ({ ...d, _type: 'conflict' }))
+      : []
+    const quakes = layers.earthquakes ? earthquakePoints : []
+    return [...base, ...quakes]
+  }, [layers.conflict, layers.earthquakes, earthquakePoints])
 
-  const polyAltitude = useCallback((d) => hoveredCountry === d ? 0.010 : 0.006, [hoveredCountry])
+  // Combined labels: country hover + storms
+  const combinedLabels = useMemo(() => {
+    const hover = hoveredCountry && !selectedCountry ? [hoveredCountry] : []
+    const storms = layers.storms ? stormPoints : []
+    return [...hover, ...storms]
+  }, [hoveredCountry, selectedCountry, layers.storms, stormPoints])
+
+  // All polygons: countries + piracy zones
+  const allPolygons = useMemo(() => {
+    if (!layers.piracy) return countries
+    return [...countries, ...PIRACY_ZONES.map(boundsToGeoFeature)]
+  }, [countries, layers.piracy])
+
+  const polyColor = useCallback((d) => {
+    if (d.properties?._piracy) return 'rgba(30,107,255,0.12)'
+    if (hoveredCountry === d) return 'rgba(255,255,255,0.10)'
+    return 'rgba(0,0,0,0)'
+  }, [hoveredCountry])
+
+  const polyAltitude = useCallback((d) => {
+    if (d.properties?._piracy) return 0.005
+    return hoveredCountry === d ? 0.010 : 0.006
+  }, [hoveredCountry])
 
   const polySideColor = useCallback((d) => {
+    if (d.properties?._piracy) return 'rgba(0,0,0,0)'
     if (hoveredCountry === d) return 'rgba(255,255,255,0.70)'
-    if (!d?.properties) return 'rgba(255,255,255,0.10)'
-    const iso = d.properties.ISO_A2
-    if (highConflictISOs.has(iso)) return 'rgba(248,81,73,0.55)'
-    if (tensionISOs.has(iso)) return 'rgba(210,153,34,0.50)'
-    return 'rgba(255,255,255,0.10)'
-  }, [hoveredCountry, highConflictISOs, tensionISOs])
+    const iso = d.properties?.ISO_A2
+    if (iso && highConflictISOs.has(iso)) return 'rgba(255,51,51,0.40)'
+    return 'rgba(0,0,0,0)'
+  }, [hoveredCountry, highConflictISOs])
 
-  // Selected country data
+  const polyStrokeColor = useCallback((d) => {
+    if (d.properties?._piracy) return 'rgba(30,107,255,0.65)'
+    return 'rgba(0,0,0,0)'
+  }, [])
+
+  // Wildfire HTML element factory (stable reference — no deps)
+  const wildfireElement = useCallback(() => {
+    const wrap = document.createElement('div')
+    wrap.style.cssText = 'position:relative;width:5px;height:5px;cursor:pointer;'
+    const core = document.createElement('div')
+    core.style.cssText = 'width:5px;height:5px;border-radius:50%;background:#FFD700;box-shadow:0 0 3px #FFD700;opacity:0.85;'
+    const ring = document.createElement('div')
+    ring.style.cssText = 'position:absolute;top:-2.5px;left:-2.5px;width:10px;height:10px;border-radius:50%;border:1px solid rgba(255,215,0,0.7);animation:wf-pulse 2s ease-out infinite;'
+    wrap.appendChild(core)
+    wrap.appendChild(ring)
+    return wrap
+  }, [])
+
   const selIso      = selectedCountry?.properties?.ISO_A2
   const selConflict = selIso ? CONFLICTS.find(c => COUNTRY_NAME_TO_ISO[c.country] === selIso) : null
 
@@ -214,44 +327,59 @@ export default function AtlasGlobe({ workspacePaused }) {
         showAtmosphere={true}
         enablePointerInteraction={!workspacePaused}
 
-        polygonsData={countries}
+        polygonsData={allPolygons}
         polygonCapColor={polyColor}
         polygonAltitude={polyAltitude}
         polygonSideColor={polySideColor}
-        polygonStrokeColor={() => 'rgba(0,0,0,0)'}
+        polygonStrokeColor={polyStrokeColor}
         polygonLabel={() => null}
         polygonsTransitionDuration={300}
         polygonCapCurvatureResolution={3}
-        onPolygonHover={d => setHoveredCountry(d || null)}
-        onPolygonClick={d => { setSelectedRegion(null); d && handleCountryClick(d) }}
+        onPolygonHover={d => setHoveredCountry(d?.properties?._piracy ? null : (d || null))}
+        onPolygonClick={d => { setSelectedRegion(null); d && !d.properties?._piracy && handleCountryClick(d) }}
 
-        pointsData={CONFLICTS.filter(d => d.status !== 'past')}
+        pointsData={combinedPoints}
         pointLat={d => d.lat}
         pointLng={d => d.lng}
-        pointColor={d => d.status === 'ongoing' ? '#F85149' : d.status === 'alert' ? '#D29922' : 'rgba(139,148,158,0.4)'}
-        pointAltitude={0.01}
-        pointRadius={0.35}
-        pointLabel={d => `${d.name} — ${d.country}`}
+        pointColor={d => {
+          if (d._type === 'earthquake') return '#FF8C42'
+          return d.status === 'ongoing' ? '#FF3333' : d.status === 'alert' ? '#D29922' : 'rgba(139,148,158,0.4)'
+        }}
+        pointAltitude={d => d._type === 'earthquake' ? 0.02 : 0.01}
+        pointRadius={d => {
+          if (d._type === 'earthquake') return d.magnitude ? Math.max(0.35, d.magnitude * 0.11) : 0.4
+          return 0.5
+        }}
+        pointLabel={d => {
+          if (d._type === 'earthquake') return `${d.name} (M${d.magnitude != null ? d.magnitude.toFixed(1) : '?'})`
+          return `${d.name} — ${d.country}`
+        }}
         pointResolution={12}
-        onPointClick={handlePointClick}
+        onPointClick={d => { if (d._type === 'conflict') handlePointClick(d) }}
 
-        ringsData={CONFLICTS.filter(d => d.status === 'ongoing')}
+        ringsData={layers.conflict ? CONFLICTS.filter(d => d.status === 'ongoing') : []}
         ringLat={d => d.lat}
         ringLng={d => d.lng}
-        ringColor={() => t => `rgba(248,81,73,${Math.max(0, 1 - t) * 0.5})`}
+        ringColor={() => t => `rgba(255,51,51,${Math.max(0, 1 - t) * 0.5})`}
         ringAltitude={0.01}
         ringMaxRadius={2}
         ringPropagationSpeed={1}
         ringRepeatPeriod={2000}
         ringResolution={64}
 
-        labelsData={hoveredCountry && !selectedCountry ? [hoveredCountry] : []}
-        labelLat={d => d.properties.LABEL_Y || 0}
-        labelLng={d => d.properties.LABEL_X || 0}
-        labelText={d => d.properties.NAME || ''}
-        labelColor={() => '#E6EDF3'}
-        labelSize={0.9}
-        labelAltitude={0.07}
+        htmlElementsData={layers.wildfires ? WILDFIRES_STATIC : []}
+        htmlLat={d => d.lat}
+        htmlLng={d => d.lng}
+        htmlAltitude={0.02}
+        htmlElement={wildfireElement}
+
+        labelsData={combinedLabels}
+        labelLat={d => d._type === 'storm' ? d.lat : (d.properties?.LABEL_Y || 0)}
+        labelLng={d => d._type === 'storm' ? d.lng : (d.properties?.LABEL_X || 0)}
+        labelText={d => d._type === 'storm' ? '🌀' : (d.properties?.NAME || '')}
+        labelColor={d => d._type === 'storm' ? '#38BDF8' : '#E6EDF3'}
+        labelSize={d => d._type === 'storm' ? 1.2 : 0.9}
+        labelAltitude={d => d._type === 'storm' ? 0.02 : 0.07}
         labelIncludeDot={false}
         labelResolution={2}
       />
@@ -262,7 +390,6 @@ export default function AtlasGlobe({ workspacePaused }) {
           onClick={e => e.stopPropagation()}
           style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(13,17,23,0.92)', border: '1px solid #1E2329', boxShadow: '0 0 0 1px rgba(0,212,255,0.08), 0 8px 32px rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', width: 300, padding: 16, fontFamily: 'JetBrains Mono' }}
         >
-          {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {flagUrl(selIso) && (
               <img src={flagUrl(selIso)} width={22} height={22} style={{ borderRadius: '50%', flexShrink: 0 }} onError={e => { e.target.style.display = 'none' }} />
@@ -276,12 +403,10 @@ export default function AtlasGlobe({ workspacePaused }) {
             >×</button>
           </div>
 
-          {/* Conflict tag */}
           {selConflict?.status === 'ongoing' && <div style={{ display: 'inline-block', marginTop: 8, padding: '2px 8px', background: 'rgba(248,81,73,0.12)', color: '#F85149', fontSize: 10, letterSpacing: '1.5px' }}>Active conflict</div>}
           {selConflict?.status === 'alert'   && <div style={{ display: 'inline-block', marginTop: 8, padding: '2px 8px', background: 'rgba(210,153,34,0.12)', color: '#D29922', fontSize: 10, letterSpacing: '1.5px' }}>Elevated tension</div>}
           {selConflict?.status === 'past'    && <div style={{ display: 'inline-block', marginTop: 8, padding: '2px 8px', background: 'rgba(139,148,158,0.12)', color: '#8B949E', fontSize: 10, letterSpacing: '1.5px' }}>Resolved</div>}
 
-          {/* Signal redirect */}
           <div
             onClick={() => window.dispatchEvent(new CustomEvent('vigil:search', { detail: { keyword: selectedCountry.properties.NAME } }))}
             style={{ borderTop: '1px solid #1E2329', marginTop: 12, paddingTop: 10, color: signalHover ? '#00D4FF' : 'rgba(0,212,255,0.5)', fontSize: 10, letterSpacing: '1px', cursor: 'pointer', transition: 'color 0.15s' }}
@@ -292,6 +417,7 @@ export default function AtlasGlobe({ workspacePaused }) {
           </div>
         </div>
       )}
+
       {/* Region popup (conflict dot click) */}
       {selectedRegion && (
         <div
