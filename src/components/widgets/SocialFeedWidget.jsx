@@ -62,7 +62,7 @@ export default function SocialFeed({ widgetId, onClose, onFullscreen, isFullscre
     setLoading(true)
     const results = await Promise.allSettled(
       enabled.map(s =>
-        fetch(`https://www.reddit.com/r/${s.name}/hot.json?limit=25`, {
+        fetch(`/api/reddit?subreddit=${encodeURIComponent(s.name)}`, {
           headers: { Accept: 'application/json' },
           signal: AbortSignal.timeout(10000),
         })
