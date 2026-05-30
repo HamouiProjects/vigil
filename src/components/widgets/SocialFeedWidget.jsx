@@ -9,16 +9,12 @@ const DEFAULT_SUBS = [
   { id: 'sub-1', name: 'geopolitics', enabled: true },
 ]
 
-function socialAge(utc) {
-  const s = Math.floor(Date.now() / 1000) - utc
+function socialAge(dateStr) {
+  const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
   if (s < 60)    return 'just now'
   if (s < 3600)  return `${Math.floor(s / 60)}m ago`
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`
   return `${Math.floor(s / 86400)}d ago`
-}
-
-function fmtNum(n) {
-  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
 }
 
 export default function SocialFeed({ widgetId, onClose, onFullscreen, isFullscreen, onCollapse, collapsed, workspacePaused = false }) {
@@ -62,12 +58,14 @@ export default function SocialFeed({ widgetId, onClose, onFullscreen, isFullscre
     setLoading(true)
     const results = await Promise.allSettled(
       enabled.map(s =>
-        fetch(`/api/reddit?subreddit=${encodeURIComponent(s.name)}`, {
-          headers: { Accept: 'application/json' },
+        fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://www.reddit.com/r/' + s.name + '/.rss')}`, {
           signal: AbortSignal.timeout(10000),
         })
           .then(r => r.json())
-          .then(json => ({ subId: s.id, posts: (json?.data?.children ?? []).map(c => c.data) }))
+          .then(json => {
+            if (json.status !== 'ok') throw new Error(json.message || 'rss2json error')
+            return { subId: s.id, posts: json.items.map(item => ({ ...item, subName: s.name })) }
+          })
       )
     )
     const newErrors = {}
@@ -79,7 +77,7 @@ export default function SocialFeed({ widgetId, onClose, onFullscreen, isFullscre
         newErrors[enabled[i].id] = true
       }
     })
-    allPosts.sort((a, b) => b.created_utc - a.created_utc)
+    allPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate))
     setPosts(allPosts)
     setErrorBySub(newErrors)
     setLoading(false)
@@ -117,7 +115,7 @@ export default function SocialFeed({ widgetId, onClose, onFullscreen, isFullscre
   const enabledSubs = subs.filter(s => s.enabled)
 
   const displayPosts = posts.filter(p => {
-    const sub = subs.find(s => s.name.toLowerCase() === (p.subreddit ?? '').toLowerCase())
+    const sub = subs.find(s => s.name.toLowerCase() === (p.subName ?? '').toLowerCase())
     if (sub && hiddenSubs.has(sub.id)) return false
     if (filter && !p.title.toLowerCase().includes(filter.toLowerCase())) return false
     return true
@@ -231,18 +229,18 @@ export default function SocialFeed({ widgetId, onClose, onFullscreen, isFullscre
                 <a
                   key={i}
                   className="rss-article"
-                  href={`https://reddit.com${post.permalink}`}
+                  href={post.link}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   <div className="rss-art-body">
                     <div className="rss-art-meta">
-                      <span className="rss-art-source" style={{ fontWeight: 'bold' }}>r/{post.subreddit}</span>
-                      <span className="rss-art-time">· {socialAge(post.created_utc)}</span>
+                      <span className="rss-art-source" style={{ fontWeight: 'bold' }}>r/{post.subName}</span>
+                      <span className="rss-art-time">· {socialAge(post.pubDate)}</span>
                     </div>
                     <div className="rss-art-title">{post.title}</div>
                     <div style={{ color: 'var(--text-secondary)', fontSize: '10px', marginTop: 2 }}>
-                      ▲ {fmtNum(post.score)} · 💬 {fmtNum(post.num_comments)}
+                      {post.author}
                     </div>
                   </div>
                   <span className="rss-art-ext">→</span>
