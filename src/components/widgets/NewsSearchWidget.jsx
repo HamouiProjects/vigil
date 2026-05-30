@@ -65,7 +65,8 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
 
   const tabsRef  = useRef(tabs);  tabsRef.current  = tabs
   const cacheRef = useRef(cache); cacheRef.current = cache
-  const pausedRef = useRef(workspacePaused)
+  const pausedRef   = useRef(workspacePaused)
+  const didMountRef = useRef(false)
   useEffect(() => { pausedRef.current = workspacePaused }, [workspacePaused])
 
   useEffect(() => {
@@ -109,6 +110,7 @@ export default function KeywordFeed({ widgetId = 'newssearch', onClose, onFullsc
 
   const isVisible = usePageVisibility()
   useEffect(() => {
+    if (!didMountRef.current) { didMountRef.current = true; return }
     if (!isVisible || pausedRef.current) return
     const tab   = tabsRef.current.find(t => t.id === activeId)
     const entry = cacheRef.current[activeId]

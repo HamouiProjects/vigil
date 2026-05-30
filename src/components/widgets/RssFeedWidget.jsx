@@ -134,6 +134,7 @@ export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFul
   const effectiveLive    = isLive && !workspacePaused
   const effectiveLiveRef = useRef(effectiveLive)
   effectiveLiveRef.current = effectiveLive
+  const didMountRef      = useRef(false)
 
   useEffect(() => {
     const saved = localStorage.getItem(`vigil_rss_active_source_${widgetId}`)
@@ -232,7 +233,10 @@ export default function RssFeed({ widgetId = 'rss', onClose, onFullscreen, isFul
   usePolling(fetchAll, 5 * 60_000, { isLive: effectiveLive })
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (isVisibleRss && effectiveLiveRef.current) fetchAll() }, [isVisibleRss])
+  useEffect(() => {
+    if (!didMountRef.current) { didMountRef.current = true; return }
+    if (isVisibleRss && effectiveLiveRef.current) fetchAll()
+  }, [isVisibleRss])
 
   useEffect(() => {
     const tick = () => {

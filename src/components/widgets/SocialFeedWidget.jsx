@@ -46,6 +46,7 @@ export default function SocialFeed({ widgetId, onClose, onFullscreen, isFullscre
   const effectiveLive    = isLive && !workspacePaused
   const effectiveLiveRef = useRef(effectiveLive)
   effectiveLiveRef.current = effectiveLive
+  const didMountRef      = useRef(false)
 
   function saveSubs(next) {
     setSubs(next)
@@ -86,7 +87,10 @@ export default function SocialFeed({ widgetId, onClose, onFullscreen, isFullscre
   usePolling(fetchAll, 10 * 60_000, { isLive: effectiveLive })
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (isVisible && effectiveLiveRef.current) fetchAll() }, [isVisible])
+  useEffect(() => {
+    if (!didMountRef.current) { didMountRef.current = true; return }
+    if (isVisible && effectiveLiveRef.current) fetchAll()
+  }, [isVisible])
 
   function addSub() {
     const name = newSubInput.trim().replace(/^r\//, '').toLowerCase()
