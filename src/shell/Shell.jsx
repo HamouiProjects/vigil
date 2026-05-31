@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useShellStore, isWorkspacePaused } from '../state/shellStore.js'
+import { useShellPersistence } from '../data/useShellPersistence.js'
 import { widgetRegistryMeta } from './widgetRegistry.js'
 import Grid from './Grid.jsx'
 import EntitlementDebug from './EntitlementDebug.jsx'
@@ -76,6 +77,8 @@ function UpgradeNudge({ message, onDismiss }) {
 }
 
 export default function Shell() {
+  useShellPersistence()
+  const loaded = useShellStore(s => s.loaded)
   const workspaces = useShellStore(s => s.workspaces)
   const activeWs = useShellStore(s => s.activeWs)
   const globalLive = useShellStore(s => s.globalLive === true)
@@ -128,6 +131,25 @@ export default function Shell() {
     const ok = addWidget(wsId, type)
     setShowWidgetPicker(false)
     if (!ok) nudgeUpgrade('Upgrade to Pro for unlimited widgets per workspace')
+  }
+
+  if (!loaded) {
+    return (
+      <div
+        className="app"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          fontFamily: 'var(--font-mono, JetBrains Mono, monospace)',
+          fontSize: 10,
+          color: 'var(--text-secondary)',
+        }}
+      >
+        Loading workspace…
+      </div>
+    )
   }
 
   return (

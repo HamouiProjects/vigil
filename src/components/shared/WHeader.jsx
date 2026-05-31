@@ -53,7 +53,7 @@ export default function WHeader({ title, onToggleLive, isLive = true, workspaceP
         {onRefresh    && <button className="widget-btn" onClick={onRefresh}    title="Refresh">↻</button>}
         {onCollapse   && <button className="widget-btn" onClick={onCollapse}   title={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? '+' : '—'}</button>}
         {onFullscreen && <button className="widget-btn" onClick={onFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>{isFullscreen ? '⤡' : '⤢'}</button>}
-        {onClose      && <button className="widget-btn" onClick={onClose}      title="Close">✕</button>}
+        {onClose      && <button className="widget-btn widget-btn-close" onClick={onClose}      title="Close">✕</button>}
       </div>
     </div>
   )

@@ -1,1 +1,1 @@
-export const devOverride = { plan: 'free', addOns: [] }
+export const devOverride = { enabled: false, plan: 'free', addOns: [] }

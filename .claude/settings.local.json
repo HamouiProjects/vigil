@@ -28,7 +28,8 @@
       "Bash(vercel env *)",
       "Bash(vercel *)",
       "Bash(pkill -f \"vite\")",
-      "PowerShell(curl *)"
+      "PowerShell(curl *)",
+      "Bash(git fetch *)"
     ]
   }
 }

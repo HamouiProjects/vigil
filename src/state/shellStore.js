@@ -42,17 +42,26 @@ function defaultLayoutEntry(id, layout) {
   return { i: id, x: 0, y, ...DEFAULT_WIDGET_SIZE }
 }
 
-const initialEntitlements = import.meta.env.DEV
+const initialEntitlements = import.meta.env.DEV && devOverride.enabled
   ? resolveEntitlements(devOverride.plan, devOverride.addOns)
   : resolveEntitlements('free', [])
 
 export const useShellStore = create((set, get) => ({
+  loaded: false,
+  uid: null,
   globalLive: true,
   activeWs: DEMO_WS_ID,
   pausedWorkspaces: [],
   inactiveTabPause: true,
   entitlements: initialEntitlements,
   workspaces: SEED_WORKSPACES,
+
+  hydrate: ({ uid, workspaces, activeWs }) => set({
+    uid,
+    workspaces,
+    activeWs: activeWs ?? workspaces[0]?.id,
+    loaded: true,
+  }),
 
   setGlobalLive: (v) => set({ globalLive: v }),
   setActiveWs: (wsId) => set({ activeWs: wsId }),

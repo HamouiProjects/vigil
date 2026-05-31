@@ -1,5 +1,8 @@
 -- v1 schema migration (run in Supabase SQL editor)
 
+alter table public.workspaces add column if not exists local_id   text;
+alter table public.workspaces add column if not exists created_at  timestamptz not null default now();
+
 do $$ begin
   if exists (select 1 from information_schema.columns
              where table_schema='public' and table_name='workspaces' and column_name='layout_json') then
@@ -16,22 +19,23 @@ alter table public.workspaces
 create unique index if not exists workspaces_user_local_uidx
   on public.workspaces (user_id, local_id);
 
+drop policy if exists "Users own workspaces" on public.workspaces;
+drop policy if exists "own workspaces"        on public.workspaces;
+create policy "own workspaces" on public.workspaces
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
 create table if not exists public.sources (
-  id         uuid primary key default gen_random_uuid(),
-  user_id    uuid references auth.users(id) on delete cascade,
-  type       text not null,
-  identifier text not null,
-  label      text,
-  meta       jsonb not null default '{}'::jsonb,
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  type text not null, identifier text not null, label text,
+  meta jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
 
 create table if not exists public.subscriptions (
-  user_id    uuid primary key references auth.users(id) on delete cascade,
-  plan       text   not null default 'free',
-  add_ons    text[] not null default '{}',
-  team_id    uuid,
-  status     text   not null default 'active',
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  plan text not null default 'free', add_ons text[] not null default '{}',
+  team_id uuid, status text not null default 'active',
   updated_at timestamptz not null default now()
 );
 
