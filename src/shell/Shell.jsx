@@ -58,10 +58,22 @@ export default function Shell() {
         <div className="navbar-right">
           <button
             type="button"
-            className={`status-dot${globalLive ? '' : ' paused'}`}
-            onClick={() => setGlobalLive(v => !v)}
+            className="status-dot"
+            onClick={() => setGlobalLive(!globalLive)}
             title={globalLive ? 'Click to pause all live feeds' : 'Click to resume all live feeds'}
+            style={{ color: globalLive ? 'var(--green)' : 'var(--red)' }}
           >
+            <span
+              aria-hidden
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                flexShrink: 0,
+                background: globalLive ? 'var(--green)' : 'var(--red)',
+                boxShadow: globalLive ? '0 0 6px var(--green)' : 'none',
+              }}
+            />
             {globalLive ? 'LIVE' : 'PAUSED'}
           </button>
         </div>
