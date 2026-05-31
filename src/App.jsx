@@ -11,6 +11,7 @@ import AddWidgetModal from './components/layout/AddWidgetModal'
 import SettingsModal from './components/layout/SettingsModal'
 import WorkspaceGrid from './components/layout/WorkspaceGrid'
 import WidgetRenderer from './components/layout/WidgetRenderer'
+import EntitlementDebug from './shell/EntitlementDebug.jsx'
 
 export default function App() {
   return (
@@ -68,6 +69,8 @@ function AppInner() {
 
   return (
     <div className="app">
+      {/* TEMP: remove in shell sprint */}
+      <EntitlementDebug />
       <NavBar
         saved={saved}
         workspaces={workspaces}
