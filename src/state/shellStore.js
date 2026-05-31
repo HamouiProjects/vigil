@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { resolveEntitlements } from '../entitlements/resolve.js'
 import { devOverride } from '../entitlements/devOverride.js'
+import { withinLimit } from '../entitlements/index.js'
+import { widgetRegistry } from '../shell/widgetRegistry.js'
 
 const DEMO_WS_ID = 'demo-ws'
 const DEMO_WEATHER_ID = 'demo-weather'
@@ -22,11 +24,29 @@ export const SEED_WORKSPACES = [
   },
 ]
 
+const DEFAULT_WIDGET_CONFIG = {
+  weather: { city: 'Berlin', latLon: null, locName: 'Berlin' },
+}
+
+const DEFAULT_WIDGET_SIZE = { w: 8, h: 8 }
+
+function newId(prefix) {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+function defaultLayoutEntry(id, layout) {
+  let y = 0
+  for (const item of layout) {
+    y = Math.max(y, item.y + item.h)
+  }
+  return { i: id, x: 0, y, ...DEFAULT_WIDGET_SIZE }
+}
+
 const initialEntitlements = import.meta.env.DEV
   ? resolveEntitlements(devOverride.plan, devOverride.addOns)
   : resolveEntitlements('free', [])
 
-export const useShellStore = create((set) => ({
+export const useShellStore = create((set, get) => ({
   globalLive: true,
   activeWs: DEMO_WS_ID,
   pausedWorkspaces: [],
@@ -43,6 +63,69 @@ export const useShellStore = create((set) => ({
   })),
   setInactiveTabPause: (v) => set({ inactiveTabPause: v }),
   setEntitlements: (ent) => set({ entitlements: ent }),
+
+  addWorkspace: (name) => {
+    const s = get()
+    if (!withinLimit(s.entitlements, 'workspaces', s.workspaces.length + 1)) return false
+    const id = newId('ws')
+    const ws = { id, name: name?.trim() || `Workspace ${s.workspaces.length + 1}`, widgets: [], layout: [] }
+    set({
+      workspaces: [...s.workspaces, ws],
+      activeWs: id,
+    })
+    return true
+  },
+
+  removeWorkspace: (wsId) => {
+    const s = get()
+    const next = s.workspaces.filter(ws => ws.id !== wsId)
+    if (!next.length) return
+    const nextActive = s.activeWs === wsId ? next[0].id : s.activeWs
+    set({
+      workspaces: next,
+      activeWs: nextActive,
+      pausedWorkspaces: s.pausedWorkspaces.filter(id => id !== wsId),
+    })
+  },
+
+  addWidget: (wsId, type) => {
+    const s = get()
+    if (!widgetRegistry[type]) return false
+    const ws = s.workspaces.find(w => w.id === wsId)
+    if (!ws) return false
+    if (!withinLimit(s.entitlements, 'widgetsPerWorkspace', ws.widgets.length + 1)) return false
+
+    const id = newId('w')
+    const widget = {
+      id,
+      type,
+      config: { ...(DEFAULT_WIDGET_CONFIG[type] ?? {}) },
+    }
+    const layoutItem = defaultLayoutEntry(id, ws.layout)
+
+    set({
+      workspaces: s.workspaces.map(w =>
+        w.id === wsId
+          ? { ...w, widgets: [...w.widgets, widget], layout: [...w.layout, layoutItem] }
+          : w
+      ),
+    })
+    return true
+  },
+
+  removeWidget: (wsId, widgetId) => {
+    set((s) => ({
+      workspaces: s.workspaces.map(ws =>
+        ws.id === wsId
+          ? {
+              ...ws,
+              widgets: ws.widgets.filter(w => w.id !== widgetId),
+              layout: ws.layout.filter(l => l.i !== widgetId),
+            }
+          : ws
+      ),
+    }))
+  },
 
   updateLayout: (wsId, layout) => set((s) => ({
     workspaces: s.workspaces.map(ws =>

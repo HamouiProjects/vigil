@@ -15,6 +15,7 @@ export default function Grid() {
   const entitlements = useShellStore(s => s.entitlements)
   const updateLayout = useShellStore(s => s.updateLayout)
   const updateWidgetConfig = useShellStore(s => s.updateWidgetConfig)
+  const removeWidget = useShellStore(s => s.removeWidget)
 
   const workspace = workspaces.find(ws => ws.id === activeWs)
   if (!workspace) return null
@@ -44,6 +45,7 @@ export default function Grid() {
             workspacePaused={workspacePaused}
             entitlements={entitlements}
             onSaveConfig={config => updateWidgetConfig(activeWs, widget.id, config)}
+            onRemove={() => removeWidget(activeWs, widget.id)}
           />
         </div>
       ))}

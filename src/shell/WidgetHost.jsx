@@ -22,7 +22,7 @@ const SLOT_STYLE = {
   minHeight: 0,
 }
 
-export default function WidgetHost({ widget, workspacePaused, entitlements, onSaveConfig }) {
+export default function WidgetHost({ widget, workspacePaused, entitlements, onSaveConfig, onRemove }) {
   const [fullscreen, setFullscreen] = useState(false)
   const slotRef = useRef(null)
   const portalRootRef = useRef(null)
@@ -64,11 +64,22 @@ export default function WidgetHost({ widget, workspacePaused, entitlements, onSa
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'flex-end',
+          gap: 2,
           padding: '2px 6px',
           borderBottom: fullscreen ? '1px solid var(--border)' : 'none',
           background: 'var(--bg)',
         }}
       >
+        {onRemove && (
+          <button
+            type="button"
+            className="widget-btn widget-btn-close"
+            onClick={onRemove}
+            title="Remove widget"
+          >
+            ✕
+          </button>
+        )}
         <button
           type="button"
           className="widget-btn"
