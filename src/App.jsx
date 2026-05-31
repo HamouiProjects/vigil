@@ -11,7 +11,14 @@ import AddWidgetModal from './components/layout/AddWidgetModal'
 import SettingsModal from './components/layout/SettingsModal'
 import WorkspaceGrid from './components/layout/WorkspaceGrid'
 import WidgetRenderer from './components/layout/WidgetRenderer'
-import EntitlementDebug from './shell/EntitlementDebug.jsx'
+import Shell from './shell/Shell.jsx'
+
+function useShellMode() {
+  const [shellMode] = useState(() =>
+    new URLSearchParams(window.location.search).get('shell') === '1'
+  )
+  return shellMode
+}
 
 export default function App() {
   return (
@@ -36,6 +43,7 @@ function AppInner() {
   const [user,         setUser]         = useState(null)
   const [authLoading,  setAuthLoading]  = useState(true)
   const [authView,     setAuthView]     = useState('login')
+  const shellMode = useShellMode()
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -66,11 +74,10 @@ function AppInner() {
 
   if (authLoading) return <div className="auth-init-screen"><div className="auth-init-inner"><div className="auth-spinner" /><span className="auth-init-text">INITIALIZING...</span></div></div>
   if (!user) return <AuthScreen authView={authView} setAuthView={setAuthView} />
+  if (shellMode) return <Shell />
 
   return (
     <div className="app">
-      {/* TEMP: remove in shell sprint */}
-      <EntitlementDebug />
       <NavBar
         saved={saved}
         workspaces={workspaces}
