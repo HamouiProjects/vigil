@@ -11,8 +11,8 @@ function isRateLimited(httpStatus, data) {
 }
 
 function buildRss2JsonUrl(feedUrl) {
-  let u = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}&count=30`
-  if (process.env.RSS2JSON_KEY) u += `&api_key=${process.env.RSS2JSON_KEY}`
+  let u = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}`
+  if (process.env.RSS2JSON_KEY) u += `&api_key=${process.env.RSS2JSON_KEY}&count=30`
   return u
 }
 
