@@ -6,6 +6,13 @@ import WidgetHost from './WidgetHost.jsx'
 
 const SizedGridLayout = WidthProvider(GridLayout)
 
+function mergeLayout(widgets, storedLayout, rglLayout) {
+  const rglById = new Map(rglLayout.map(item => [item.i, item]))
+  return widgets
+    .map(w => rglById.get(w.id) ?? storedLayout.find(item => item.i === w.id))
+    .filter(Boolean)
+}
+
 export default function Grid() {
   const activeWs = useShellStore(s => s.activeWs)
   const workspaces = useShellStore(s => s.workspaces)
@@ -26,7 +33,7 @@ export default function Grid() {
   return (
     <SizedGridLayout
       layout={workspace.layout}
-      onLayoutChange={layout => updateLayout(activeWs, layout)}
+      onLayoutChange={layout => updateLayout(activeWs, mergeLayout(workspace.widgets, workspace.layout, layout))}
       cols={24}
       rowHeight={32}
       margin={[6, 6]}
@@ -38,17 +45,25 @@ export default function Grid() {
       isResizable
       isDraggable
     >
-      {workspace.widgets.map(widget => (
-        <div key={widget.id} style={{ height: '100%', overflow: 'hidden' }}>
-          <WidgetHost
-            widget={widget}
-            workspacePaused={workspacePaused}
-            entitlements={entitlements}
-            onSaveConfig={config => updateWidgetConfig(activeWs, widget.id, config)}
-            onRemove={() => removeWidget(activeWs, widget.id)}
-          />
-        </div>
-      ))}
+      {workspace.widgets.map(widget => {
+        const gridItem = workspace.layout.find(item => item.i === widget.id)
+        if (!gridItem) return null
+        return (
+          <div
+            key={widget.id}
+            data-grid={{ ...gridItem }}
+            style={{ height: '100%', overflow: 'hidden' }}
+          >
+            <WidgetHost
+              widget={widget}
+              workspacePaused={workspacePaused}
+              entitlements={entitlements}
+              onSaveConfig={config => updateWidgetConfig(activeWs, widget.id, config)}
+              onRemove={() => removeWidget(activeWs, widget.id)}
+            />
+          </div>
+        )
+      })}
     </SizedGridLayout>
   )
 }

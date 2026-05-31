@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useShellStore, isWorkspacePaused } from '../state/shellStore.js'
 import { widgetRegistryMeta } from './widgetRegistry.js'
 import Grid from './Grid.jsx'
@@ -89,6 +89,7 @@ export default function Shell() {
 
   const [upgradeNudge, setUpgradeNudge] = useState(null)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
+  const widgetPickerRef = useRef(null)
 
   useEffect(() => {
     const { globalLive: live, setGlobalLive } = useShellStore.getState()
@@ -103,7 +104,10 @@ export default function Shell() {
 
   useEffect(() => {
     if (!showWidgetPicker) return
-    function onDoc() { setShowWidgetPicker(false) }
+    function onDoc(e) {
+      if (widgetPickerRef.current?.contains(e.target)) return
+      setShowWidgetPicker(false)
+    }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [showWidgetPicker])
@@ -120,7 +124,8 @@ export default function Shell() {
   }
 
   function handleAddWidget(type) {
-    const ok = addWidget(activeWs, type)
+    const wsId = useShellStore.getState().activeWs
+    const ok = addWidget(wsId, type)
     setShowWidgetPicker(false)
     if (!ok) nudgeUpgrade('Upgrade to Pro for unlimited widgets per workspace')
   }
@@ -180,7 +185,7 @@ export default function Shell() {
         </div>
 
         <div className="navbar-right" style={{ position: 'relative', zIndex: 110 }}>
-          <div style={{ position: 'relative' }}>
+          <div ref={widgetPickerRef} style={{ position: 'relative' }}>
             <button type="button" className="nav-add-btn" onClick={() => setShowWidgetPicker(v => !v)}>
               + Add Widget
             </button>
@@ -198,7 +203,6 @@ export default function Shell() {
                   padding: 6,
                   boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
                 }}
-                onPointerDownCapture={e => e.stopPropagation()}
               >
                 {Object.entries(widgetRegistryMeta).map(([type, meta]) => (
                   <button
