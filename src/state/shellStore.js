@@ -55,13 +55,23 @@ export const useShellStore = create((set, get) => ({
   inactiveTabPause: true,
   entitlements: initialEntitlements,
   workspaces: SEED_WORKSPACES,
+  sources: [],
 
-  hydrate: ({ uid, workspaces, activeWs }) => set({
+  hydrate: ({ uid, workspaces, activeWs, sources }) => set({
     uid,
     workspaces,
     activeWs: activeWs ?? workspaces[0]?.id,
+    sources: sources ?? [],
     loaded: true,
   }),
+
+  setSources: (rows) => set({ sources: rows ?? [] }),
+  addSourceLocal: (row) => set((s) => ({
+    sources: s.sources.some(x => x.id === row.id)
+      ? s.sources.map(x => x.id === row.id ? row : x)
+      : [...s.sources, row],
+  })),
+  removeSourceLocal: (id) => set((s) => ({ sources: s.sources.filter(x => x.id !== id) })),
 
   setGlobalLive: (v) => set({ globalLive: v }),
   setActiveWs: (wsId) => set({ activeWs: wsId }),

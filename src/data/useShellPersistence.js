@@ -5,6 +5,7 @@ import { devOverride } from '../entitlements/devOverride.js'
 import { ensureSession } from './session.js'
 import { loadWorkspaces, saveWorkspaces } from './workspacesRepo.js'
 import { loadSubscription } from './subscriptionRepo.js'
+import { listSources } from './sourcesRepo.js'
 
 export function useShellPersistence() {
   useEffect(() => {
@@ -22,13 +23,19 @@ export function useShellPersistence() {
           )
         }
 
-        let wss = await loadWorkspaces(uid)
+        const [wss0, srcs] = await Promise.all([loadWorkspaces(uid), listSources(uid)])
+        let wss = wss0
         if (!wss.length) {
           wss = useShellStore.getState().workspaces
           await saveWorkspaces(uid, wss)
         }
 
-        useShellStore.getState().hydrate({ uid, workspaces: wss, activeWs: wss[0]?.id })
+        useShellStore.getState().hydrate({
+          uid,
+          workspaces: wss,
+          activeWs: wss[0]?.id,
+          sources: srcs,
+        })
 
         unsub = useShellStore.subscribe((state, prev) => {
           if (state.workspaces === prev.workspaces || !state.uid) return

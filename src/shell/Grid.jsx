@@ -2,6 +2,7 @@ import { ReactGridLayout as GridLayout, WidthProvider } from 'react-grid-layout/
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import { useShellStore, isWorkspacePaused } from '../state/shellStore.js'
+import { useSources } from '../data/useSources.js'
 import WidgetHost from './WidgetHost.jsx'
 
 const SizedGridLayout = WidthProvider(GridLayout)
@@ -14,6 +15,7 @@ function mergeLayout(widgets, storedLayout, rglLayout) {
 }
 
 export default function Grid() {
+  const { sources, addSource, removeSource } = useSources()
   const activeWs = useShellStore(s => s.activeWs)
   const workspaces = useShellStore(s => s.workspaces)
   const globalLive = useShellStore(s => s.globalLive)
@@ -60,6 +62,9 @@ export default function Grid() {
               entitlements={entitlements}
               onSaveConfig={config => updateWidgetConfig(activeWs, widget.id, config)}
               onRemove={() => removeWidget(activeWs, widget.id)}
+              sources={sources}
+              onAddSource={addSource}
+              onRemoveSource={removeSource}
             />
           </div>
         )

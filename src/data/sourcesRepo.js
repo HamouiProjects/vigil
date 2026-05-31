@@ -13,7 +13,10 @@ export async function listSources(uid) {
 export async function createSource(uid, { type, identifier, label, meta }) {
   const { data, error } = await supabase
     .from('sources')
-    .insert({ user_id: uid, type, identifier, label, meta: meta ?? {} })
+    .upsert(
+      { user_id: uid, type, identifier, label, meta: meta ?? {} },
+      { onConflict: 'user_id,type,identifier', ignoreDuplicates: false },
+    )
     .select()
     .single()
   if (error) throw error

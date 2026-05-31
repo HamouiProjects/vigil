@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { widgetRegistry } from './widgetRegistry.js'
+import { widgetRegistry, SOURCE_BACKED_TYPES } from './widgetRegistry.js'
 
 const FS_STYLE = {
   position: 'fixed',
@@ -22,7 +22,16 @@ const SLOT_STYLE = {
   minHeight: 0,
 }
 
-export default function WidgetHost({ widget, workspacePaused, entitlements, onSaveConfig, onRemove }) {
+export default function WidgetHost({
+  widget,
+  workspacePaused,
+  entitlements,
+  onSaveConfig,
+  onRemove,
+  sources,
+  onAddSource,
+  onRemoveSource,
+}) {
   const [fullscreen, setFullscreen] = useState(false)
   const slotRef = useRef(null)
   const portalRootRef = useRef(null)
@@ -95,6 +104,9 @@ export default function WidgetHost({ widget, workspacePaused, entitlements, onSa
           paused={workspacePaused}
           config={widget.config ?? {}}
           onSaveConfig={onSaveConfig}
+          {...(SOURCE_BACKED_TYPES.has(widget.type)
+            ? { sources, onAddSource, onRemoveSource }
+            : {})}
         />
       </div>
     </>
