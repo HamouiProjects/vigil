@@ -1,16 +1,63 @@
+import { useEffect } from 'react'
 import { useShellStore, isWorkspacePaused } from '../state/shellStore.js'
 import Grid from './Grid.jsx'
 import EntitlementDebug from './EntitlementDebug.jsx'
 
+function ShellGlobalLiveToggle() {
+  const globalLive = useShellStore(s => s.globalLive === true)
+
+  return (
+    <button
+      type="button"
+      className="shell-global-live-btn"
+      onClick={(e) => {
+        e.stopPropagation()
+        const live = useShellStore.getState().globalLive === true
+        useShellStore.getState().setGlobalLive(!live)
+      }}
+      title={globalLive ? 'Click to pause all live feeds' : 'Click to resume all live feeds'}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: 0,
+        fontSize: 10,
+        fontFamily: 'var(--font-mono, JetBrains Mono, monospace)',
+        color: globalLive ? 'var(--green)' : 'var(--red)',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
+          flexShrink: 0,
+          background: globalLive ? 'var(--green)' : 'var(--red)',
+          boxShadow: globalLive ? '0 0 6px var(--green)' : 'none',
+        }}
+      />
+      {globalLive ? 'LIVE' : 'PAUSED'}
+    </button>
+  )
+}
+
 export default function Shell() {
   const workspaces = useShellStore(s => s.workspaces)
   const activeWs = useShellStore(s => s.activeWs)
-  const globalLive = useShellStore(s => s.globalLive)
+  const globalLive = useShellStore(s => s.globalLive === true)
   const pausedWorkspaces = useShellStore(s => s.pausedWorkspaces)
   const inactiveTabPause = useShellStore(s => s.inactiveTabPause)
   const setActiveWs = useShellStore(s => s.setActiveWs)
-  const setGlobalLive = useShellStore(s => s.setGlobalLive)
   const toggleWorkspacePause = useShellStore(s => s.toggleWorkspacePause)
+
+  useEffect(() => {
+    const { globalLive: live, setGlobalLive } = useShellStore.getState()
+    if (typeof live !== 'boolean') setGlobalLive(true)
+  }, [])
 
   const pauseState = { globalLive, activeWs, pausedWorkspaces, inactiveTabPause }
 
@@ -55,27 +102,8 @@ export default function Shell() {
           </div>
         </div>
 
-        <div className="navbar-right">
-          <button
-            type="button"
-            className="status-dot"
-            onClick={() => setGlobalLive(!globalLive)}
-            title={globalLive ? 'Click to pause all live feeds' : 'Click to resume all live feeds'}
-            style={{ color: globalLive ? 'var(--green)' : 'var(--red)' }}
-          >
-            <span
-              aria-hidden
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                flexShrink: 0,
-                background: globalLive ? 'var(--green)' : 'var(--red)',
-                boxShadow: globalLive ? '0 0 6px var(--green)' : 'none',
-              }}
-            />
-            {globalLive ? 'LIVE' : 'PAUSED'}
-          </button>
+        <div className="navbar-right" style={{ position: 'relative', zIndex: 110 }}>
+          <ShellGlobalLiveToggle />
         </div>
       </nav>
 
