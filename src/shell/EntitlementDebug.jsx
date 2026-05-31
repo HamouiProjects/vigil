@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import { useShellStore, isWorkspacePaused } from '../state/shellStore.js'
 import { resolveEntitlements } from '../entitlements/resolve.js'
 import { PLANS, ADDONS } from '../domain/types.js'
+import WidgetHost from './WidgetHost.jsx'
 
 const DEMO_WS = 'demo-ws'
+const DEMO_WEATHER_WIDGET = { id: 'demo-weather', type: 'weather', config: { city: 'Berlin', latLon: null, locName: 'Berlin' } }
 
 const box = {
   position: 'fixed',
@@ -49,6 +52,8 @@ export default function EntitlementDebug() {
   const toggleWorkspacePause = useShellStore(s => s.toggleWorkspacePause)
   const setInactiveTabPause = useShellStore(s => s.setInactiveTabPause)
   const setEntitlements = useShellStore(s => s.setEntitlements)
+
+  const [demoWidget, setDemoWidget] = useState(DEMO_WEATHER_WIDGET)
 
   const state = { globalLive, activeWs, pausedWorkspaces, inactiveTabPause }
   const demoPaused = isWorkspacePaused(state, DEMO_WS)
@@ -134,6 +139,20 @@ export default function EntitlementDebug() {
           <button type="button" style={btn} onClick={() => toggleWorkspacePause(DEMO_WS)}>
             pause {DEMO_WS}: {String(pausedWorkspaces.includes(DEMO_WS))}
           </button>
+        </div>
+      </div>
+
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 8 }}>
+        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+          WidgetHost harness
+        </div>
+        <div style={{ height: 320, border: '1px solid var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+          <WidgetHost
+            widget={demoWidget}
+            workspacePaused={demoPaused}
+            entitlements={entitlements}
+            onSaveConfig={cfg => setDemoWidget(w => ({ ...w, config: cfg }))}
+          />
         </div>
       </div>
     </div>
