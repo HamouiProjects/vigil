@@ -34,14 +34,20 @@ export default async function handler(req, res) {
   const now = Date.now()
 
   try {
-    const { data: cached, error: dbErr } = await supabase
-      .from('quote_cache')
-      .select('*')
-      .in('symbol', symbols)
+    let cached = []
+    if (supabase) {
+      try {
+        const { data, error: dbErr } = await supabase
+          .from('quote_cache')
+          .select('*')
+          .in('symbol', symbols)
+        if (!dbErr) cached = data ?? []
+      } catch {
+        cached = []
+      }
+    }
 
-    if (dbErr) throw dbErr
-
-    const cachedBySym = new Map((cached ?? []).map(r => [r.symbol, r]))
+    const cachedBySym = new Map(cached.map(r => [r.symbol, r]))
     const freshQuotes = []
     const needFetch = []
 
@@ -63,8 +69,18 @@ export default async function handler(req, res) {
     if (needFetch.length) {
       try {
         fetchedQuotes = await getQuotes(needFetch)
+      } catch {
+        for (const sym of needFetch) {
+          const row = cachedBySym.get(sym)
+          if (row) staleQuotes.push(toQuoteRow(row, true))
+        }
+        if (freshQuotes.length === 0 && staleQuotes.length === 0) {
+          return res.status(502).json({ error: 'Quotes unavailable' })
+        }
+      }
 
-        if (fetchedQuotes.length) {
+      if (fetchedQuotes.length && supabase) {
+        try {
           const upsertRows = fetchedQuotes.map(q => ({
             symbol: q.symbol,
             price: q.price,
@@ -79,19 +95,11 @@ export default async function handler(req, res) {
             updated_at: new Date().toISOString(),
           }))
 
-          const { error: upsertErr } = await supabase
+          await supabase
             .from('quote_cache')
             .upsert(upsertRows, { onConflict: 'symbol' })
-
-          if (upsertErr) throw upsertErr
-        }
-      } catch {
-        for (const sym of needFetch) {
-          const row = cachedBySym.get(sym)
-          if (row) staleQuotes.push(toQuoteRow(row, true))
-        }
-        if (freshQuotes.length === 0 && staleQuotes.length === 0) {
-          return res.status(502).json({ error: 'Quotes unavailable' })
+        } catch {
+          // cache write is best-effort
         }
       }
     }
