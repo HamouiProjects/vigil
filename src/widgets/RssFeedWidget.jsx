@@ -71,6 +71,7 @@ export default function RssFeedWidget({
   onSaveConfig,
   sources,
   onAddSource,
+  setActions,
 }) {
   const density = config.density ?? 'compact'
   const activeSource = config.activeSource ?? 'all'
@@ -331,17 +332,9 @@ export default function RssFeedWidget({
     ? 'all sources'
     : (feedRows.find(f => f.sourceId === activeSource)?.name ?? activeSource)
 
-  return (
-    <div className="widget" data-widget-id={id}>
-      <div className="widget-header widget-drag-handle" style={{ cursor: 'default' }}>
-        <div className="widget-title-group">
-          <span className="widget-title">RSS</span>
-        </div>
-        {paused && (
-          <span style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
-            PAUSED
-          </span>
-        )}
+  useEffect(() => {
+    setActions?.(
+      <>
         <button
           type="button"
           className="widget-btn"
@@ -361,8 +354,12 @@ export default function RssFeedWidget({
             ↻
           </span>
         </button>
-      </div>
+      </>
+    )
+  }, [setActions, density, paused, loading])
 
+  return (
+    <>
       <div className="rss-body">
         <div className="rss-sidebar" onPointerDownCapture={e => e.stopPropagation()}>
           <div
@@ -655,6 +652,6 @@ export default function RssFeedWidget({
           <div className="attr-line">via rss2json</div>
         </div>
       </div>
-    </div>
+    </>
   )
 }

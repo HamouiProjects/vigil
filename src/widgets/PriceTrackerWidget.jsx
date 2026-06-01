@@ -265,7 +265,7 @@ function SymbolSearch({ existingSyms, onAdd }) {
   )
 }
 
-export default function PriceTrackerWidget({ id, paused, config, onSaveConfig }) {
+export default function PriceTrackerWidget({ id, paused, config, onSaveConfig, setActions }) {
   const symbols = config.symbols ?? []
   const [editMode, setEditMode] = useState(false)
   const [quotesBySymbol, setQuotesBySymbol] = useState({})
@@ -285,6 +285,21 @@ export default function PriceTrackerWidget({ id, paused, config, onSaveConfig })
       onSaveConfigRef.current({ ...configRef.current, symbols: DEFAULT_SYMBOLS })
     }
   }, [])
+
+  useEffect(() => {
+    setActions?.(
+      <>
+        <button
+          type="button"
+          className="widget-btn"
+          onClick={() => setEditMode(v => !v)}
+          title={editMode ? 'Done editing' : 'Edit watchlist'}
+        >
+          {editMode ? '✓' : '⚙'}
+        </button>
+      </>
+    )
+  }, [setActions, editMode])
 
   const fetchQuotes = useCallback(async () => {
     if (pausedRef.current) return
@@ -354,26 +369,7 @@ export default function PriceTrackerWidget({ id, paused, config, onSaveConfig })
   const isInitialLoad = loading && !hasData && !error && symbols.length > 0
 
   return (
-    <div className="widget" data-widget-id={id}>
-      <div className="widget-header widget-drag-handle" style={{ cursor: 'default' }}>
-        <div className="widget-title-group">
-          <span className="widget-title">PRICES</span>
-        </div>
-        {paused && (
-          <span style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
-            PAUSED
-          </span>
-        )}
-        <button
-          type="button"
-          className="widget-btn"
-          onClick={() => setEditMode(v => !v)}
-          title={editMode ? 'Done editing' : 'Edit watchlist'}
-        >
-          {editMode ? '✓' : '⚙'}
-        </button>
-      </div>
-
+    <>
       <div className="widget-body" style={{ flexDirection: 'column', alignItems: 'stretch', padding: 0 }}>
         {editMode ? (
           <div style={ptEdit.panel} onPointerDownCapture={e => e.stopPropagation()}>
@@ -531,6 +527,6 @@ export default function PriceTrackerWidget({ id, paused, config, onSaveConfig })
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }
