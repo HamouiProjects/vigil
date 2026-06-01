@@ -25,7 +25,7 @@ function decodeWmo(code) {
 
 const WX_DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
-export default function WeatherWidget({ id, paused, config, onSaveConfig }) {
+export default function WeatherWidget({ id, paused, config, onSaveConfig, setTitle }) {
   const city = config.city ?? 'Berlin'
   const latLon = config.latLon ?? null
   const locName = config.locName ?? city
@@ -45,6 +45,8 @@ export default function WeatherWidget({ id, paused, config, onSaveConfig }) {
   useEffect(() => {
     setCityInput(city)
   }, [city, id])
+
+  useEffect(() => { setTitle?.('WEATHER · ' + locName.toUpperCase()) }, [setTitle, locName])
 
   useEffect(() => {
     if (!bodyRef.current) return
@@ -143,19 +145,7 @@ export default function WeatherWidget({ id, paused, config, onSaveConfig }) {
   }))
 
   return (
-    <div className="widget" data-widget-id={id}>
-      <div
-        className="widget-header widget-drag-handle"
-        style={{ cursor: 'default' }}
-      >
-        <div className="widget-title-group">
-          <span className="widget-title">WEATHER · {locName.toUpperCase()}</span>
-        </div>
-        {paused && (
-          <span style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>PAUSED</span>
-        )}
-      </div>
-
+    <>
       <form className="wx-search-bar" onSubmit={handleCitySubmit} onPointerDownCapture={e => e.stopPropagation()}>
         <input
           className="wx-search-input"
@@ -218,6 +208,6 @@ export default function WeatherWidget({ id, paused, config, onSaveConfig }) {
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }

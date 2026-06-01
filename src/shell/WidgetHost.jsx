@@ -35,6 +35,8 @@ export default function WidgetHost({
   onRemoveSource,
 }) {
   const [fullscreen, setFullscreen] = useState(false)
+  const [widgetTitle, setWidgetTitle] = useState(null)
+  const [widgetActions, setWidgetActions] = useState(null)
   const slotRef = useRef(null)
   const portalRootRef = useRef(null)
 
@@ -69,7 +71,7 @@ export default function WidgetHost({
   const overridden = workspacePaused                 // global / workspace / inactive-tab already folded in
   const effectivePaused = overridden || widgetPaused
 
-  const title = widgetRegistryMeta[widget.type]?.label ?? widget.type
+  const title = widgetTitle ?? widgetRegistryMeta[widget.type]?.label ?? widget.type
   const cartridge = (
     <div className="widget" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <div className="widget-header" style={{ cursor: 'grab', justifyContent: 'space-between' }}>
@@ -83,6 +85,7 @@ export default function WidgetHost({
           style={{ display: 'flex', alignItems: 'center', gap: 2 }}
           onPointerDownCapture={(e) => e.stopPropagation()}
         >
+          {widgetActions}
           <button
             type="button" className="widget-btn"
             onClick={overridden ? undefined : onTogglePause}
@@ -108,6 +111,8 @@ export default function WidgetHost({
           paused={effectivePaused}
           config={widget.config ?? {}}
           onSaveConfig={onSaveConfig}
+          setTitle={setWidgetTitle}
+          setActions={setWidgetActions}
           {...(SOURCE_BACKED_TYPES.has(widget.type) ? { sources, onAddSource, onRemoveSource } : {})}
         />
       </div>
