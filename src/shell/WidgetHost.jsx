@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { widgetRegistry, SOURCE_BACKED_TYPES } from './widgetRegistry.js'
+import { widgetRegistry, widgetRegistryMeta, SOURCE_BACKED_TYPES } from './widgetRegistry.js'
 
 const FS_STYLE = {
   position: 'fixed',
@@ -69,57 +69,37 @@ export default function WidgetHost({
   const overridden = workspacePaused                 // global / workspace / inactive-tab already folded in
   const effectivePaused = overridden || widgetPaused
 
+  const title = widgetRegistryMeta[widget.type]?.label ?? widget.type
   const cartridge = (
-    <>
-      <div
-        className="widget-host-chrome"
-        style={{
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 2,
-          padding: '2px 6px',
-          borderBottom: fullscreen ? '1px solid var(--border)' : 'none',
-          background: 'var(--bg)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+    <div className="widget" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <div className="widget-header" style={{ cursor: 'grab', justifyContent: 'space-between' }}>
+        <div className="widget-title-group">
+          <span className="widget-title">{title}</span>
+          {effectivePaused && (
+            <span style={{ marginLeft: 6, fontSize: 8, letterSpacing: '0.1em', color: '#970047', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>PAUSED</span>
+          )}
+        </div>
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: 2 }}
+          onPointerDownCapture={(e) => e.stopPropagation()}
+        >
           <button
-            type="button"
-            className="widget-btn"
+            type="button" className="widget-btn"
             onClick={overridden ? undefined : onTogglePause}
             title={overridden ? 'Paused by workspace / global' : (effectivePaused ? 'Resume widget' : 'Pause widget')}
             aria-label={effectivePaused ? 'Resume widget' : 'Pause widget'}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: effectivePaused ? '#970047' : '#009750',
-              opacity: overridden ? 0.35 : 1,
-              cursor: overridden ? 'not-allowed' : 'pointer',
-            }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: effectivePaused ? '#970047' : '#009750', opacity: overridden ? 0.35 : 1, cursor: overridden ? 'not-allowed' : 'pointer' }}
           >
-            {effectivePaused ? (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-            ) : (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-            )}
+            {effectivePaused
+              ? <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+              : <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>}
           </button>
-          {effectivePaused && (
-            <span style={{ fontSize: 8, letterSpacing: '0.1em', color: '#970047', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>PAUSED</span>
-          )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <button type="button" className="widget-btn" onClick={() => setFullscreen(f => !f)} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+            {fullscreen ? '⤡' : '⤢'}
+          </button>
           {onRemove && (
             <button type="button" className="widget-btn widget-btn-close" onClick={onRemove} title="Remove widget">✕</button>
           )}
-          <button
-            type="button"
-            className="widget-btn"
-            onClick={() => setFullscreen(f => !f)}
-            title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-          >
-            {fullscreen ? '⤡' : '⤢'}
-          </button>
         </div>
       </div>
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -128,12 +108,10 @@ export default function WidgetHost({
           paused={effectivePaused}
           config={widget.config ?? {}}
           onSaveConfig={onSaveConfig}
-          {...(SOURCE_BACKED_TYPES.has(widget.type)
-            ? { sources, onAddSource, onRemoveSource }
-            : {})}
+          {...(SOURCE_BACKED_TYPES.has(widget.type) ? { sources, onAddSource, onRemoveSource } : {})}
         />
       </div>
-    </>
+    </div>
   )
 
   return (
