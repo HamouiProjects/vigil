@@ -72,16 +72,7 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig }) {
   const iframeSrc = (key) => (mapMode === key && !paused) ? IFRAME_URLS[key] : 'about:blank'
 
   return (
-    <div className="widget" data-widget-id={id}>
-      <div className="widget-header widget-drag-handle" style={{ cursor: 'default' }}>
-        <div className="widget-title-group">
-          <span className="widget-title">ATLAS</span>
-        </div>
-        {paused && (
-          <span style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>PAUSED</span>
-        )}
-      </div>
-
+    <>
       {!barsCollapsed && (
         <div style={barStyle} onPointerDownCapture={e => e.stopPropagation()}>
           {TABS.map(({ key, label }) => (
@@ -151,6 +142,6 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig }) {
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }

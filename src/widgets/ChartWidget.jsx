@@ -26,18 +26,7 @@ export default function ChartWidget({ id, paused, config, onSaveConfig }) {
   }
 
   return (
-    <div className="widget" data-widget-id={id}>
-      <div className="widget-header widget-drag-handle" style={{ cursor: 'default' }}>
-        <div className="widget-title-group">
-          <span className="widget-title">CHART</span>
-        </div>
-        {paused && (
-          <span style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
-            PAUSED
-          </span>
-        )}
-      </div>
-
+    <>
       <form
         className="tvchart-bar"
         onPointerDownCapture={e => e.stopPropagation()}
@@ -64,6 +53,6 @@ export default function ChartWidget({ id, paused, config, onSaveConfig }) {
       />
 
       <div className="attr-line">powered by TradingView</div>
-    </div>
+    </>
   )
 }
