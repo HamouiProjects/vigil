@@ -4,6 +4,31 @@ import { usePolling } from '../hooks/usePolling'
 import { SkeletonFeedItems } from '../components/shared/SkeletonLoader'
 
 const FEED_COLORS = ['#e63946', '#00b894', '#0984e3', '#a29bfe', '#fdcb6e', '#fd79a8', '#74b9ff', '#636e72']
+const DEFAULT_SAVED_FILTERS = ['Iran', 'Gaza', 'Ukraine']
+const EXCLUDED_DOMAINS = [
+  'feeds.reuters.com', 'feeds.apnews.com', 'foxnews.com',
+  'haaretz.com', 'arabnews.com', 'rt.com',
+]
+
+const SUGGESTIONS = [
+  { name: 'BBC News', url: 'https://feeds.bbci.co.uk/news/rss.xml', color: '#bb1919' },
+  { name: 'BBC World', url: 'https://feeds.bbci.co.uk/news/world/rss.xml', color: '#bb1919' },
+  { name: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml', color: '#009966' },
+  { name: 'France 24', url: 'https://www.france24.com/en/rss', color: '#003f8a' },
+  { name: 'The Guardian', url: 'https://www.theguardian.com/world/rss', color: '#005689' },
+  { name: 'Guardian US', url: 'https://www.theguardian.com/us-news/rss', color: '#005689' },
+  { name: 'DW News', url: 'https://rss.dw.com/rdf/rss-en-all', color: '#c8102e' },
+  { name: 'NPR News', url: 'https://feeds.npr.org/1001/rss.xml', color: '#4a235a' },
+  { name: 'CNN', url: 'http://rss.cnn.com/rss/edition.rss', color: '#cc0000' },
+  { name: 'NBC News', url: 'https://feeds.nbcnews.com/nbcnews/public/news', color: '#0a356d' },
+  { name: 'The Hindu', url: 'https://www.thehindu.com/news/international/?service=rss', color: '#8b0000' },
+  { name: 'Times of India', url: 'https://timesofindia.indiatimes.com/rssfeeds/296589292.cms', color: '#d32f2f' },
+  { name: 'Middle East Eye', url: 'https://www.middleeasteye.net/rss', color: '#1a6b3c' },
+  { name: 'CGTN', url: 'https://www.cgtn.com/subscribe/rss/section/world.xml', color: '#c8102e' },
+  { name: 'Politico', url: 'https://rss.politico.com/politics-news.xml', color: '#1a1a2e' },
+  { name: 'Foreign Policy', url: 'https://foreignpolicy.com/feed/', color: '#2c3e50' },
+  { name: 'The Economist', url: 'https://www.economist.com/the-world-this-week/rss.xml', color: '#e2001a' },
+].filter(s => !EXCLUDED_DOMAINS.some(d => s.url.includes(d)))
 
 function rssRelTime(pubDate) {
   try {
@@ -47,6 +72,12 @@ export default function RssFeedWidget({
   sources,
   onAddSource,
 }) {
+  const density = config.density ?? 'compact'
+  const activeSource = config.activeSource ?? 'all'
+  const savedFilters = config.savedFilters ?? DEFAULT_SAVED_FILTERS
+  const sourcesCollapsed = config.sourcesCollapsed ?? false
+  const filtersCollapsed = config.filtersCollapsed ?? false
+
   const feedRows = useMemo(
     () => (config.feeds ?? [])
       .map(f => {
@@ -72,6 +103,11 @@ export default function RssFeedWidget({
   const [newName, setNewName] = useState('')
   const [newUrl, setNewUrl] = useState('')
   const [addError, setAddError] = useState('')
+  const [filterInput, setFilterInput] = useState('')
+  const [filter, setFilter] = useState('')
+  const [addingFilter, setAddingFilter] = useState(false)
+  const [newFilter, setNewFilter] = useState('')
+  const [showSugs, setShowSugs] = useState(false)
 
   const feedRowsRef = useRef(feedRows)
   feedRowsRef.current = feedRows
@@ -81,8 +117,23 @@ export default function RssFeedWidget({
   onSaveConfigRef.current = onSaveConfig
   const pausedRef = useRef(paused)
   pausedRef.current = paused
+  const filterTimerRef = useRef(null)
   const isVisible = usePageVisibility()
   const didMountRef = useRef(false)
+
+  const saveConfig = useCallback(
+    patch => onSaveConfigRef.current({ ...configRef.current, ...patch }),
+    [],
+  )
+
+  useEffect(() => () => clearTimeout(filterTimerRef.current), [])
+
+  useEffect(() => {
+    const active = configRef.current.activeSource ?? 'all'
+    if (active !== 'all' && !feedRows.some(f => f.sourceId === active)) {
+      saveConfig({ activeSource: 'all' })
+    }
+  }, [feedRows, saveConfig])
 
   const fetchAll = useCallback(async () => {
     if (pausedRef.current) return
@@ -161,9 +212,9 @@ export default function RssFeedWidget({
     fetchAll()
   }, [enabledKey, paused, fetchAll])
 
-  async function handleAddFeed() {
-    const name = newName.trim()
-    const url = newUrl.trim()
+  async function handleAddFeed(nameOverride, urlOverride, colorOverride) {
+    const name = (nameOverride ?? newName).trim()
+    const url = (urlOverride ?? newUrl).trim()
     if (!name || !url) {
       setAddError('Name and URL required')
       return
@@ -172,7 +223,7 @@ export default function RssFeedWidget({
       type: 'rss',
       identifier: url,
       label: name,
-      meta: { color: FEED_COLORS[feedRows.length % FEED_COLORS.length] },
+      meta: { color: colorOverride ?? FEED_COLORS[feedRows.length % FEED_COLORS.length] },
     })
     if (!row) return
     const feeds = configRef.current.feeds ?? []
@@ -180,10 +231,7 @@ export default function RssFeedWidget({
       closeAddForm()
       return
     }
-    onSaveConfigRef.current({
-      ...configRef.current,
-      feeds: [...feeds, { sourceId: row.id, enabled: true }],
-    })
+    saveConfig({ feeds: [...feeds, { sourceId: row.id, enabled: true }] })
     closeAddForm()
   }
 
@@ -192,13 +240,17 @@ export default function RssFeedWidget({
     setNewName('')
     setNewUrl('')
     setAddError('')
+    setShowSugs(false)
   }
 
   function removeFeed(sourceId) {
-    onSaveConfig({
-      ...config,
-      feeds: (config.feeds ?? []).filter(f => f.sourceId !== sourceId),
-    })
+    const patch = {
+      feeds: (configRef.current.feeds ?? []).filter(f => f.sourceId !== sourceId),
+    }
+    if ((configRef.current.activeSource ?? 'all') === sourceId) {
+      patch.activeSource = 'all'
+    }
+    saveConfig(patch)
     setErrorBySource(prev => {
       const next = { ...prev }
       delete next[sourceId]
@@ -212,28 +264,71 @@ export default function RssFeedWidget({
   }
 
   function toggleFeed(sourceId) {
-    onSaveConfig({
-      ...config,
-      feeds: (config.feeds ?? []).map(f =>
+    saveConfig({
+      feeds: (configRef.current.feeds ?? []).map(f =>
         f.sourceId === sourceId ? { ...f, enabled: !f.enabled } : f,
       ),
     })
   }
 
-  const displayItems = useMemo(() => {
+  function applyFilter(kw) {
+    clearTimeout(filterTimerRef.current)
+    setFilterInput(kw)
+    setFilter(kw)
+  }
+
+  function removeSavedFilter(kw) {
+    saveConfig({ savedFilters: savedFilters.filter(x => x !== kw) })
+    if (filter === kw) applyFilter('')
+  }
+
+  function addSavedFilter() {
+    const kw = newFilter.trim()
+    if (!kw || savedFilters.includes(kw)) {
+      setNewFilter('')
+      setAddingFilter(false)
+      return
+    }
+    saveConfig({ savedFilters: [...savedFilters, kw] })
+    setNewFilter('')
+    setAddingFilter(false)
+  }
+
+  const filteredSugs = newName.length > 0
+    ? SUGGESTIONS.filter(
+        s => s.name.toLowerCase().includes(newName.toLowerCase())
+          && !feedRows.some(f => f.url === s.url),
+      )
+    : []
+
+  const allItems = useMemo(() => {
     const seen = new Set()
-    return Object.values(itemsBySource)
-      .flat()
+    const sourceItems = activeSource === 'all'
+      ? Object.values(itemsBySource).flat()
+      : (itemsBySource[activeSource] ?? [])
+    return sourceItems
+      .slice()
       .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate))
       .filter(item => {
         if (seen.has(item.title)) return false
         seen.add(item.title)
         return true
       })
-  }, [itemsBySource])
+  }, [itemsBySource, activeSource])
+
+  const displayItems = useMemo(() => {
+    if (!filter.trim()) return allItems
+    const q = filter.toLowerCase()
+    return allItems.filter(item =>
+      (item.title + ' ' + item.description).toLowerCase().includes(q),
+    )
+  }, [allItems, filter])
 
   const isFirstLoad = loading && Object.keys(itemsBySource).length === 0
   const hasFeeds = feedRows.length > 0
+  const activeSourceName = activeSource === 'all'
+    ? 'all sources'
+    : (feedRows.find(f => f.sourceId === activeSource)?.name ?? activeSource)
 
   return (
     <div className="widget" data-widget-id={id}>
@@ -249,6 +344,14 @@ export default function RssFeedWidget({
         <button
           type="button"
           className="widget-btn"
+          onClick={() => saveConfig({ density: density === 'compact' ? 'comfortable' : 'compact' })}
+          title={density === 'compact' ? 'Comfortable view' : 'Compact view'}
+        >
+          {density === 'compact' ? '☰' : '≡'}
+        </button>
+        <button
+          type="button"
+          className="widget-btn"
           onClick={handleRefresh}
           title="Refresh"
           disabled={paused}
@@ -261,97 +364,233 @@ export default function RssFeedWidget({
 
       <div className="rss-body">
         <div className="rss-sidebar" onPointerDownCapture={e => e.stopPropagation()}>
-          <div className="rss-sidebar-label">SOURCES</div>
-          <div className="rss-source-list">
-            {feedRows.map(f => {
-              const hasErr = !!errorBySource[f.sourceId]
-              return (
-                <div
-                  key={f.sourceId}
-                  className={`rss-source-item${!f.enabled ? ' rss-source-off' : ''}`}
-                  style={{ borderLeftColor: f.enabled ? f.color : undefined }}
-                  onClick={() => toggleFeed(f.sourceId)}
-                >
-                  <span className="rss-source-name">{f.name}</span>
-                  {hasErr && (
+          <div
+            className="rss-sidebar-label"
+            style={{ cursor: 'pointer', userSelect: 'none' }}
+            onClick={() => saveConfig({ sourcesCollapsed: !sourcesCollapsed })}
+          >
+            <span style={{ marginRight: 4 }}>{sourcesCollapsed ? '▶' : '▼'}</span>
+            SOURCES
+          </div>
+          {!sourcesCollapsed && (
+            <div className="rss-source-list">
+              <div
+                className={`rss-source-item${activeSource === 'all' ? ' active' : ''}`}
+                onClick={() => saveConfig({ activeSource: 'all' })}
+              >
+                <span className="rss-source-name">All</span>
+              </div>
+
+              {feedRows.map(f => {
+                const hasErr = !!errorBySource[f.sourceId]
+                return (
+                  <div
+                    key={f.sourceId}
+                    className={`rss-source-item${activeSource === f.sourceId ? ' active' : ''}${!f.enabled ? ' rss-source-off' : ''}`}
+                    style={{ borderLeftColor: f.enabled ? f.color : undefined }}
+                  >
                     <span
-                      className="rss-source-err"
-                      title="Failed — click to retry"
+                      className="rss-source-name"
+                      onClick={() => saveConfig({ activeSource: f.sourceId })}
+                    >
+                      {f.name}
+                    </span>
+                    <span
+                      className={`rss-source-toggle${f.enabled ? ' on' : ''}`}
+                      title={f.enabled ? 'Disable feed' : 'Enable feed'}
                       onClick={e => {
                         e.stopPropagation()
-                        retrySingleFeed(f)
+                        toggleFeed(f.sourceId)
                       }}
+                    />
+                    {hasErr && (
+                      <span
+                        className="rss-source-err"
+                        title="Failed — click to retry"
+                        onClick={e => {
+                          e.stopPropagation()
+                          retrySingleFeed(f)
+                        }}
+                      >
+                        ⚠
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="rss-source-del"
+                      onClick={e => {
+                        e.stopPropagation()
+                        removeFeed(f.sourceId)
+                      }}
+                      title="Remove"
                     >
-                      ⚠
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className="rss-source-del"
-                    onClick={e => {
-                      e.stopPropagation()
-                      removeFeed(f.sourceId)
+                      ×
+                    </button>
+                  </div>
+                )
+              })}
+
+              {addingSource && (
+                <div
+                  className="rss-add-source-form"
+                  onPointerDownCapture={e => e.stopPropagation()}
+                  style={{ padding: '6px 8px', borderTop: '1px solid #1a2535' }}
+                >
+                  <div className="rss-add-name-wrap">
+                    <input
+                      autoFocus
+                      className="rss-add-source-input"
+                      value={newName}
+                      onChange={e => {
+                        setNewName(e.target.value)
+                        setNewUrl('')
+                        setAddError('')
+                        setShowSugs(true)
+                      }}
+                      onFocus={() => setShowSugs(true)}
+                      onBlur={() => setTimeout(() => setShowSugs(false), 160)}
+                      placeholder="Source name…"
+                    />
+                    {showSugs && filteredSugs.length > 0 && (
+                      <div className="rss-sug-dropdown">
+                        {filteredSugs.slice(0, 5).map((s, i) => (
+                          <div
+                            key={i}
+                            className="rss-sug-item"
+                            onMouseDown={() => handleAddFeed(s.name, s.url, s.color)}
+                          >
+                            <span className="rss-sug-name">{s.name}</span>
+                            <span className="rss-sug-url">{s.url}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    className="rss-add-source-input"
+                    value={newUrl}
+                    onChange={e => {
+                      setNewUrl(e.target.value)
+                      setAddError('')
                     }}
-                    title="Remove"
-                  >
-                    ×
-                  </button>
+                    placeholder="RSS URL…"
+                    spellCheck={false}
+                  />
+                  {addError && (
+                    <span style={{ fontSize: '8px', color: '#ff4d4f' }}>{addError}</span>
+                  )}
+                  <div className="rss-add-source-actions">
+                    <button type="button" className="rss-add-source-add" onClick={() => handleAddFeed()}>
+                      ADD
+                    </button>
+                    <button type="button" className="rss-add-source-cancel" onClick={closeAddForm}>
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-              )
-            })}
+              )}
 
-            {addingSource && (
-              <div
-                className="rss-add-source-form"
-                onPointerDownCapture={e => e.stopPropagation()}
-                style={{ padding: '6px 8px', borderTop: '1px solid #1a2535' }}
+              <button
+                type="button"
+                className="rss-add-source-btn"
+                style={{ margin: '4px 8px', width: 'calc(100% - 16px)' }}
+                onClick={() => setAddingSource(v => !v)}
               >
-                <input
-                  autoFocus
-                  className="rss-add-source-input"
-                  value={newName}
-                  onChange={e => {
-                    setNewName(e.target.value)
-                    setAddError('')
-                  }}
-                  placeholder="Source name…"
-                />
-                <input
-                  className="rss-add-source-input"
-                  value={newUrl}
-                  onChange={e => {
-                    setNewUrl(e.target.value)
-                    setAddError('')
-                  }}
-                  placeholder="RSS URL…"
-                  spellCheck={false}
-                />
-                {addError && (
-                  <span style={{ fontSize: '8px', color: '#ff4d4f' }}>{addError}</span>
-                )}
-                <div className="rss-add-source-actions">
-                  <button type="button" className="rss-add-source-add" onClick={handleAddFeed}>
-                    ADD
-                  </button>
-                  <button type="button" className="rss-add-source-cancel" onClick={closeAddForm}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <button
-              type="button"
-              className="rss-add-source-btn"
-              style={{ margin: '4px 8px', width: 'calc(100% - 16px)' }}
-              onClick={() => setAddingSource(v => !v)}
-            >
-              ＋ Add Source
-            </button>
-          </div>
+                ＋ Add Source
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="rss-right" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div className="rss-filters-strip" onPointerDownCapture={e => e.stopPropagation()}>
+            <div
+              className="rss-filters-strip-header"
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => saveConfig({ filtersCollapsed: !filtersCollapsed })}
+            >
+              <span style={{ marginRight: 4 }}>{filtersCollapsed ? '▶' : '▼'}</span>
+              <span className="rss-filters-strip-label">FILTERS</span>
+            </div>
+            {!filtersCollapsed && (
+              <div className="rss-filters-chips">
+                {savedFilters.map(kw => (
+                  <div
+                    key={kw}
+                    className={`rss-filter-chip${filterInput === kw ? ' active' : ''}`}
+                    onClick={() => applyFilter(kw)}
+                  >
+                    <span className="rss-filter-chip-text">{kw}</span>
+                    <button
+                      type="button"
+                      className="rss-filter-chip-del"
+                      onClick={e => {
+                        e.stopPropagation()
+                        removeSavedFilter(kw)
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                {addingFilter ? (
+                  <input
+                    autoFocus
+                    className="rss-add-source-input"
+                    value={newFilter}
+                    onChange={e => setNewFilter(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') addSavedFilter()
+                      if (e.key === 'Escape') {
+                        setAddingFilter(false)
+                        setNewFilter('')
+                      }
+                    }}
+                    placeholder="Keyword…"
+                    style={{ width: 80 }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="rss-filter-add-btn"
+                    onClick={() => setAddingFilter(true)}
+                  >
+                    ＋
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="rss-filter-bar" onPointerDownCapture={e => e.stopPropagation()}>
+            <input
+              className="rss-input rss-filter-input"
+              value={filterInput}
+              onChange={e => {
+                const v = e.target.value
+                setFilterInput(v)
+                clearTimeout(filterTimerRef.current)
+                filterTimerRef.current = setTimeout(() => setFilter(v), 150)
+              }}
+              placeholder="Filter headlines…"
+            />
+            {filterInput && (
+              <button
+                type="button"
+                className="rss-filter-clear"
+                onClick={() => applyFilter('')}
+                title="Clear filter"
+              >
+                ×
+              </button>
+            )}
+            {filter && (
+              <div className="rss-result-count">
+                {displayItems.length} article{displayItems.length !== 1 ? 's' : ''} · filtered by &quot;{filter}&quot;
+              </div>
+            )}
+          </div>
+
           <div className="rss-articles" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
             {!hasFeeds ? (
               <div className="empty-state">
@@ -361,34 +600,55 @@ export default function RssFeedWidget({
             ) : isFirstLoad ? (
               <SkeletonFeedItems count={6} />
             ) : displayItems.length === 0 ? (
-              <div className="empty-state">
-                <span className="empty-state-icon">📰</span>
-                No articles available
-              </div>
+              filter ? (
+                <div className="empty-state">
+                  <span className="empty-state-icon">🔍</span>
+                  No headlines matching &quot;{filter}&quot; in {activeSourceName}
+                  <button
+                    type="button"
+                    className="widget-error-retry"
+                    style={{ marginTop: 6 }}
+                    onClick={() => applyFilter('')}
+                  >
+                    Clear filter
+                  </button>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <span className="empty-state-icon">📰</span>
+                  No articles available
+                </div>
+              )
             ) : (
-              displayItems.map((item, i) => (
-                <a
-                  key={`${item.link}-${i}`}
-                  className="rss-article"
-                  href={item.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <div className="rss-art-body">
-                    <div className="rss-art-meta">
-                      <span
-                        className="rss-art-source"
-                        style={{ color: 'var(--text-secondary)', fontWeight: 'bold' }}
-                      >
-                        {item._feedName}
-                      </span>
-                      <span className="rss-art-time">· {rssRelTime(item.pubDate)}</span>
+              displayItems.map((item, i) => {
+                const desc = item.description?.slice(0, 150)
+                return (
+                  <a
+                    key={`${item.link}-${i}`}
+                    className={`rss-article${density === 'comfortable' ? ' rss-comfortable' : ''}`}
+                    href={item.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <div className="rss-art-body">
+                      <div className="rss-art-meta">
+                        <span
+                          className="rss-art-source"
+                          style={{ color: 'var(--text-secondary)', fontWeight: 'bold' }}
+                        >
+                          {item._feedName}
+                        </span>
+                        <span className="rss-art-time">· {rssRelTime(item.pubDate)}</span>
+                      </div>
+                      <div className="rss-art-title">{item.title}</div>
+                      {density === 'comfortable' && desc && (
+                        <div className="rss-art-desc">{desc}</div>
+                      )}
                     </div>
-                    <div className="rss-art-title">{item.title}</div>
-                  </div>
-                  <span className="rss-art-ext">→</span>
-                </a>
-              ))
+                    <span className="rss-art-ext">→</span>
+                  </a>
+                )
+              })
             )}
           </div>
           <div className="attr-line">via rss2json</div>
