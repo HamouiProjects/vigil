@@ -94,8 +94,8 @@ export default function WidgetHost({
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: effectivePaused ? '#970047' : '#009750', opacity: overridden ? 0.35 : 1, cursor: overridden ? 'not-allowed' : 'pointer' }}
           >
             {effectivePaused
-              ? <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-              : <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>}
+              ? <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              : <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>}
           </button>
           <button type="button" className="widget-btn" onClick={() => setFullscreen(f => !f)} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
             {fullscreen ? '⤡' : '⤢'}
