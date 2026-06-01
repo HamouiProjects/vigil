@@ -164,6 +164,19 @@ export const useShellStore = create((set, get) => ({
         : ws
     ),
   })),
+
+  toggleWidgetPause: (wsId, widgetId) => set((s) => ({
+    workspaces: s.workspaces.map(ws =>
+      ws.id === wsId
+        ? {
+            ...ws,
+            widgets: ws.widgets.map(w =>
+              w.id === widgetId ? { ...w, paused: !(w.paused === true) } : w
+            ),
+          }
+        : ws
+    ),
+  })),
 }))
 
 export function isWorkspacePaused(state, wsId) {

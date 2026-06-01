@@ -25,6 +25,7 @@ export default function Grid() {
   const updateLayout = useShellStore(s => s.updateLayout)
   const updateWidgetConfig = useShellStore(s => s.updateWidgetConfig)
   const removeWidget = useShellStore(s => s.removeWidget)
+  const toggleWidgetPause = useShellStore(s => s.toggleWidgetPause)
 
   const workspace = workspaces.find(ws => ws.id === activeWs)
   if (!workspace) return null
@@ -59,6 +60,8 @@ export default function Grid() {
             <WidgetHost
               widget={widget}
               workspacePaused={workspacePaused}
+              widgetPaused={widget.paused === true}
+              onTogglePause={() => toggleWidgetPause(activeWs, widget.id)}
               entitlements={entitlements}
               onSaveConfig={config => updateWidgetConfig(activeWs, widget.id, config)}
               onRemove={() => removeWidget(activeWs, widget.id)}
