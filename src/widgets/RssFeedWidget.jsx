@@ -303,9 +303,10 @@ export default function RssFeedWidget({
 
   const allItems = useMemo(() => {
     const seen = new Set()
+    const enabledIds = new Set(feedRows.filter(f => f.enabled).map(f => f.sourceId))
     const sourceItems = activeSource === 'all'
-      ? Object.values(itemsBySource).flat()
-      : (itemsBySource[activeSource] ?? [])
+      ? feedRows.filter(f => f.enabled).flatMap(f => itemsBySource[f.sourceId] ?? [])
+      : (enabledIds.has(activeSource) ? (itemsBySource[activeSource] ?? []) : [])
     return sourceItems
       .slice()
       .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate))
@@ -314,7 +315,7 @@ export default function RssFeedWidget({
         seen.add(item.title)
         return true
       })
-  }, [itemsBySource, activeSource])
+  }, [itemsBySource, activeSource, feedRows])
 
   const displayItems = useMemo(() => {
     if (!filter.trim()) return allItems
