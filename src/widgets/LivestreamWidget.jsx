@@ -23,16 +23,6 @@ function toEmbedUrl(raw) {
   }
 }
 
-function withAutoplay(url) {
-  if (!url) return ''
-  try {
-    const u = new URL(url)
-    u.searchParams.set('autoplay', '1')
-    u.searchParams.set('mute', '1')
-    return u.toString()
-  } catch { return url }
-}
-
 export default function LivestreamWidget({ paused, config, onSaveConfig, setActions }) {
   const streams = config.streams ?? DEFAULT_STREAMS
   const activeUrl = config.activeUrl ?? streams[0]?.url ?? ''
@@ -79,7 +69,7 @@ export default function LivestreamWidget({ paused, config, onSaveConfig, setActi
   }, [setActions, editMode])
 
   const off = paused || !isVisible
-  const iframeSrc = off ? '' : withAutoplay(activeUrl)
+  const iframeSrc = off ? '' : activeUrl
 
   return (
     <>
