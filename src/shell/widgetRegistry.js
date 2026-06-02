@@ -5,6 +5,7 @@ import ChartWidget from '../widgets/ChartWidget.jsx'
 import HeatmapWidget from '../widgets/HeatmapWidget.jsx'
 import AtlasWidget from '../widgets/AtlasWidget.jsx'
 import LivestreamWidget from '../widgets/LivestreamWidget.jsx'
+import NewsSearchWidget from '../widgets/NewsSearchWidget.jsx'
 
 export const SOURCE_BACKED_TYPES = new Set(['rss'])
 
@@ -16,6 +17,7 @@ export const widgetRegistry = {
   heatmap: HeatmapWidget,
   map: AtlasWidget,
   stream: LivestreamWidget,
+  feed: NewsSearchWidget,
 }
 
 export const widgetRegistryMeta = {
@@ -26,6 +28,7 @@ export const widgetRegistryMeta = {
   heatmap: { label: 'Heatmap', icon: '🔲' },
   map: { label: 'Atlas', icon: '🌐' },
   stream: { label: 'Livestream', icon: '📺' },
+  feed: { label: 'News Search', icon: '🔍' },
 }
 
 export default widgetRegistry
