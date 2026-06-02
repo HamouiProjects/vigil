@@ -1,3 +1,6 @@
+import supabase from './_supabase.js'
+
+const FRESH_MS = 120_000
 const WAITS = [500, 1200, 2500]
 
 function sleep(ms) {
@@ -23,6 +26,24 @@ async function fetchFeed(feedUrl) {
   return { httpStatus: res.status, data }
 }
 
+function mapItems(data) {
+  return (data.items || []).map(it => ({
+    title: it.title,
+    link: it.link,
+    pubDate: it.pubDate,
+    description: it.description ?? '',
+    author: it.author ?? '',
+  }))
+}
+
+function okPayload(url, title, items) {
+  return {
+    status: 'ok',
+    source: { title: title ?? '', url },
+    items,
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -34,6 +55,28 @@ export default async function handler(req, res) {
     return res.status(400).json({ status: 'error', error: 'invalid url', items: [] })
   }
 
+  const now = Date.now()
+  let cachedRow = null
+
+  if (supabase) {
+    try {
+      const { data, error: dbErr } = await supabase
+        .from('feed_cache')
+        .select('*')
+        .eq('feed_url', url)
+        .maybeSingle()
+      if (!dbErr && data) {
+        cachedRow = data
+        const age = now - new Date(data.updated_at).getTime()
+        if (age >= 0 && age < FRESH_MS) {
+          return res.status(200).json(okPayload(url, data.title, data.items))
+        }
+      }
+    } catch {
+      cachedRow = null
+    }
+  }
+
   try {
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await sleep(WAITS[attempt - 1] + Math.random() * 200)
@@ -42,25 +85,46 @@ export default async function handler(req, res) {
       if (isRateLimited(httpStatus, data)) continue
 
       if (data?.status === 'ok') {
-        return res.status(200).json({
-          status: 'ok',
-          source: { title: data.feed?.title ?? '', url },
-          items: (data.items || []).map(it => ({
-            title: it.title,
-            link: it.link,
-            pubDate: it.pubDate,
-            description: it.description ?? '',
-            author: it.author ?? '',
-          })),
-        })
+        const title = data.feed?.title ?? ''
+        const items = mapItems(data)
+        const body = okPayload(url, title, items)
+
+        if (supabase) {
+          try {
+            await supabase
+              .from('feed_cache')
+              .upsert(
+                {
+                  feed_url: url,
+                  title,
+                  items,
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: 'feed_url' },
+              )
+          } catch {
+            // cache write is best-effort
+          }
+        }
+
+        return res.status(200).json(body)
       }
 
       const errMsg = data?.message ?? (httpStatus !== 200 ? `HTTP ${httpStatus}` : 'fetch failed')
+      if (cachedRow) {
+        return res.status(200).json(okPayload(url, cachedRow.title, cachedRow.items))
+      }
       return res.status(200).json({ status: 'error', error: String(errMsg), items: [] })
     }
 
+    if (cachedRow) {
+      return res.status(200).json(okPayload(url, cachedRow.title, cachedRow.items))
+    }
     return res.status(429).json({ status: 'rate_limited', items: [] })
   } catch (err) {
+    if (cachedRow) {
+      return res.status(200).json(okPayload(url, cachedRow.title, cachedRow.items))
+    }
     return res.status(200).json({
       status: 'error',
       error: String(err?.message ?? 'fetch failed'),
