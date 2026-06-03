@@ -1,3 +1,4 @@
+/* global __APP_VERSION__ */
 import { useEffect, useState, useRef } from 'react'
 import { useShellStore, isWorkspacePaused } from '../state/shellStore.js'
 import { useShellPersistence } from '../data/useShellPersistence.js'
@@ -116,6 +117,8 @@ export default function Shell() {
   const [showAuth, setShowAuth] = useState(false)
   const [authView, setAuthView] = useState('login')
   const [navCollapsed, setNavCollapsed] = useState(() => { try { return localStorage.getItem('vigil_nav_collapsed') === '1' } catch { return false } })
+  const scrollRef = useRef(null)
+  const [atBottom, setAtBottom] = useState(false)
   const widgetPickerRef = useRef(null)
 
   const plan = useShellStore(s => s.entitlements.plan)
@@ -180,6 +183,24 @@ export default function Shell() {
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [uid])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const NEAR = 24
+    const recompute = () => {
+      const max = el.scrollHeight - el.clientHeight
+      const scrollable = max > NEAR
+      setAtBottom(scrollable && (max - el.scrollTop <= NEAR))
+    }
+    recompute()
+    el.addEventListener('scroll', recompute, { passive: true })
+    window.addEventListener('resize', recompute)
+    return () => {
+      el.removeEventListener('scroll', recompute)
+      window.removeEventListener('resize', recompute)
+    }
+  }, [loaded, activeWs, navCollapsed])
 
   const pauseState = { globalLive, activeWs, pausedWorkspaces, inactiveTabPause }
 
@@ -371,8 +392,13 @@ export default function Shell() {
         </div>
       </nav>)}
 
-      <div style={{ width: '100%', height: navCollapsed ? 'calc(100vh - 6px)' : 'calc(100vh - 40px)', position: 'relative', overflow: 'auto' }}>
+      <div ref={scrollRef} style={{ width: '100%', height: navCollapsed ? 'calc(100vh - 6px)' : 'calc(100vh - 40px)', position: 'relative', overflow: 'auto' }}>
         <Grid />
+      </div>
+
+      <div className={`bottom-bar${atBottom ? ' is-visible' : ''}`} aria-hidden={!atBottom}>
+        <span className="bottom-bar-note">Vigil tracks, it does not verify.</span>
+        <span className="bottom-bar-meta">v{__APP_VERSION__} · © {new Date().getFullYear()}</span>
       </div>
 
       {import.meta.env.DEV && <EntitlementDebug />}

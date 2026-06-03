@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
 
 const PRIVATE_HOST = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+)$/
 
@@ -86,4 +89,5 @@ function articleApiPlugin() {
 
 export default defineConfig({
   plugins: [react(), articleApiPlugin()],
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
 })
