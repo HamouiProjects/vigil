@@ -394,6 +394,7 @@ export default function Shell() {
 
       <div ref={scrollRef} style={{ width: '100%', height: navCollapsed ? 'calc(100vh - 6px)' : 'calc(100vh - 40px)', position: 'relative', overflow: 'auto' }}>
         <Grid />
+        <div aria-hidden="true" style={{ height: 36 }} />
       </div>
 
       <div className={`bottom-bar${atBottom ? ' is-visible' : ''}`} aria-hidden={!atBottom}>
