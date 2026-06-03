@@ -10,6 +10,7 @@ import EntitlementDebug from './EntitlementDebug.jsx'
 import UpgradeModal from './UpgradeModal.jsx'
 import { supabase } from '../lib/supabase.js'
 import AuthScreen from '../components/layout/AuthScreen.jsx'
+import { getThemePref, setThemePref, reconcileRemotePref } from '../utils/theme.js'
 
 function ShellGlobalLiveToggle() {
   const globalLive = useShellStore(s => s.globalLive === true)
@@ -110,6 +111,7 @@ export default function Shell() {
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
   const [account, setAccount] = useState(null)
+  const [themePref, setThemePrefState] = useState(getThemePref())
   const [showAuth, setShowAuth] = useState(false)
   const [authView, setAuthView] = useState('login')
   const widgetPickerRef = useRef(null)
@@ -142,6 +144,8 @@ export default function Shell() {
     if (!uid) return
     supabase.auth.getUser().then(({ data }) => {
       setAccount({ email: data?.user?.email ?? null, isAnon: data?.user?.is_anonymous === true })
+      reconcileRemotePref(data?.user?.user_metadata?.theme)
+      setThemePrefState(getThemePref())
     })
   }, [uid])
 
@@ -199,6 +203,13 @@ export default function Shell() {
       console.error(e)
       setUpgradeNudge('Could not create share link')
     }
+  }
+
+  const cycleTheme = () => {
+    const order = ['system', 'light', 'dark']
+    const next = order[(order.indexOf(themePref) + 1) % order.length]
+    setThemePref(next)
+    setThemePrefState(next)
   }
 
   if (!loaded) {
@@ -357,6 +368,14 @@ export default function Shell() {
               </div>
             )}
           </div>
+          <button
+            type="button"
+            className="nav-add-btn"
+            onClick={cycleTheme}
+            title="Theme — cycles System / Light / Dark (temporary control; moves into the account menu in the main-bar pass)"
+          >
+            {themePref === 'system' ? 'SYS' : themePref === 'light' ? 'LIGHT' : 'DARK'}
+          </button>
           <ShellGlobalLiveToggle />
         </div>
       </nav>
