@@ -8,6 +8,7 @@ import { widgetRegistryMeta } from './widgetRegistry.js'
 import Grid from './Grid.jsx'
 import EntitlementDebug from './EntitlementDebug.jsx'
 import UpgradeModal from './UpgradeModal.jsx'
+import AccountMenu from './AccountMenu.jsx'
 import { supabase } from '../lib/supabase.js'
 import AuthScreen from '../components/layout/AuthScreen.jsx'
 import { getThemePref, setThemePref, reconcileRemotePref } from '../utils/theme.js'
@@ -211,12 +212,7 @@ export default function Shell() {
     }
   }
 
-  const cycleTheme = () => {
-    const order = ['system', 'light', 'dark']
-    const next = order[(order.indexOf(themePref) + 1) % order.length]
-    setThemePref(next)
-    setThemePrefState(next)
-  }
+  const setTheme = (p) => { setThemePref(p); setThemePrefState(p) }
 
   const setNavCollapsedPersisted = (v) => {
     setNavCollapsed(v)
@@ -303,36 +299,6 @@ export default function Shell() {
         </div>
 
         <div className="navbar-right" style={{ position: 'relative', zIndex: 110 }}>
-          {account && account.isAnon === false ? (
-            <>
-              <span style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 10, color: 'var(--text-secondary)' }}>
-                {account.email}
-              </span>
-              <button
-                type="button"
-                className="nav-add-btn btn-ghost"
-                onClick={async () => {
-                  await supabase.auth.signOut()
-                  window.location.reload()
-                }}
-              >
-                Sign out
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              className="nav-add-btn btn-secondary"
-              onClick={() => { setAuthView('login'); setShowAuth(true) }}
-            >
-              Log in
-            </button>
-          )}
-          {plan === 'free' && (
-            <button type="button" className="nav-add-btn btn-primary" onClick={() => setShowUpgrade(true)}>
-              Upgrade
-            </button>
-          )}
           <button type="button" className="nav-add-btn btn-secondary" onClick={handleShare}>Share</button>
           <div ref={widgetPickerRef} style={{ position: 'relative' }}>
             <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowWidgetPicker(v => !v)}>
@@ -381,15 +347,16 @@ export default function Shell() {
               </div>
             )}
           </div>
-          <button
-            type="button"
-            className="nav-add-btn btn-ghost"
-            onClick={cycleTheme}
-            title="Theme — cycles System / Light / Dark (temporary control; moves into the account menu in the main-bar pass)"
-          >
-            {themePref === 'system' ? 'SYS' : themePref === 'light' ? 'LIGHT' : 'DARK'}
-          </button>
           <ShellGlobalLiveToggle />
+          <AccountMenu
+            account={account}
+            plan={plan}
+            themePref={themePref}
+            onSetTheme={setTheme}
+            onUpgrade={() => setShowUpgrade(true)}
+            onLogin={() => { setAuthView('login'); setShowAuth(true) }}
+            onSignOut={async () => { await supabase.auth.signOut(); window.location.reload() }}
+          />
           <button type="button" className="nav-collapse-btn" onClick={() => setNavCollapsedPersisted(true)} title="Hide toolbar" aria-label="Hide toolbar">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 15l6-6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
