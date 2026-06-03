@@ -81,3 +81,15 @@ export async function publishWorkspace(uid, localId, origin) {
   }
   return `${origin}/?r=${slug}`
 }
+
+export async function loadPublicRoom(slug) {
+  const { data, error } = await supabase.rpc('get_public_room', { p_slug: slug })
+  if (error) throw error
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) return null
+  return {
+    name: row.name,
+    widgets: Array.isArray(row.widgets) ? row.widgets : [],
+    layout: Array.isArray(row.layout) ? row.layout : [],
+  }
+}
