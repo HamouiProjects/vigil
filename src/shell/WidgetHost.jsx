@@ -79,7 +79,7 @@ export default function WidgetHost({
         <div className="widget-title-group">
           <span className="widget-title">{title}</span>
           {effectivePaused && (
-            <span style={{ marginLeft: 6, fontSize: 8, letterSpacing: '0.1em', color: '#970047', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>PAUSED</span>
+            <span style={{ marginLeft: 6, fontSize: 8, letterSpacing: '0.1em', color: 'var(--color-error)', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>PAUSED</span>
           )}
         </div>
         <div
@@ -93,7 +93,7 @@ export default function WidgetHost({
               onClick={overridden ? undefined : onTogglePause}
               title={overridden ? 'Paused by workspace / global' : (effectivePaused ? 'Resume widget' : 'Pause widget')}
               aria-label={effectivePaused ? 'Resume widget' : 'Pause widget'}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: effectivePaused ? '#970047' : '#009750', opacity: overridden ? 0.35 : 1, cursor: overridden ? 'not-allowed' : 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: effectivePaused ? 'var(--color-error)' : 'var(--color-success)', opacity: overridden ? 0.35 : 1, cursor: overridden ? 'not-allowed' : 'pointer' }}
             >
               {effectivePaused
                 ? <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>

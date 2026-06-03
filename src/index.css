@@ -1,24 +1,70 @@
 :root {
-  --bg:               #0A0C10;
-  --surface:          #0D1117;
-  --surface-elevated: #161B22;
-  --surface-hover:    #1C2128;
-  --border:           #1E2329;
-  --border-active:    #2D3440;
-  --accent:           #00D4FF;
-  --accent-dim:       rgba(0,212,255,0.15);
-  --green:            #00C96B;
-  --red:              #F85149;
-  --amber:            #D29922;
-  --text-primary:     #E6EDF3;
-  --text-secondary:   #8B949E;
-  --text-muted:       #484F58;
-  --font-mono:        'JetBrains Mono', monospace;
-  --font-sans:        'Inter', 'Segoe UI', system-ui, sans-serif;
-  --widget-gap:       6px;
-  --widget-padding:   12px;
-  --header-height:    30px;
-  --radius:           3px;
+  /* Primitives — palette only; components use semantic tokens below */
+  --teal-50:#E6F6F3; --teal-100:#BFE9E1; --teal-200:#8AD7CB; --teal-300:#5BCFC4;
+  --teal-400:#46C2B6; --teal-500:#2FA89C; --teal-600:#138A7F; --teal-700:#0A6B61;
+  --teal-800:#08544C; --teal-900:#06251F;
+  --font-mono:'JetBrains Mono', monospace;
+  --font-sans:'Geist','Segoe UI',system-ui,sans-serif;
+  --widget-gap:6px; --widget-padding:12px; --header-height:30px; --radius:3px;
+}
+
+:root, [data-theme="dark"] {
+  --color-bg:#0B0E13;
+  --color-surface-1:#12161D;
+  --color-surface-2:#1A1F28;
+  --color-surface-hover:#1E242E;
+  --color-border:#232A35;
+  --color-border-strong:#2E3744;
+  --color-text-primary:#E5E9F0;
+  --color-text-secondary:#9AA4B2;
+  --color-text-muted:#7A8494;
+  --color-brand:#46C2B6;
+  --color-brand-hover:#5BCFC4;
+  --color-brand-active:#38AEA3;
+  --color-on-brand:#06251F;
+  --color-brand-tint:rgba(70,194,182,0.14);
+  --color-success:#36C68A;
+  --color-warning:#E0A93B;
+  --color-error:#E5564D;
+  --color-info:#4FA8D6;
+  --shadow-overlay:none;
+  /* Legacy aliases → semantic, so existing var(--accent)/var(--bg)/… flip per theme without mass edits */
+  --bg:var(--color-bg);
+  --surface:var(--color-surface-1);
+  --surface-elevated:var(--color-surface-2);
+  --surface-hover:var(--color-surface-hover);
+  --border:var(--color-border);
+  --border-active:var(--color-border-strong);
+  --accent:var(--color-brand);
+  --accent-dim:var(--color-brand-tint);
+  --green:var(--color-success);
+  --red:var(--color-error);
+  --amber:var(--color-warning);
+  --text-primary:var(--color-text-primary);
+  --text-secondary:var(--color-text-secondary);
+  --text-muted:var(--color-text-muted);
+}
+
+[data-theme="light"] {
+  --color-bg:#F5F7FA;
+  --color-surface-1:#FFFFFF;
+  --color-surface-2:#FFFFFF;
+  --color-surface-hover:#ECEFF3;
+  --color-border:#E2E6EC;
+  --color-border-strong:#CDD3DC;
+  --color-text-primary:#1A1F2A;
+  --color-text-secondary:#5A6473;
+  --color-text-muted:#626C7B;
+  --color-brand:#0A6B61;
+  --color-brand-hover:#096257;
+  --color-brand-active:#07564D;
+  --color-on-brand:#FFFFFF;
+  --color-brand-tint:rgba(10,107,97,0.10);
+  --color-success:#0B7349;
+  --color-warning:#7E560A;
+  --color-error:#C23B33;
+  --color-info:#1C72A0;
+  --shadow-overlay:0 4px 16px rgba(0,0,0,0.08);
 }
 
 *, *::before, *::after {
@@ -56,7 +102,7 @@ body {
   background: rgba(139, 148, 158, 0.25);
   border-radius: 2px;
 }
-*::-webkit-scrollbar-thumb:hover { background: rgba(0, 212, 255, 0.4); }
+*::-webkit-scrollbar-thumb:hover { background: var(--color-brand-tint); }
 *::-webkit-scrollbar-corner { background: transparent; }
 
 /* ─── ATLAS fullscreen — applied to .react-grid-item to escape CSS transform ── */
@@ -401,7 +447,7 @@ body {
 .pf-modal-add {
   background: var(--accent);
   border: none;
-  color: #0a0c10;
+  color: var(--color-on-brand);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
@@ -704,7 +750,7 @@ body {
   width: 100%;
   padding: 9px;
   background: var(--accent);
-  color: #000;
+  color: var(--color-on-brand);
   border: none;
   border-radius: var(--radius);
   font-family: var(--font-mono);
@@ -720,15 +766,15 @@ body {
 .auth-screen {
   position: fixed;
   inset: 0;
-  background: #0A0C10;
+  background: var(--color-bg);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
 }
 .auth-card {
-  background: #0D1117;
-  border: 1px solid #1E2329;
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
   border-radius: 3px;
   padding: 32px;
   width: 100%;
@@ -748,22 +794,22 @@ body {
   font-size: 1.4rem;
   font-weight: 700;
   letter-spacing: 0.3em;
-  color: #00D4FF;
+  color: var(--color-brand);
 }
 .auth-tagline {
   font-family: var(--font-sans);
   font-size: 0.8rem;
-  color: #8B949E;
+  color: var(--color-text-secondary);
 }
 .auth-tabs {
   display: flex;
-  border-bottom: 1px solid #1E2329;
+  border-bottom: 1px solid var(--color-border);
 }
 .auth-tab {
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: #484F58;
+  color: var(--color-text-muted);
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.1em;
@@ -772,8 +818,8 @@ body {
   margin-bottom: -1px;
   transition: color 0.15s, border-color 0.15s;
 }
-.auth-tab:hover { color: #E6EDF3; }
-.auth-tab.active { color: #E6EDF3; border-bottom-color: #00D4FF; }
+.auth-tab:hover { color: var(--color-text-primary); }
+.auth-tab.active { color: var(--color-text-primary); border-bottom-color: var(--color-brand); }
 .auth-form {
   display: flex;
   flex-direction: column;
@@ -783,13 +829,13 @@ body {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.1em;
-  color: #8B949E;
+  color: var(--color-text-secondary);
   margin-bottom: 4px;
 }
 .auth-input {
-  background: #111419;
-  border: 1px solid #1E2329;
-  color: #E6EDF3;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
   font-family: var(--font-sans);
   font-size: 13px;
   padding: 10px 12px;
@@ -798,10 +844,10 @@ body {
   width: 100%;
   transition: border-color 0.15s;
 }
-.auth-input:focus { border-color: #00D4FF; }
+.auth-input:focus { border-color: var(--color-brand); }
 .auth-btn {
-  background: #00D4FF;
-  color: #0A0C10;
+  background: var(--color-brand);
+  color: var(--color-on-brand);
   border: none;
   border-radius: 2px;
   padding: 11px;
@@ -817,29 +863,29 @@ body {
 .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .auth-error {
   font-size: 11px;
-  color: #F85149;
+  color: var(--color-error);
 }
 .auth-success {
   font-size: 11px;
-  color: #00C96B;
+  color: var(--color-success);
 }
 .auth-link {
   background: none;
   border: none;
-  color: #8B949E;
+  color: var(--color-text-secondary);
   font-size: 11px;
   cursor: pointer;
   text-align: center;
   padding: 0;
   text-decoration: underline;
 }
-.auth-link:hover { color: #E6EDF3; }
+.auth-link:hover { color: var(--color-text-primary); }
 
 /* Auth init / loading spinner */
 .auth-init-screen {
   position: fixed;
   inset: 0;
-  background: #0A0C10;
+  background: var(--color-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -854,8 +900,8 @@ body {
 .auth-spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid rgba(0, 212, 255, 0.15);
-  border-top-color: #00D4FF;
+  border: 2px solid var(--color-brand-tint);
+  border-top-color: var(--color-brand);
   border-radius: 50%;
   animation: auth-spin 0.8s linear infinite;
 }
@@ -864,14 +910,14 @@ body {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.2em;
-  color: #00D4FF;
+  color: var(--color-brand);
 }
 
 /* Navbar auth additions */
 .nav-user-email {
   font-family: var(--font-mono);
   font-size: 0.65rem;
-  color: #8B949E;
+  color: var(--color-text-secondary);
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -879,8 +925,8 @@ body {
 }
 .nav-signout-btn {
   background: none;
-  border: 1px solid #1E2329;
-  color: #484F58;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
   font-family: var(--font-mono);
   font-size: 0.65rem;
   letter-spacing: 0.06em;
@@ -889,4 +935,4 @@ body {
   cursor: pointer;
   white-space: nowrap;
 }
-.nav-signout-btn:hover { border-color: #F85149; color: #F85149; }
+.nav-signout-btn:hover { border-color: var(--color-error); color: var(--color-error); }

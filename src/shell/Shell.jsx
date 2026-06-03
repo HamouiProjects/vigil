@@ -263,7 +263,7 @@ export default function Shell() {
                       className={`ws-power-btn${isPaused ? ' is-paused' : ' is-live'}`}
                       onClick={(e) => { e.stopPropagation(); toggleWorkspacePause(ws.id) }}
                       title={isPaused ? 'Resume workspace' : 'Pause workspace'}
-                      style={!globalLive ? { color: '#970047', opacity: 0.25, pointerEvents: 'none' } : undefined}
+                      style={!globalLive ? { color: 'var(--color-error)', opacity: 0.25, pointerEvents: 'none' } : undefined}
                     >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
                         <path d="M12 3v9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
