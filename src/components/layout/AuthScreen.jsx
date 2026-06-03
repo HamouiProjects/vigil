@@ -5,11 +5,12 @@ export default function AuthScreen({ authView, setAuthView, onAuthed, onClose })
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
   const [confirm,  setConfirm]  = useState('')
+  const [username, setUsername] = useState('')
   const [error,    setError]    = useState(null)
   const [message,  setMessage]  = useState(null)
   const [loading,  setLoading]  = useState(false)
 
-  function clearForm() { setEmail(''); setPassword(''); setConfirm(''); setError(null); setMessage(null) }
+  function clearForm() { setEmail(''); setPassword(''); setConfirm(''); setUsername(''); setError(null); setMessage(null) }
 
   async function handleLogin(e) {
     e.preventDefault()
@@ -24,8 +25,9 @@ export default function AuthScreen({ authView, setAuthView, onAuthed, onClose })
     e.preventDefault()
     if (password !== confirm) { setError('Passwords do not match'); return }
     if (password.length < 6)  { setError('Password must be at least 6 characters'); return }
+    if (!username.trim()) { setError('Please choose a username'); return }
     setError(null); setLoading(true)
-    const { error } = await supabase.auth.signUp({ email, password })
+    const { error } = await supabase.auth.signUp({ email, password, options: { data: { username: username.trim() } } })
     if (error) { setLoading(false); setError(error.message); return }
     setMessage('Account created! Signing you in...')
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
@@ -81,6 +83,7 @@ export default function AuthScreen({ authView, setAuthView, onAuthed, onClose })
 
         {authView === 'signup' && (
           <form className="auth-form" onSubmit={handleSignup}>
+            <input className="auth-input" type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="Username" required autoComplete="username" maxLength={32} />
             <input className="auth-input" type="email"    value={email}    onChange={e => setEmail(e.target.value)}    placeholder="Email"                  required autoComplete="email" />
             <input className="auth-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password (min 6 chars)"  required autoComplete="new-password" />
             <input className="auth-input" type="password" value={confirm}  onChange={e => setConfirm(e.target.value)}  placeholder="Confirm password"         required autoComplete="new-password" />
