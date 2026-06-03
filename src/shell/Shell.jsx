@@ -242,7 +242,6 @@ export default function Shell() {
       <nav className="navbar">
         <div className="navbar-left">
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--accent)' }}>VIGIL</span>
-          <span style={{ fontSize: 8, letterSpacing: '0.1em', color: 'var(--text-muted)', border: '1px solid var(--border)', padding: '1px 4px', borderRadius: 2 }}>SHELL</span>
         </div>
 
         <div className="navbar-center">
@@ -297,7 +296,7 @@ export default function Shell() {
               </span>
               <button
                 type="button"
-                className="nav-add-btn"
+                className="nav-add-btn btn-ghost"
                 onClick={async () => {
                   await supabase.auth.signOut()
                   window.location.reload()
@@ -309,20 +308,20 @@ export default function Shell() {
           ) : (
             <button
               type="button"
-              className="nav-add-btn"
+              className="nav-add-btn btn-secondary"
               onClick={() => { setAuthView('login'); setShowAuth(true) }}
             >
               Log in
             </button>
           )}
           {plan === 'free' && (
-            <button type="button" className="nav-add-btn" onClick={() => setShowUpgrade(true)}>
+            <button type="button" className="nav-add-btn btn-primary" onClick={() => setShowUpgrade(true)}>
               Upgrade
             </button>
           )}
-          <button type="button" className="nav-add-btn" onClick={handleShare}>Share</button>
+          <button type="button" className="nav-add-btn btn-secondary" onClick={handleShare}>Share</button>
           <div ref={widgetPickerRef} style={{ position: 'relative' }}>
-            <button type="button" className="nav-add-btn" onClick={() => setShowWidgetPicker(v => !v)}>
+            <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowWidgetPicker(v => !v)}>
               + Add Widget
             </button>
             {showWidgetPicker && (
@@ -370,7 +369,7 @@ export default function Shell() {
           </div>
           <button
             type="button"
-            className="nav-add-btn"
+            className="nav-add-btn btn-ghost"
             onClick={cycleTheme}
             title="Theme — cycles System / Light / Dark (temporary control; moves into the account menu in the main-bar pass)"
           >

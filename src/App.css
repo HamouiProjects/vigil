@@ -1429,16 +1429,31 @@ button.status-dot:hover { opacity: 0.8; }
   background: var(--red); animation: pulse 1s infinite;
 }
 
-/* ── Navbar add widget button ── */
+/* ── Nav button: shape only; color comes from the tier modifier ── */
 .nav-add-btn {
   font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
   font-family: 'JetBrains Mono', monospace;
-  color: var(--accent); background: transparent; border: 1px solid var(--accent);
+  background: transparent; border: 1px solid transparent;
   border-radius: var(--radius); height: 26px; padding: 0 10px; cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
 }
-.nav-add-btn:hover { background: var(--accent-dim); }
+.nav-add-btn:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
+
+/* primary — the single primary action (Upgrade) */
+.btn-primary  { background: var(--color-brand); color: var(--color-on-brand); border-color: var(--color-brand); }
+.btn-primary:hover  { background: var(--color-brand-hover); border-color: var(--color-brand-hover); }
+.btn-primary:active { background: var(--color-brand-active); border-color: var(--color-brand-active); transform: scale(0.98); }
+
+/* secondary — Share, + Add Widget, Log in */
+.btn-secondary  { color: var(--color-brand); border-color: var(--color-brand); }
+.btn-secondary:hover  { background: var(--color-brand-tint); }
+.btn-secondary:active { color: var(--color-brand-active); border-color: var(--color-brand-active); transform: scale(0.98); }
+
+/* ghost — Sign out, theme toggle (low emphasis) */
+.btn-ghost  { color: var(--color-text-secondary); }
+.btn-ghost:hover  { background: var(--color-brand-tint); color: var(--color-text-primary); }
+.btn-ghost:active { transform: scale(0.98); }
 
 /* ── Workspace add button ── */
 .ws-add-btn {
