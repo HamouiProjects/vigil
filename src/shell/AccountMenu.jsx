@@ -1,9 +1,12 @@
 // src/shell/AccountMenu.jsx — account avatar + dropdown (appearance/theme, upgrade, auth)
 import { useState, useRef, useEffect } from 'react'
 
-export default function AccountMenu({ account, plan, themePref, onSetTheme, onUpgrade, onLogin, onSignOut }) {
+export default function AccountMenu({ account, plan, themePref, onSetTheme, onUpgrade, onLogin, onSignOut, onSetUsername }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const username = account?.username || ''
 
   useEffect(() => {
     if (!open) return
@@ -19,16 +22,26 @@ export default function AccountMenu({ account, plan, themePref, onSetTheme, onUp
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button type="button" className="account-avatar" onClick={() => setOpen(v => !v)} title="Account" aria-label="Account menu">
-        {isReal && email
-          ? email[0].toUpperCase()
-          : <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.2" stroke="currentColor" strokeWidth="2"/><path d="M5 19c0-3.3 3.1-5 7-5s7 1.7 7 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}
+        {username
+          ? username[0].toUpperCase()
+          : (isReal && email
+              ? email[0].toUpperCase()
+              : <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.2" stroke="currentColor" strokeWidth="2"/><path d="M5 19c0-3.3 3.1-5 7-5s7 1.7 7 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>)}
       </button>
       {open && (
         <div className="account-menu">
           <div className="account-menu-header">
-            <span className="account-menu-name">{isReal ? email : 'Guest'}</span>
+            <span className="account-menu-name">{username || (isReal ? email : 'Guest')}</span>
             <span className="account-menu-plan">{plan === 'pro' ? 'PRO' : 'FREE'}</span>
           </div>
+
+          {isReal && (editing
+            ? <div className="account-menu-edit">
+                <input className="account-menu-input" value={draft} maxLength={32} placeholder="Username" autoFocus onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { const v = draft.trim(); if (v) { onSetUsername(v); setEditing(false) } } }} />
+                <button type="button" className="account-menu-item" style={{ width: 'auto' }} onClick={() => { const v = draft.trim(); if (v) { onSetUsername(v); setEditing(false) } }}>Save</button>
+              </div>
+            : <button type="button" className="account-menu-item" onClick={() => { setDraft(username); setEditing(true) }}>{username ? 'Edit username' : 'Set username'}</button>
+          )}
 
           <div className="account-menu-label">Appearance</div>
           {themes.map(([val, lbl]) => (

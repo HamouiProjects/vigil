@@ -145,7 +145,7 @@ export default function Shell() {
   useEffect(() => {
     if (!uid) return
     supabase.auth.getUser().then(({ data }) => {
-      setAccount({ email: data?.user?.email ?? null, isAnon: data?.user?.is_anonymous === true })
+      setAccount({ email: data?.user?.email ?? null, isAnon: data?.user?.is_anonymous === true, username: data?.user?.user_metadata?.username ?? null })
       reconcileRemotePref(data?.user?.user_metadata?.theme)
       setThemePrefState(getThemePref())
       const rc = data?.user?.user_metadata?.nav_collapsed
@@ -213,6 +213,13 @@ export default function Shell() {
   }
 
   const setTheme = (p) => { setThemePref(p); setThemePrefState(p) }
+
+  const handleSetUsername = async (name) => {
+    const u = (name || '').trim()
+    if (!u) return
+    await supabase.auth.updateUser({ data: { username: u } })
+    setAccount(a => (a ? { ...a, username: u } : a))
+  }
 
   const setNavCollapsedPersisted = (v) => {
     setNavCollapsed(v)
@@ -356,6 +363,7 @@ export default function Shell() {
             onUpgrade={() => setShowUpgrade(true)}
             onLogin={() => { setAuthView('login'); setShowAuth(true) }}
             onSignOut={async () => { await supabase.auth.signOut(); window.location.reload() }}
+            onSetUsername={handleSetUsername}
           />
           <button type="button" className="nav-collapse-btn" onClick={() => setNavCollapsedPersisted(true)} title="Hide toolbar" aria-label="Hide toolbar">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 15l6-6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
