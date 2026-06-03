@@ -46,24 +46,24 @@
 }
 
 [data-theme="light"] {
-  --color-bg:#F5F7FA;
-  --color-surface-1:#FFFFFF;
-  --color-surface-2:#FFFFFF;
-  --color-surface-hover:#ECEFF3;
-  --color-border:#E2E6EC;
-  --color-border-strong:#CDD3DC;
-  --color-text-primary:#1A1F2A;
-  --color-text-secondary:#5A6473;
-  --color-text-muted:#626C7B;
+  --color-bg:#E6E1D6;
+  --color-surface-1:#ECE7DC;
+  --color-surface-2:#ECE7DC;
+  --color-surface-hover:#DDD7C9;
+  --color-border:#D6CFBF;
+  --color-border-strong:#C2B9A7;
+  --color-text-primary:#211E17;
+  --color-text-secondary:#544C41;
+  --color-text-muted:#655D50;
   --color-brand:#0A6B61;
   --color-brand-hover:#096257;
   --color-brand-active:#07564D;
   --color-on-brand:#FFFFFF;
   --color-brand-tint:rgba(10,107,97,0.10);
-  --color-success:#0B7349;
-  --color-warning:#7E560A;
-  --color-error:#C23B33;
-  --color-info:#1C72A0;
+  --color-success:#0A6B43;
+  --color-warning:#6F4D08;
+  --color-error:#AE2E27;
+  --color-info:#155E86;
   --shadow-overlay:0 4px 16px rgba(0,0,0,0.08);
 }
 
