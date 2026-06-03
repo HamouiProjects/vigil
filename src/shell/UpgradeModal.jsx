@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { useShellStore } from '../state/shellStore.js'
 
@@ -8,25 +8,43 @@ export default function UpgradeModal({ onClose }) {
   const [period, setPeriod] = useState('annual')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [isAnon, setIsAnon] = useState(null)
+  const [existingEmail, setExistingEmail] = useState('')
+
+  useEffect(() => {
+    supabase.auth.getUser()
+      .then(({ data }) => {
+        setIsAnon(data?.user?.is_anonymous === true)
+        setExistingEmail(data?.user?.email || '')
+      })
+      .catch(() => setIsAnon(true))
+  }, [])
 
   async function handleContinue() {
-    const trimmed = email.trim()
-    if (!trimmed || password.length < 6) {
-      setError(!trimmed ? 'Email is required' : 'Password must be at least 6 characters')
-      return
-    }
+    let checkoutEmail
 
-    setLoading(true)
-    setError(null)
-
-    try {
+    if (isAnon) {
+      const trimmed = email.trim()
+      if (!trimmed || password.length < 6) {
+        setError(!trimmed ? 'Email is required' : 'Password must be at least 6 characters')
+        return
+      }
+      setLoading(true)
+      setError(null)
       const { error: upErr } = await supabase.auth.updateUser({ email: trimmed, password })
       if (upErr) {
         setError(upErr.message)
         setLoading(false)
         return
       }
+      checkoutEmail = trimmed
+    } else {
+      setLoading(true)
+      setError(null)
+      checkoutEmail = existingEmail
+    }
 
+    try {
       const uid = useShellStore.getState().uid
       if (!uid) {
         setError('Session not ready')
@@ -37,7 +55,7 @@ export default function UpgradeModal({ onClose }) {
       const res = await fetch('/api/stripe?action=checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid, email: trimmed, period }),
+        body: JSON.stringify({ uid, email: checkoutEmail, period }),
       })
       const data = await res.json()
       if (!res.ok || !data.url) {
@@ -93,29 +111,41 @@ export default function UpgradeModal({ onClose }) {
             </button>
           </div>
 
-          <input
-            className="auth-input"
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="Email"
-            autoComplete="email"
-          />
-          <input
-            className="auth-input"
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="Create a password"
-            autoComplete="new-password"
-          />
+          {isAnon === null && (
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>…</div>
+          )}
+          {isAnon === true && (
+            <>
+              <input
+                className="auth-input"
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="Email"
+                autoComplete="email"
+              />
+              <input
+                className="auth-input"
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Create a password"
+                autoComplete="new-password"
+              />
+            </>
+          )}
+          {isAnon === false && (
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>
+              Signed in as {existingEmail}
+            </div>
+          )}
 
           {error && <div className="auth-error">{error}</div>}
 
           <button
             type="button"
             className="auth-btn"
-            disabled={loading}
+            disabled={loading || isAnon === null}
             onClick={handleContinue}
           >
             {loading ? '…' : 'Continue to payment'}
