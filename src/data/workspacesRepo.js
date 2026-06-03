@@ -1,4 +1,7 @@
 import { supabase } from '../lib/supabase.js'
+import { createSource } from './sourcesRepo.js'
+
+const genId = (p) => `${p}-${crypto.randomUUID().slice(0, 8)}`
 
 function rowToWorkspace(r) {
   return {
@@ -91,5 +94,40 @@ export async function loadPublicRoom(slug) {
     name: row.name,
     widgets: Array.isArray(row.widgets) ? row.widgets : [],
     layout: Array.isArray(row.layout) ? row.layout : [],
+    sources: Array.isArray(row.sources) ? row.sources : [],
   }
+}
+
+export async function cloneRoom(uid, room) {
+  const idMap = {}
+  for (const src of (room.sources ?? [])) {
+    const row = await createSource(uid, {
+      type: src.type, identifier: src.identifier, label: src.label, meta: src.meta ?? {},
+    })
+    if (row) idMap[src.id] = row.id
+  }
+  const widgetIdMap = {}
+  const widgets = (room.widgets ?? []).map(w => {
+    const newId = genId('w')
+    widgetIdMap[w.id] = newId
+    let config = w.config ?? {}
+    if (Array.isArray(config.feeds)) {
+      config = { ...config, feeds: config.feeds.map(f => ({ ...f, sourceId: idMap[f.sourceId] ?? f.sourceId })) }
+    }
+    return { ...w, id: newId, config }
+  })
+  const layout = (room.layout ?? [])
+    .filter(l => widgetIdMap[l.i])
+    .map(l => ({ ...l, i: widgetIdMap[l.i] }))
+  const { data: last } = await supabase
+    .from('workspaces').select('position').eq('user_id', uid)
+    .order('position', { ascending: false }).limit(1).maybeSingle()
+  const position = (last?.position ?? -1) + 1
+  const localId = genId('ws')
+  const { error } = await supabase.from('workspaces').insert({
+    user_id: uid, local_id: localId, name: room.name,
+    widgets, layout, settings: {}, position, updated_at: new Date().toISOString(),
+  })
+  if (error) throw error
+  return localId
 }

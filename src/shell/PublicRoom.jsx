@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { ReactGridLayout as GridLayout, WidthProvider } from 'react-grid-layout/legacy'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
-import { loadPublicRoom } from '../data/workspacesRepo.js'
+import { ensureSession } from '../data/session.js'
+import { loadPublicRoom, cloneRoom } from '../data/workspacesRepo.js'
 import WidgetHost from './WidgetHost.jsx'
 
 const SizedGridLayout = WidthProvider(GridLayout)
@@ -21,6 +22,20 @@ export default function PublicRoom({ slug }) {
   const [loading, setLoading] = useState(true)
   const [room, setRoom] = useState(null)
   const [notFound, setNotFound] = useState(false)
+  const [cloning, setCloning] = useState(false)
+
+  async function handleClone() {
+    if (cloning) return
+    setCloning(true)
+    try {
+      const uid = await ensureSession()
+      await cloneRoom(uid, room)
+      window.location.href = '/'
+    } catch (e) {
+      console.error(e)
+      setCloning(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -66,7 +81,9 @@ export default function PublicRoom({ slug }) {
         <span style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 11, color: 'var(--text-primary)' }}>
           {room.name}
         </span>
-        <a href="/" className="nav-add-btn">Build your own →</a>
+        <button type="button" className="nav-add-btn" onClick={handleClone} disabled={cloning}>
+          {cloning ? 'Cloning…' : 'Clone this room'}
+        </button>
       </div>
 
       <div style={{ width: '100%', height: 'calc(100vh - 40px)', overflow: 'auto' }}>
@@ -96,7 +113,7 @@ export default function PublicRoom({ slug }) {
                   widgetPaused={false}
                   entitlements={{}}
                   onSaveConfig={() => {}}
-                  sources={[]}
+                  sources={room.sources ?? []}
                   readOnly
                 />
               </div>
