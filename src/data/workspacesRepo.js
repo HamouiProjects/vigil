@@ -55,3 +55,29 @@ export async function saveWorkspaces(uid, workspaces) {
     if (delErr) throw delErr
   }
 }
+
+export async function publishWorkspace(uid, localId, origin) {
+  const { data: existing, error: selErr } = await supabase
+    .from('workspaces')
+    .select('public_slug')
+    .eq('user_id', uid)
+    .eq('local_id', localId)
+    .maybeSingle()
+  if (selErr) throw selErr
+  let slug = existing?.public_slug
+  if (!slug) {
+    slug = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+    const { error: updErr } = await supabase
+      .from('workspaces')
+      .update({ is_public: true, public_slug: slug })
+      .eq('user_id', uid)
+      .eq('local_id', localId)
+    if (updErr) throw updErr
+  } else {
+    await supabase.from('workspaces')
+      .update({ is_public: true })
+      .eq('user_id', uid)
+      .eq('local_id', localId)
+  }
+  return `${origin}/?r=${slug}`
+}

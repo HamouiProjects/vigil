@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useShellStore, isWorkspacePaused } from '../state/shellStore.js'
 import { useShellPersistence } from '../data/useShellPersistence.js'
+import { publishWorkspace } from '../data/workspacesRepo.js'
 import { loadSubscription } from '../data/subscriptionRepo.js'
 import { resolveEntitlements } from '../entitlements/resolve.js'
 import { widgetRegistryMeta } from './widgetRegistry.js'
@@ -175,6 +176,19 @@ export default function Shell() {
     if (!ok) nudgeUpgrade('Upgrade to Pro for unlimited widgets per workspace')
   }
 
+  async function handleShare() {
+    const s = useShellStore.getState()
+    if (!s.uid || !s.activeWs) return
+    try {
+      const url = await publishWorkspace(s.uid, s.activeWs, window.location.origin)
+      await navigator.clipboard.writeText(url)
+      setUpgradeNudge('Public link copied — anyone with it can view this room')
+    } catch (e) {
+      console.error(e)
+      setUpgradeNudge('Could not create share link')
+    }
+  }
+
   if (!loaded) {
     return (
       <div
@@ -258,6 +272,7 @@ export default function Shell() {
               Upgrade
             </button>
           )}
+          <button type="button" className="nav-add-btn" onClick={handleShare}>Share</button>
           <div ref={widgetPickerRef} style={{ position: 'relative' }}>
             <button type="button" className="nav-add-btn" onClick={() => setShowWidgetPicker(v => !v)}>
               + Add Widget
