@@ -114,6 +114,7 @@ export default function Shell() {
   const [themePref, setThemePrefState] = useState(getThemePref())
   const [showAuth, setShowAuth] = useState(false)
   const [authView, setAuthView] = useState('login')
+  const [navCollapsed, setNavCollapsed] = useState(() => { try { return localStorage.getItem('vigil_nav_collapsed') === '1' } catch { return false } })
   const widgetPickerRef = useRef(null)
 
   const plan = useShellStore(s => s.entitlements.plan)
@@ -146,6 +147,11 @@ export default function Shell() {
       setAccount({ email: data?.user?.email ?? null, isAnon: data?.user?.is_anonymous === true })
       reconcileRemotePref(data?.user?.user_metadata?.theme)
       setThemePrefState(getThemePref())
+      const rc = data?.user?.user_metadata?.nav_collapsed
+      if (typeof rc === 'boolean') {
+        setNavCollapsed(rc)
+        try { localStorage.setItem('vigil_nav_collapsed', rc ? '1' : '0') } catch {}
+      }
     })
   }, [uid])
 
@@ -212,6 +218,12 @@ export default function Shell() {
     setThemePrefState(next)
   }
 
+  const setNavCollapsedPersisted = (v) => {
+    setNavCollapsed(v)
+    try { localStorage.setItem('vigil_nav_collapsed', v ? '1' : '0') } catch {}
+    supabase.auth.updateUser({ data: { nav_collapsed: v } }).catch(() => {})
+  }
+
   if (!loaded) {
     return (
       <div
@@ -239,7 +251,9 @@ export default function Shell() {
         onUpgrade={() => { setUpgradeNudge(null); setShowUpgrade(true) }}
       />
 
-      <nav className="navbar">
+      {navCollapsed
+        ? <div className="nav-reveal-handle" onClick={() => setNavCollapsedPersisted(false)} title="Show toolbar" />
+        : (<nav className="navbar">
         <div className="navbar-left">
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--accent)' }}>VIGIL</span>
         </div>
@@ -376,10 +390,13 @@ export default function Shell() {
             {themePref === 'system' ? 'SYS' : themePref === 'light' ? 'LIGHT' : 'DARK'}
           </button>
           <ShellGlobalLiveToggle />
+          <button type="button" className="nav-collapse-btn" onClick={() => setNavCollapsedPersisted(true)} title="Hide toolbar" aria-label="Hide toolbar">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 15l6-6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
         </div>
-      </nav>
+      </nav>)}
 
-      <div style={{ width: '100%', height: 'calc(100vh - 40px)', position: 'relative', overflow: 'auto' }}>
+      <div style={{ width: '100%', height: navCollapsed ? 'calc(100vh - 6px)' : 'calc(100vh - 40px)', position: 'relative', overflow: 'auto' }}>
         <Grid />
       </div>
 

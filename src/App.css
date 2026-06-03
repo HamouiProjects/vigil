@@ -22,6 +22,21 @@
 .navbar-right { display: flex; align-items: center; gap: 10px; }
 .navbar-center { display: flex; align-items: center; gap: 4px; }
 
+.nav-collapse-btn {
+  background: none; border: none; color: var(--color-text-muted); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 4px 6px; border-radius: var(--radius); flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+.nav-collapse-btn:hover { color: var(--color-text-secondary); background: var(--color-surface-hover); }
+
+.nav-reveal-handle {
+  height: 6px; width: 100%; flex-shrink: 0; cursor: pointer;
+  background: var(--color-surface-1); border-bottom: 1px solid var(--color-border);
+  transition: background 0.15s;
+}
+.nav-reveal-handle:hover { background: var(--color-surface-hover); }
+
 /* ── Workspace tabs ── */
 .ws-tabs { display: flex; align-items: center; gap: 2px; }
 .ws-tab {
