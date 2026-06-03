@@ -1,9 +1,12 @@
 import { useEffect, useState, useRef } from 'react'
 import { useShellStore, isWorkspacePaused } from '../state/shellStore.js'
 import { useShellPersistence } from '../data/useShellPersistence.js'
+import { loadSubscription } from '../data/subscriptionRepo.js'
+import { resolveEntitlements } from '../entitlements/resolve.js'
 import { widgetRegistryMeta } from './widgetRegistry.js'
 import Grid from './Grid.jsx'
 import EntitlementDebug from './EntitlementDebug.jsx'
+import UpgradeModal from './UpgradeModal.jsx'
 
 function ShellGlobalLiveToggle() {
   const globalLive = useShellStore(s => s.globalLive === true)
@@ -47,7 +50,7 @@ function ShellGlobalLiveToggle() {
   )
 }
 
-function UpgradeNudge({ message, onDismiss }) {
+function UpgradeNudge({ message, onDismiss, onUpgrade }) {
   if (!message) return null
   return (
     <div
@@ -71,6 +74,16 @@ function UpgradeNudge({ message, onDismiss }) {
       }}
     >
       <span>{message}</span>
+      {onUpgrade && (
+        <button
+          type="button"
+          className="nav-add-btn"
+          onClick={onUpgrade}
+          style={{ padding: '2px 8px', fontSize: 9 }}
+        >
+          Upgrade
+        </button>
+      )}
       <button type="button" className="widget-btn" onClick={onDismiss} title="Dismiss">✕</button>
     </div>
   )
@@ -91,8 +104,12 @@ export default function Shell() {
   const addWidget = useShellStore(s => s.addWidget)
 
   const [upgradeNudge, setUpgradeNudge] = useState(null)
+  const [showUpgrade, setShowUpgrade] = useState(false)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
   const widgetPickerRef = useRef(null)
+
+  const plan = useShellStore(s => s.entitlements.plan)
+  const uid = useShellStore(s => s.uid)
 
   useEffect(() => {
     const { globalLive: live, setGlobalLive } = useShellStore.getState()
@@ -114,6 +131,31 @@ export default function Shell() {
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [showWidgetPicker])
+
+  useEffect(() => {
+    if (!uid) return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('upgraded') === '1') {
+      let tries = 0
+      const poll = async () => {
+        tries++
+        try {
+          const sub = await loadSubscription(uid)
+          if (sub?.plan === 'pro') {
+            useShellStore.getState().setEntitlements(resolveEntitlements('pro', sub.addOns ?? []))
+            setUpgradeNudge('Welcome to Pro — unlimited workspaces & widgets unlocked')
+            return
+          }
+        } catch {}
+        if (tries < 6) setTimeout(poll, 1500)
+      }
+      poll()
+      window.history.replaceState({}, '', window.location.pathname)
+    } else if (params.get('upgrade') === 'cancelled') {
+      setUpgradeNudge('Checkout cancelled')
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [uid])
 
   const pauseState = { globalLive, activeWs, pausedWorkspaces, inactiveTabPause }
 
@@ -154,7 +196,11 @@ export default function Shell() {
 
   return (
     <div className="app">
-      <UpgradeNudge message={upgradeNudge} onDismiss={() => setUpgradeNudge(null)} />
+      <UpgradeNudge
+        message={upgradeNudge}
+        onDismiss={() => setUpgradeNudge(null)}
+        onUpgrade={() => { setUpgradeNudge(null); setShowUpgrade(true) }}
+      />
 
       <nav className="navbar">
         <div className="navbar-left">
@@ -207,6 +253,11 @@ export default function Shell() {
         </div>
 
         <div className="navbar-right" style={{ position: 'relative', zIndex: 110 }}>
+          {plan === 'free' && (
+            <button type="button" className="nav-add-btn" onClick={() => setShowUpgrade(true)}>
+              Upgrade
+            </button>
+          )}
           <div ref={widgetPickerRef} style={{ position: 'relative' }}>
             <button type="button" className="nav-add-btn" onClick={() => setShowWidgetPicker(v => !v)}>
               + Add Widget
@@ -262,7 +313,8 @@ export default function Shell() {
         <Grid />
       </div>
 
-      <EntitlementDebug />
+      {import.meta.env.DEV && <EntitlementDebug />}
+      {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
     </div>
   )
 }
