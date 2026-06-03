@@ -197,9 +197,9 @@ button.status-dot:hover { opacity: 0.8; }
 .react-resizable-handle-n, .react-resizable-handle-s { cursor:ns-resize !important; }
 .react-resizable-handle-e, .react-resizable-handle-w { cursor:ew-resize !important; }
 .react-resizable-handle-se { opacity:0; }
-.react-resizable-handle.react-resizable-handle-se::after { content:'↘'; position:absolute; bottom:0; right:2px; font-size:11px; line-height:1; color:var(--color-text-muted); background:none; }
+.react-grid-item > .react-resizable-handle.react-resizable-handle-se::after { content:'↘'; position:absolute; bottom:0; right:2px; font-size:11px; line-height:1; color:var(--color-text-muted); background:none; border:none; }
 .react-resizable-handle-se:hover { opacity:1; }
-.react-resizable-handle.react-resizable-handle-se:hover::after { color:var(--color-text-secondary); }
+.react-grid-item > .react-resizable-handle.react-resizable-handle-se:hover::after { color:var(--color-text-secondary); }
 
 /* ── Widget hover / drag — active-card cue is the header border-top → brand; no neon card outline ── */
 .react-grid-item:hover { outline:none; }
