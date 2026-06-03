@@ -81,7 +81,7 @@ function UpgradeNudge({ message, onDismiss, onUpgrade }) {
       {onUpgrade && (
         <button
           type="button"
-          className="nav-add-btn"
+          className="nav-add-btn btn-primary"
           onClick={onUpgrade}
           style={{ padding: '2px 8px', fontSize: 9 }}
         >

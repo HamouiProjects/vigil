@@ -81,7 +81,7 @@ export default function PublicRoom({ slug }) {
         <span style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 11, color: 'var(--text-primary)' }}>
           {room.name}
         </span>
-        <button type="button" className="nav-add-btn" onClick={handleClone} disabled={cloning}>
+        <button type="button" className="nav-add-btn btn-primary" onClick={handleClone} disabled={cloning}>
           {cloning ? 'Cloning…' : 'Clone this room'}
         </button>
       </div>
