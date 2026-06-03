@@ -60,6 +60,19 @@ export default function AtlasGlobe({ paused, layers = DEFAULT_LAYERS }) {
   const [earthquakePoints, setEarthquakePoints] = useState([])
   const [stormPoints, setStormPoints] = useState([])
 
+  // Globe is a WebGL canvas — CSS vars can't reach it, so track [data-theme] directly.
+  const [isLight, setIsLight] = useState(
+    typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light'
+  )
+  useEffect(() => {
+    const root = document.documentElement
+    const read = () => setIsLight(root.getAttribute('data-theme') === 'light')
+    read()
+    const obs = new MutationObserver(read)
+    obs.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => obs.disconnect()
+  }, [])
+
   // Inject wildfire pulse keyframe once on mount
   useEffect(() => {
     const style = document.createElement('style')
@@ -442,10 +455,10 @@ export default function AtlasGlobe({ paused, layers = DEFAULT_LAYERS }) {
         ref={globeRef}
         width={dimensions.w}
         height={dimensions.h}
-        globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
-        backgroundColor="#0d1a2e"
+        globeImageUrl={isLight ? "//unpkg.com/three-globe/example/img/earth-day.jpg" : "//unpkg.com/three-globe/example/img/earth-night.jpg"}
+        backgroundColor={isLight ? "rgba(0,0,0,0)" : "#0d1a2e"}
         backgroundImageUrl={null}
-        atmosphereColor="#4a6fa5"
+        atmosphereColor={isLight ? "#bcd2ec" : "#4a6fa5"}
         atmosphereAltitude={0.18}
         showAtmosphere={true}
         enablePointerInteraction={!paused}
