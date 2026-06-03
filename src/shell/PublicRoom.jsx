@@ -78,9 +78,14 @@ export default function PublicRoom({ slug }) {
           borderBottom: '1px solid var(--border)',
         }}
       >
-        <span style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 11, color: 'var(--text-primary)' }}>
-          {room.name}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <span style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 11, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {room.name}
+          </span>
+          <span style={{ fontFamily: 'var(--font-sans)', fontSize: 11, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+            Vigil tracks, it does not verify.
+          </span>
+        </div>
         <button type="button" className="nav-add-btn btn-primary" onClick={handleClone} disabled={cloning}>
           {cloning ? 'Cloning…' : 'Clone this room'}
         </button>
