@@ -107,6 +107,14 @@ export const useShellStore = create((set, get) => ({
     })
   },
 
+  renameWorkspace: (wsId, name) => {
+    const next = (name ?? '').trim()
+    if (!next) return
+    set((s) => ({
+      workspaces: s.workspaces.map(ws => ws.id === wsId ? { ...ws, name: next } : ws),
+    }))
+  },
+
   addWidget: (wsId, type) => {
     const s = get()
     if (!widgetRegistry[type]) return false

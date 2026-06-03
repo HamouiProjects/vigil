@@ -107,6 +107,7 @@ export default function Shell() {
   const toggleWorkspacePause = useShellStore(s => s.toggleWorkspacePause)
   const addWorkspace = useShellStore(s => s.addWorkspace)
   const removeWorkspace = useShellStore(s => s.removeWorkspace)
+  const renameWorkspace = useShellStore(s => s.renameWorkspace)
   const addWidget = useShellStore(s => s.addWidget)
 
   const [upgradeNudge, setUpgradeNudge] = useState(null)
@@ -119,6 +120,8 @@ export default function Shell() {
   const [navCollapsed, setNavCollapsed] = useState(() => { try { return localStorage.getItem('vigil_nav_collapsed') === '1' } catch { return false } })
   const scrollRef = useRef(null)
   const [atBottom, setAtBottom] = useState(false)
+  const [editingWs, setEditingWs] = useState(null)
+  const [wsDraft, setWsDraft] = useState('')
   const widgetPickerRef = useRef(null)
 
   const plan = useShellStore(s => s.entitlements.plan)
@@ -294,7 +297,28 @@ export default function Shell() {
                   onClick={() => setActiveWs(ws.id)}
                   title={ws.name}
                 >
-                  <span className="ws-tab-name">{ws.name}</span>
+                  {editingWs === ws.id ? (
+                    <input
+                      value={wsDraft}
+                      autoFocus
+                      maxLength={32}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => setWsDraft(e.target.value)}
+                      onBlur={() => { renameWorkspace(ws.id, wsDraft); setEditingWs(null) }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { renameWorkspace(ws.id, wsDraft); setEditingWs(null) }
+                        else if (e.key === 'Escape') { setEditingWs(null) }
+                      }}
+                      style={{ font: 'inherit', color: 'var(--color-text-primary)', background: 'transparent', border: 'none', borderBottom: '1px solid var(--color-brand)', padding: 0, width: 84, outline: 'none' }}
+                    />
+                  ) : (
+                    <span
+                      className="ws-tab-name"
+                      onDoubleClick={(e) => { e.stopPropagation(); setWsDraft(ws.name); setEditingWs(ws.id) }}
+                    >
+                      {ws.name}
+                    </span>
+                  )}
                   {workspaces.length > 1 && (
                     <button
                       type="button"
