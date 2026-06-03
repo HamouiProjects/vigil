@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 
-export default function AuthScreen({ authView, setAuthView }) {
+export default function AuthScreen({ authView, setAuthView, onAuthed, onClose }) {
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
   const [confirm,  setConfirm]  = useState('')
@@ -17,6 +17,7 @@ export default function AuthScreen({ authView, setAuthView }) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
     if (error) setError(error.message)
+    else onAuthed?.()
   }
 
   async function handleSignup(e) {
@@ -30,6 +31,7 @@ export default function AuthScreen({ authView, setAuthView }) {
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
     if (signInError) setError(signInError.message)
+    else onAuthed?.()
   }
 
   async function handleForgot(e) {
@@ -45,7 +47,16 @@ export default function AuthScreen({ authView, setAuthView }) {
 
   return (
     <div className="auth-screen">
-      <div className="auth-card">
+      <div className="auth-card" style={{ position: 'relative' }}>
+        <button
+          type="button"
+          className="widget-btn"
+          onClick={onClose}
+          title="Close"
+          style={{ position: 'absolute', top: 12, right: 12 }}
+        >
+          ✕
+        </button>
         <div className="auth-logo">
           <span className="auth-logo-text">VIGIL</span>
           <span className="auth-tagline">Build your own situation room.</span>
@@ -89,6 +100,10 @@ export default function AuthScreen({ authView, setAuthView }) {
             <button type="button" className="auth-link" onClick={() => switchView('login')}>Back to login</button>
           </form>
         )}
+
+        <button type="button" className="auth-link" onClick={onClose} style={{ marginTop: 16 }}>
+          Continue as guest
+        </button>
       </div>
     </div>
   )

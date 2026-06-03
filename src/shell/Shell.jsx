@@ -8,6 +8,8 @@ import { widgetRegistryMeta } from './widgetRegistry.js'
 import Grid from './Grid.jsx'
 import EntitlementDebug from './EntitlementDebug.jsx'
 import UpgradeModal from './UpgradeModal.jsx'
+import { supabase } from '../lib/supabase.js'
+import AuthScreen from '../components/layout/AuthScreen.jsx'
 
 function ShellGlobalLiveToggle() {
   const globalLive = useShellStore(s => s.globalLive === true)
@@ -107,6 +109,9 @@ export default function Shell() {
   const [upgradeNudge, setUpgradeNudge] = useState(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
+  const [account, setAccount] = useState(null)
+  const [showAuth, setShowAuth] = useState(false)
+  const [authView, setAuthView] = useState('login')
   const widgetPickerRef = useRef(null)
 
   const plan = useShellStore(s => s.entitlements.plan)
@@ -132,6 +137,13 @@ export default function Shell() {
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [showWidgetPicker])
+
+  useEffect(() => {
+    if (!uid) return
+    supabase.auth.getUser().then(({ data }) => {
+      setAccount({ email: data?.user?.email ?? null, isAnon: data?.user?.is_anonymous === true })
+    })
+  }, [uid])
 
   useEffect(() => {
     if (!uid) return
@@ -267,6 +279,31 @@ export default function Shell() {
         </div>
 
         <div className="navbar-right" style={{ position: 'relative', zIndex: 110 }}>
+          {account && account.isAnon === false ? (
+            <>
+              <span style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 10, color: 'var(--text-secondary)' }}>
+                {account.email}
+              </span>
+              <button
+                type="button"
+                className="nav-add-btn"
+                onClick={async () => {
+                  await supabase.auth.signOut()
+                  window.location.reload()
+                }}
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="nav-add-btn"
+              onClick={() => { setAuthView('login'); setShowAuth(true) }}
+            >
+              Log in
+            </button>
+          )}
           {plan === 'free' && (
             <button type="button" className="nav-add-btn" onClick={() => setShowUpgrade(true)}>
               Upgrade
@@ -330,6 +367,16 @@ export default function Shell() {
 
       {import.meta.env.DEV && <EntitlementDebug />}
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
+      {showAuth && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100002, background: 'var(--bg, #0A0C10)' }}>
+          <AuthScreen
+            authView={authView}
+            setAuthView={setAuthView}
+            onClose={() => setShowAuth(false)}
+            onAuthed={() => window.location.reload()}
+          />
+        </div>
+      )}
     </div>
   )
 }
