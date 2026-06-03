@@ -52,7 +52,6 @@ export default function ChartWidget({ id, paused, config, onSaveConfig }) {
         allow="clipboard-write"
       />
 
-      <div className="attr-line">powered by TradingView</div>
     </>
   )
 }

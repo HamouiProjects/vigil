@@ -9,7 +9,6 @@ export default function HeatmapWidget({ paused }) {
         title="Market Heatmap"
         allow="clipboard-write"
       />
-      <div className="attr-line">via TradingView</div>
     </>
   )
 }

@@ -1676,14 +1676,6 @@ button.status-dot:hover { opacity: 0.8; }
 }
 .layer-tip:hover .layer-tip-text { display: block; }
 
-/* ── Attribution line ── */
-.attr-line {
-  text-align: center; font-size: 9px; color: var(--text-muted);
-  font-family: 'JetBrains Mono', monospace;
-  letter-spacing: 0.06em; padding: 5px 8px 4px;
-  border-top: 1px solid rgba(33,38,45,0.4); flex-shrink: 0;
-}
-
 /* ── Error retry button ── */
 .widget-error-retry {
   font-size: 9px; font-weight: 700; letter-spacing: 0.1em;

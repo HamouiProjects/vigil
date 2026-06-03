@@ -523,7 +523,6 @@ export default function PriceTrackerWidget({ id, paused, config, onSaveConfig, s
                 </div>
               )
             })}
-            <div className="attr-line">via Yahoo Finance</div>
           </div>
         )}
       </div>

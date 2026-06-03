@@ -649,7 +649,6 @@ export default function RssFeedWidget({
               })
             )}
           </div>
-          <div className="attr-line">via rss2json</div>
         </div>
       </div>
     </>

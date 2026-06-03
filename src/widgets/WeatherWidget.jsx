@@ -204,7 +204,6 @@ export default function WeatherWidget({ id, paused, config, onSaveConfig, setTit
                 ))}
               </div>
             )}
-            <div className="attr-line">via Open-Meteo · Nominatim</div>
           </div>
         )}
       </div>
