@@ -6,6 +6,7 @@ export default function AccountMenu({ account, plan, themePref, onSetTheme, onUp
   const ref = useRef(null)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  const [appearanceOpen, setAppearanceOpen] = useState(false)
   const username = account?.username || ''
 
   useEffect(() => {
@@ -43,9 +44,15 @@ export default function AccountMenu({ account, plan, themePref, onSetTheme, onUp
             : <button type="button" className="account-menu-item" onClick={() => { setDraft(username); setEditing(true) }}>{username ? 'Edit username' : 'Set username'}</button>
           )}
 
-          <div className="account-menu-label">Appearance</div>
-          {themes.map(([val, lbl]) => (
-            <button key={val} type="button" className="account-menu-item" onClick={() => onSetTheme(val)}>
+          <button type="button" className="account-menu-item" onClick={() => setAppearanceOpen(v => !v)} aria-expanded={appearanceOpen}>
+            <span>Appearance</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-text-muted)' }}>
+              <span style={{ fontSize: 11 }}>{(themes.find(([v]) => v === themePref) || [])[1]}</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style={{ transform: appearanceOpen ? 'rotate(90deg)' : 'none', transition: 'transform 120ms ease' }}><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </span>
+          </button>
+          {appearanceOpen && themes.map(([val, lbl]) => (
+            <button key={val} type="button" className="account-menu-item" style={{ paddingLeft: 24 }} onClick={() => onSetTheme(val)}>
               <span>{lbl}</span>
               {themePref === val && <span className="account-menu-check">✓</span>}
             </button>
