@@ -2,6 +2,22 @@ import { useRef, useEffect } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
+const RTL_TEXT_PLUGIN_URL =
+  'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.min.js'
+let rtlTextPluginRequested = false
+
+function ensureRtlTextPlugin() {
+  if (rtlTextPluginRequested) return
+  rtlTextPluginRequested = true
+  try {
+    maplibregl.setRTLTextPlugin(RTL_TEXT_PLUGIN_URL, null, true)
+  } catch {
+    /* plugin already registered */
+  }
+}
+
+ensureRtlTextPlugin()
+
 const OPENFREEMAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
 const DEMOTILES_STYLE = 'https://demotiles.maplibre.org/style.json'
 const STYLE_WATCHDOG_MS = 2500
@@ -24,63 +40,50 @@ const COUNTRIES_GEO_URL = '/ne_110m_admin_0_countries.geojson'
 const COUNTRIES_SOURCE_ID = 'countries-admin0'
 const COUNTRIES_FILL_LAYER_ID = 'countries-hover-fill'
 const COUNTRIES_LINE_LAYER_ID = 'countries-hover-outline'
-const MINOR_LABEL_LAYER_RE =
-  /(?:^|[-_])(?:city|cities|town|towns|village|hamlet|suburb|neighbour|neighbor|locality|metropolis|settlement|municipal|state|province|region|county|district|capital|adm1|admin-1|admin1|place-2|place-3|place_2|place_3|label_city|label_town|place-label)(?:$|[-_])/i
-const COUNTRY_LABEL_LAYER_RE =
-  /(?:^|[-_])(?:country|countries|adm0|admin-0|admin0|sovereign|nation|place-country|place_country|label_country)(?:$|[-_])/i
+const PLACE_LABEL_LAYER_RE =
+  /(?:^|[-_])(?:country|countries|city|cities|town|towns|village|hamlet|suburb|neighbour|neighbor|locality|metropolis|settlement|municipal|state|province|region|county|district|capital|adm0|admin-0|admin0|adm1|admin-1|admin1|sovereign|nation|place-country|place_country|place-2|place-3|place_2|place_3|label_city|label_town|label_country|place-label)(?:$|[-_])/i
+const NON_PLACE_LABEL_LAYER_RE =
+  /(?:^|[-_])(?:road|street|highway|motorway|waterway|poi|shield|ref-|housenumber|house-number|airport|rail|ferry|marine|ocean|transit|barrier|tunnel|bridge|building|entrance|aeroway)(?:$|[-_])/i
+
+function isPlaceLabelLayer(layer) {
+  if (layer.type !== 'symbol') return false
+  const layout = layer.layout || {}
+  if (layout['text-field'] == null) return false
+
+  const lid = layer.id.toLowerCase()
+  if (NON_PLACE_LABEL_LAYER_RE.test(lid)) return false
+
+  const filterStr = JSON.stringify(layer.filter ?? null)
+  if (PLACE_LABEL_LAYER_RE.test(lid)) return true
+  if (layer['source-layer'] === 'place') return true
+  if (
+    /"class"[^\]]*"(?:country|state|province|region|city|town|village|hamlet|suburb|county|locality)"/.test(
+      filterStr,
+    )
+  ) {
+    return true
+  }
+  return false
+}
 
 function countryNameFromProps(props) {
   if (!props) return null
   return props.NAME || props.ADMIN || props.NAME_EN || props.NAME_LONG || null
 }
 
+/** Subtle dial-back for all place name labels (countries through cities); never hides layers. */
 function calmBasemapLabels(map) {
   const style = map.getStyle()
   if (!style?.layers) return
 
   for (const layer of style.layers) {
-    if (layer.type !== 'symbol') continue
-    const layout = layer.layout || {}
-    if (layout['text-field'] == null) continue
-
-    const lid = layer.id.toLowerCase()
-    const filterStr = JSON.stringify(layer.filter ?? null)
-
-    const looksCountry =
-      COUNTRY_LABEL_LAYER_RE.test(lid) ||
-      /"class"[^\]]*"country"/.test(filterStr) ||
-      /"type"[^\]]*"country"/.test(filterStr)
-
-    const looksMinor =
-      !looksCountry &&
-      (MINOR_LABEL_LAYER_RE.test(lid) ||
-        /"class"[^\]]*"(?:city|town|village|hamlet|suburb|state|province|region|county|locality)"/.test(
-          filterStr,
-        ))
-
-    if (looksMinor) {
-      try {
-        map.setLayoutProperty(layer.id, 'visibility', 'none')
-      } catch {
-        /* layer not ready */
-      }
-      continue
-    }
-
-    if (looksCountry) {
-      try {
-        map.setPaintProperty(layer.id, 'text-opacity', 0.5)
-        map.setPaintProperty(layer.id, 'text-halo-width', 0)
-        map.setPaintProperty(layer.id, 'text-halo-color', 'rgba(0,0,0,0)')
-        const size = layout['text-size']
-        if (typeof size === 'number') {
-          map.setLayoutProperty(layer.id, 'text-size', Math.max(7, size * 0.55))
-        } else {
-          map.setLayoutProperty(layer.id, 'text-size', 9)
-        }
-      } catch {
-        /* ignore */
-      }
+    if (!isPlaceLabelLayer(layer)) continue
+    try {
+      map.setPaintProperty(layer.id, 'text-opacity', 0.5)
+      map.setPaintProperty(layer.id, 'text-halo-width', 0)
+      map.setPaintProperty(layer.id, 'text-halo-color', 'rgba(0,0,0,0)')
+    } catch {
+      /* layer not ready */
     }
   }
 }
@@ -781,6 +784,8 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
         tryAdvanceStyle()
       }, STYLE_WATCHDOG_MS)
     }
+
+    ensureRtlTextPlugin()
 
     const map = new maplibregl.Map({
       container,
