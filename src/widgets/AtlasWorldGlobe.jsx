@@ -23,14 +23,25 @@ const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] }
 
 /** Interim palette — Phase D will align with design tokens */
 export const LAYER_COLORS = {
-  earthquakes: '#C7873E',
-  storms: '#5B93B8',
-  aircraft: '#C2CAD4',
-  wildfires: '#BD5A39',
+  earthquakes: '#F2A03D',
+  storms: '#58B4E6',
+  aircraft: '#E2E8F0',
+  wildfires: '#EA5F38',
 }
 
-const MARKER_STROKE = '#0B0E13'
+const CIRCLE_STROKE_COLOR = 'rgba(8,11,19,0.6)'
+const CIRCLE_STROKE_WIDTH = 1.2
 const AIRCRAFT_ICON_ID = 'vigil-aircraft-plane'
+const PLANE_OUTLINE = 'rgba(8,11,19,0.85)'
+
+function tracePlanePath(ctx, cx) {
+  ctx.beginPath()
+  ctx.moveTo(cx, 2)
+  ctx.lineTo(cx + 5, 14)
+  ctx.lineTo(cx, 11)
+  ctx.lineTo(cx - 5, 14)
+  ctx.closePath()
+}
 
 function createAircraftPlaneImageData(color = LAYER_COLORS.aircraft) {
   const size = 18
@@ -39,13 +50,13 @@ function createAircraftPlaneImageData(color = LAYER_COLORS.aircraft) {
   canvas.height = size
   const ctx = canvas.getContext('2d')
   const cx = size / 2
+  tracePlanePath(ctx, cx)
+  ctx.strokeStyle = PLANE_OUTLINE
+  ctx.lineWidth = 1.2
+  ctx.lineJoin = 'round'
+  ctx.stroke()
   ctx.fillStyle = color
-  ctx.beginPath()
-  ctx.moveTo(cx, 2)
-  ctx.lineTo(cx + 5, 14)
-  ctx.lineTo(cx, 11)
-  ctx.lineTo(cx - 5, 14)
-  ctx.closePath()
+  tracePlanePath(ctx, cx)
   ctx.fill()
   return ctx.getImageData(0, 0, size, size)
 }
@@ -78,17 +89,110 @@ function formatTime(epochMs) {
 }
 
 function formatIsoDate(iso) {
-  if (!iso) return '—'
+  if (!iso) return null
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return String(iso)
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+function buildPopupCard({ dotColor, kicker, title, rows, footer }) {
+  const rowsHtml = rows
+    .map(
+      ([label, value]) =>
+        `<div style="margin-bottom:3px;font-size:12px;line-height:1.4;">
+          <span style="color:var(--color-text-muted);">${escapeHtml(label)}</span>
+          <span style="color:var(--color-text);"> ${escapeHtml(value)}</span>
+        </div>`,
+    )
+    .join('')
+
+  return `<div style="color:var(--color-text);font-size:12px;line-height:1.45;min-width:200px;">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+      <span style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;border:1px solid rgba(8,11,19,0.35);"></span>
+      <span style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-text-muted);">${escapeHtml(kicker)}</span>
+    </div>
+    <div style="font-weight:600;font-size:13px;margin-bottom:6px;line-height:1.35;">${escapeHtml(title)}</div>
+    ${rowsHtml}
+    <div style="color:var(--color-text-muted);font-size:10px;margin-top:8px;padding-top:6px;border-top:1px solid var(--color-border);">${escapeHtml(footer)}</div>
+  </div>`
+}
+
+function buildEarthquakePopupHtml(feature, updatedAt) {
+  const props = feature.properties || {}
+  const mag = props.mag
+  const place = props.place || 'Unknown location'
+  const title =
+    mag != null && !Number.isNaN(Number(mag))
+      ? `M${mag} · ${place}`
+      : place
+
+  const rows = []
+  if (mag != null && !Number.isNaN(Number(mag))) rows.push(['Magnitude', String(mag)])
+  const depth = feature.geometry?.coordinates?.[2]
+  if (depth != null && !Number.isNaN(Number(depth))) {
+    rows.push(['Depth', `${Number(depth).toFixed(1)} km`])
+  }
+  if (props.time != null) {
+    const t = formatTime(props.time)
+    if (t !== '—') rows.push(['Time', t])
+  }
+
+  const updated = formatTime(props.updated ?? updatedAt)
+  const footer =
+    updated !== '—' ? `Source: USGS · updated ${updated}` : 'Source: USGS'
+
+  return buildPopupCard({
+    dotColor: LAYER_COLORS.earthquakes,
+    kicker: 'EARTHQUAKE',
+    title,
+    rows,
+    footer,
+  })
+}
+
+function buildStormPopupHtml(props) {
+  const name = props.name || props.eventname || 'Unknown event'
+  const rows = []
+  if (props.country) rows.push(['Region', props.country])
+  if (props.alertlevel) rows.push(['Alert level', props.alertlevel])
+  const from = formatIsoDate(props.fromdate)
+  const to = formatIsoDate(props.todate)
+  if (from || to) {
+    const active = from && to ? `${from} – ${to}` : from || to
+    rows.push(['Active', active])
+  }
+
+  return buildPopupCard({
+    dotColor: LAYER_COLORS.storms,
+    kicker: 'TROPICAL CYCLONE',
+    title: name,
+    rows,
+    footer: 'Source: GDACS',
+  })
+}
+
+function buildWildfirePopupHtml(props) {
+  const rows = []
+  if (props.frp != null && props.frp !== '' && !Number.isNaN(Number(props.frp))) {
+    rows.push(['Radiative power', `${props.frp} MW`])
+  }
+  if (props.confidence) rows.push(['Confidence', props.confidence])
+  const detected = [props.acq_date, props.acq_time].filter(Boolean).join(' ')
+  if (detected) rows.push(['Detected', `${detected} UTC`])
+
+  return buildPopupCard({
+    dotColor: LAYER_COLORS.wildfires,
+    kicker: 'ACTIVE WILDFIRE',
+    title: 'Active fire detection',
+    rows,
+    footer: 'Source: NASA FIRMS (VIIRS NOAA-20)',
+  })
+}
+
 function buildAircraftPopupHtml(props) {
-  const title = (props.callsign || '').trim() || props.hex || 'Unknown aircraft'
-  const milLine = props.type
-    ? `Military aircraft · ${props.type}`
-    : 'Military aircraft'
+  const callsign = (props.callsign || '').trim()
+  const titleBase = callsign || props.hex || 'Unknown aircraft'
+  const title = props.type ? `${titleBase} · ${props.type}` : titleBase
 
   const rows = []
   if (props.reg) rows.push(['Registration', props.reg])
@@ -102,22 +206,16 @@ function buildAircraftPopupHtml(props) {
     rows.push(['Heading', `${props.track}°`])
   }
   if (props.squawk != null && props.squawk !== '') {
-    rows.push(['Squawk', props.squawk])
+    rows.push(['Squawk', String(props.squawk)])
   }
 
-  const rowsHtml = rows
-    .map(
-      ([label, value]) =>
-        `<div style="color:var(--color-text-muted);margin-bottom:2px;"><span style="color:var(--color-text-secondary);">${escapeHtml(label)}:</span> ${escapeHtml(value)}</div>`,
-    )
-    .join('')
-
-  return `<div style="color:var(--color-text);font-size:12px;line-height:1.45;">
-    <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(title)}</div>
-    <div style="color:var(--color-text-muted);margin-bottom:6px;">${escapeHtml(milLine)}</div>
-    ${rowsHtml}
-    <div style="color:var(--color-text-muted);font-size:11px;margin-top:6px;">Source: adsb.lol</div>
-  </div>`
+  return buildPopupCard({
+    dotColor: LAYER_COLORS.aircraft,
+    kicker: 'MILITARY AIRCRAFT',
+    title,
+    rows,
+    footer: 'Source: adsb.lol',
+  })
 }
 
 function filterTcStorms(geojson) {
@@ -373,9 +471,9 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
             ],
             'circle-color': LAYER_COLORS.earthquakes,
             'circle-opacity': 0.85,
-            'circle-stroke-color': MARKER_STROKE,
-            'circle-stroke-width': 0.5,
-            'circle-stroke-opacity': 0.45,
+            'circle-stroke-color': CIRCLE_STROKE_COLOR,
+            'circle-stroke-width': CIRCLE_STROKE_WIDTH,
+            'circle-stroke-opacity': 1,
           },
         })
       }
@@ -389,22 +487,10 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
         map.on('click', 'quakes-layer', (e) => {
           const feature = e.features?.[0]
           if (!feature) return
-          const props = feature.properties || {}
-          const mag = props.mag != null ? props.mag : '—'
-          const place = props.place || 'Unknown location'
-          const eventTime = formatTime(props.time)
-          const updatedAt = formatTime(props.updated ?? lastFetchRef.current)
-
           popup?.remove()
           popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
             .setLngLat(e.lngLat)
-            .setHTML(
-              `<div style="color:var(--color-text);font-size:12px;line-height:1.45;">
-                <div style="font-weight:600;margin-bottom:4px;">M${escapeHtml(mag)} — ${escapeHtml(place)}</div>
-                <div style="color:var(--color-text-muted);margin-bottom:6px;">${escapeHtml(eventTime)}</div>
-                <div style="color:var(--color-text-muted);font-size:11px;">Source: USGS · updated ${escapeHtml(updatedAt)}</div>
-              </div>`,
-            )
+            .setHTML(buildEarthquakePopupHtml(feature, lastFetchRef.current))
             .addTo(map)
         })
 
@@ -436,9 +522,9 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
             'circle-radius': 6,
             'circle-color': LAYER_COLORS.storms,
             'circle-opacity': 0.85,
-            'circle-stroke-color': MARKER_STROKE,
-            'circle-stroke-width': 0.5,
-            'circle-stroke-opacity': 0.45,
+            'circle-stroke-color': CIRCLE_STROKE_COLOR,
+            'circle-stroke-width': CIRCLE_STROKE_WIDTH,
+            'circle-stroke-opacity': 1,
           },
         })
       }
@@ -453,22 +539,11 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
           const feature = e.features?.[0]
           if (!feature) return
           const props = feature.properties || {}
-          const name = props.name || props.eventname || 'Unknown event'
-          const country = props.country || '—'
-          const alertLevel = props.alertlevel || '—'
-          const dateRange = `${formatIsoDate(props.fromdate)} – ${formatIsoDate(props.todate)}`
 
           popup?.remove()
           popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
             .setLngLat(e.lngLat)
-            .setHTML(
-              `<div style="color:var(--color-text);font-size:12px;line-height:1.45;">
-                <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(name)}</div>
-                <div style="color:var(--color-text-muted);margin-bottom:4px;">${escapeHtml(country)} · Alert: ${escapeHtml(alertLevel)}</div>
-                <div style="color:var(--color-text-muted);margin-bottom:6px;">${escapeHtml(dateRange)}</div>
-                <div style="color:var(--color-text-muted);font-size:11px;">Source: GDACS</div>
-              </div>`,
-            )
+            .setHTML(buildStormPopupHtml(props))
             .addTo(map)
         })
 
@@ -564,9 +639,9 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
             ],
             'circle-color': LAYER_COLORS.wildfires,
             'circle-opacity': 0.85,
-            'circle-stroke-color': MARKER_STROKE,
-            'circle-stroke-width': 0.5,
-            'circle-stroke-opacity': 0.45,
+            'circle-stroke-color': CIRCLE_STROKE_COLOR,
+            'circle-stroke-width': CIRCLE_STROKE_WIDTH,
+            'circle-stroke-opacity': 1,
           },
         })
       }
@@ -581,21 +656,11 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
           const feature = e.features?.[0]
           if (!feature) return
           const props = feature.properties || {}
-          const frp = props.frp != null ? props.frp : '—'
-          const confidence = props.confidence || '—'
-          const detected = `${props.acq_date || '—'} ${props.acq_time || ''}`.trim()
 
           popup?.remove()
           popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
             .setLngLat(e.lngLat)
-            .setHTML(
-              `<div style="color:var(--color-text);font-size:12px;line-height:1.45;">
-                <div style="font-weight:600;margin-bottom:4px;">Active fire detection</div>
-                <div style="color:var(--color-text-muted);margin-bottom:4px;">FRP: ${escapeHtml(frp)} MW · Confidence: ${escapeHtml(confidence)}</div>
-                <div style="color:var(--color-text-muted);margin-bottom:6px;">Detected: ${escapeHtml(detected)} UTC</div>
-                <div style="color:var(--color-text-muted);font-size:11px;">Source: NASA FIRMS (VIIRS NOAA-20)</div>
-              </div>`,
-            )
+            .setHTML(buildWildfirePopupHtml(props))
             .addTo(map)
         })
 
