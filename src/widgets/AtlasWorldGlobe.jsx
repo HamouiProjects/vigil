@@ -20,6 +20,70 @@ const STORMS_REFRESH_MS = 300_000
 const AIRCRAFT_REFRESH_MS = 20_000
 const WILDFIRES_REFRESH_MS = 600_000
 const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] }
+const COUNTRIES_GEO_URL = '/ne_110m_admin_0_countries.geojson'
+const COUNTRIES_SOURCE_ID = 'countries-admin0'
+const COUNTRIES_FILL_LAYER_ID = 'countries-hover-fill'
+const COUNTRIES_LINE_LAYER_ID = 'countries-hover-outline'
+const MINOR_LABEL_LAYER_RE =
+  /(?:^|[-_])(?:city|cities|town|towns|village|hamlet|suburb|neighbour|neighbor|locality|metropolis|settlement|municipal|state|province|region|county|district|capital|adm1|admin-1|admin1|place-2|place-3|place_2|place_3|label_city|label_town|place-label)(?:$|[-_])/i
+const COUNTRY_LABEL_LAYER_RE =
+  /(?:^|[-_])(?:country|countries|adm0|admin-0|admin0|sovereign|nation|place-country|place_country|label_country)(?:$|[-_])/i
+
+function countryNameFromProps(props) {
+  if (!props) return null
+  return props.NAME || props.ADMIN || props.NAME_EN || props.NAME_LONG || null
+}
+
+function calmBasemapLabels(map) {
+  const style = map.getStyle()
+  if (!style?.layers) return
+
+  for (const layer of style.layers) {
+    if (layer.type !== 'symbol') continue
+    const layout = layer.layout || {}
+    if (layout['text-field'] == null) continue
+
+    const lid = layer.id.toLowerCase()
+    const filterStr = JSON.stringify(layer.filter ?? null)
+
+    const looksCountry =
+      COUNTRY_LABEL_LAYER_RE.test(lid) ||
+      /"class"[^\]]*"country"/.test(filterStr) ||
+      /"type"[^\]]*"country"/.test(filterStr)
+
+    const looksMinor =
+      !looksCountry &&
+      (MINOR_LABEL_LAYER_RE.test(lid) ||
+        /"class"[^\]]*"(?:city|town|village|hamlet|suburb|state|province|region|county|locality)"/.test(
+          filterStr,
+        ))
+
+    if (looksMinor) {
+      try {
+        map.setLayoutProperty(layer.id, 'visibility', 'none')
+      } catch {
+        /* layer not ready */
+      }
+      continue
+    }
+
+    if (looksCountry) {
+      try {
+        map.setPaintProperty(layer.id, 'text-opacity', 0.5)
+        map.setPaintProperty(layer.id, 'text-halo-width', 0)
+        map.setPaintProperty(layer.id, 'text-halo-color', 'rgba(0,0,0,0)')
+        const size = layout['text-size']
+        if (typeof size === 'number') {
+          map.setLayoutProperty(layer.id, 'text-size', Math.max(7, size * 0.55))
+        } else {
+          map.setLayoutProperty(layer.id, 'text-size', 9)
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
 
 // ICAO Annex 10 address blocks — flightaware/dump1090 public_html/flags.js (readsb/tar1090 table)
 const ICAO_COUNTRY_RANGES = [
@@ -505,6 +569,7 @@ void fitBoundsStub
 
 export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
   const containerRef = useRef(null)
+  const countryReadoutRef = useRef(null)
   const mapRef = useRef(null)
   const rafRef = useRef(null)
   const pausedRef = useRef(paused)
@@ -518,6 +583,8 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
   const wildfiresGeoRef = useRef(null)
   const lastFetchRef = useRef(null)
   const aircraftPhotoCacheRef = useRef(new Map())
+  const countriesGeoRef = useRef(null)
+  const hoveredCountryIdRef = useRef(null)
 
   pausedRef.current = paused
   layersRef.current = layers
@@ -667,6 +734,32 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
     let stormListenersBound = false
     let aircraftListenersBound = false
     let wildfiresListenersBound = false
+    let countriesHoverListenersBound = false
+
+    const updateCountryReadout = (name) => {
+      const el = countryReadoutRef.current
+      if (!el) return
+      if (name) {
+        el.textContent = name
+        el.style.display = 'block'
+      } else {
+        el.textContent = ''
+        el.style.display = 'none'
+      }
+    }
+
+    const clearCountryHover = () => {
+      const hoveredId = hoveredCountryIdRef.current
+      if (hoveredId != null && map.getSource(COUNTRIES_SOURCE_ID)) {
+        try {
+          map.setFeatureState({ source: COUNTRIES_SOURCE_ID, id: hoveredId }, { hover: false })
+        } catch {
+          /* feature may have been removed on style swap */
+        }
+      }
+      hoveredCountryIdRef.current = null
+      updateCountryReadout(null)
+    }
 
     const clearWatchdog = () => {
       if (watchdogTimer != null) {
@@ -707,6 +800,88 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
           'sky-type': 'atmosphere',
           'sky-atmosphere-sun': [0.0, 0.0],
           'sky-atmosphere-sun-intensity': 12,
+        })
+      }
+    }
+
+    const ensureCountryHoverLayers = () => {
+      const geo = countriesGeoRef.current
+      if (!geo) return
+
+      if (!map.getSource(COUNTRIES_SOURCE_ID)) {
+        map.addSource(COUNTRIES_SOURCE_ID, {
+          type: 'geojson',
+          data: geo,
+          generateId: true,
+        })
+      } else {
+        map.getSource(COUNTRIES_SOURCE_ID).setData(geo)
+      }
+
+      const beforeId = map.getLayer('quakes-layer') ? 'quakes-layer' : undefined
+
+      if (!map.getLayer(COUNTRIES_FILL_LAYER_ID)) {
+        map.addLayer(
+          {
+            id: COUNTRIES_FILL_LAYER_ID,
+            type: 'fill',
+            source: COUNTRIES_SOURCE_ID,
+            paint: {
+              'fill-color': '#E2E8F0',
+              'fill-opacity': [
+                'case',
+                ['boolean', ['feature-state', 'hover'], false],
+                0.1,
+                0,
+              ],
+            },
+          },
+          beforeId,
+        )
+      }
+
+      if (!map.getLayer(COUNTRIES_LINE_LAYER_ID)) {
+        map.addLayer(
+          {
+            id: COUNTRIES_LINE_LAYER_ID,
+            type: 'line',
+            source: COUNTRIES_SOURCE_ID,
+            paint: {
+              'line-color': '#E2E8F0',
+              'line-width': 1,
+              'line-opacity': [
+                'case',
+                ['boolean', ['feature-state', 'hover'], false],
+                0.5,
+                0,
+              ],
+            },
+          },
+          beforeId,
+        )
+      }
+
+      if (!countriesHoverListenersBound) {
+        countriesHoverListenersBound = true
+
+        map.on('mousemove', COUNTRIES_FILL_LAYER_ID, (e) => {
+          const feature = e.features?.[0]
+          if (!feature) return
+
+          if (hoveredCountryIdRef.current != null && hoveredCountryIdRef.current !== feature.id) {
+            map.setFeatureState(
+              { source: COUNTRIES_SOURCE_ID, id: hoveredCountryIdRef.current },
+              { hover: false },
+            )
+          }
+
+          hoveredCountryIdRef.current = feature.id
+          map.setFeatureState({ source: COUNTRIES_SOURCE_ID, id: feature.id }, { hover: true })
+          updateCountryReadout(countryNameFromProps(feature.properties))
+        })
+
+        map.on('mouseleave', COUNTRIES_FILL_LAYER_ID, () => {
+          clearCountryHover()
         })
       }
     }
@@ -987,7 +1162,10 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
       advanceInFlight = false
       styleLocked = true
       clearWatchdog()
+      clearCountryHover()
       applyGlobeAtmosphere()
+      calmBasemapLabels(map)
+      ensureCountryHoverLayers()
       ensureQuakesLayer()
       ensureStormsLayer()
       ensureAircraftLayer()
@@ -1072,8 +1250,20 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
     }
     rafRef.current = requestAnimationFrame(tick)
 
+    fetch(COUNTRIES_GEO_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error('countries geo unavailable')
+        return res.json()
+      })
+      .then((data) => {
+        countriesGeoRef.current = data
+        if (map.isStyleLoaded()) ensureCountryHoverLayers()
+      })
+      .catch(() => {})
+
     return () => {
       resetEaseToken += 1
+      clearCountryHover()
       popup?.remove()
       cancelAnimationFrame(rafRef.current)
       clearTimeout(idleTimerRef.current)
@@ -1085,13 +1275,24 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
 
   return (
     <div
-      ref={containerRef}
+      className="atlas-world-globe-wrap"
       style={{
+        position: 'relative',
         width: '100%',
         height: '100%',
         minHeight: 0,
         background: 'var(--color-bg)',
       }}
-    />
+    >
+      <div
+        ref={containerRef}
+        style={{ width: '100%', height: '100%', minHeight: 0 }}
+      />
+      <div
+        ref={countryReadoutRef}
+        className="atlas-country-readout"
+        aria-hidden="true"
+      />
+    </div>
   )
 }
