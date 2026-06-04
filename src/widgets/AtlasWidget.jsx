@@ -3,12 +3,20 @@ import AtlasWorldGlobe, { LAYER_COLORS } from './AtlasWorldGlobe'
 
 const DEFAULT_GLOBE_LAYERS = { wildfires: false, earthquakes: true, storms: false, aircraft: false }
 
+/** Muted chip only — globe marker + legend stay on LAYER_COLORS.aircraft */
+const AIRCRAFT_CHIP_COLOR = '#92A2B5'
+
 const LAYER_DEFS = [
   { key: 'wildfires',   label: 'Wildfires',   color: LAYER_COLORS.wildfires },
   { key: 'earthquakes', label: 'Earthquakes', color: LAYER_COLORS.earthquakes },
   { key: 'storms',      label: 'Storms',      color: LAYER_COLORS.storms },
-  { key: 'aircraft',    label: 'Aircraft',    color: LAYER_COLORS.aircraft },
+  { key: 'aircraft',    label: 'Aircraft',    color: LAYER_COLORS.aircraft, chipColor: AIRCRAFT_CHIP_COLOR },
 ]
+
+function layerChipColor(def, on) {
+  if (!on) return null
+  return def.chipColor ?? def.color
+}
 
 const COMING_SOON = [
   {
@@ -221,15 +229,34 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
 
       {mapMode === 'world' && !barsCollapsed && (
         <div style={barStyle} onPointerDownCapture={e => e.stopPropagation()}>
-          {LAYER_DEFS.map(({ key, label, color }) => {
+          {LAYER_DEFS.map((def) => {
+            const { key, label, color } = def
             const on = layers[key]
+            const chipColor = layerChipColor(def, on)
             return (
               <button
                 key={key}
                 onClick={() => toggleLayer(key)}
-                style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 6px', border: `1px solid ${on ? color : 'rgba(255,255,255,0.15)'}`, borderRadius: 2, background: 'transparent', color: on ? color : 'var(--text-muted, #484f58)', fontFamily: 'var(--font-mono, JetBrains Mono)', fontSize: 11, textTransform: 'uppercase', cursor: 'pointer', lineHeight: 1, letterSpacing: '0.5px', transition: 'color 0.15s, border-color 0.15s', flexShrink: 0 }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '3px 6px',
+                  border: `1px solid ${on ? chipColor : 'var(--color-border)'}`,
+                  borderRadius: 2,
+                  background: 'transparent',
+                  color: on ? chipColor : 'var(--color-text-muted)',
+                  fontFamily: 'var(--font-mono, JetBrains Mono)',
+                  fontSize: 11,
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                  lineHeight: 1,
+                  letterSpacing: '0.5px',
+                  transition: 'color 0.15s, border-color 0.15s',
+                  flexShrink: 0,
+                }}
               >
-                <span style={{ fontSize: 9 }}>{on ? '●' : '○'}</span>
+                <span style={{ fontSize: 9, color: on ? chipColor : 'inherit' }}>{on ? '●' : '○'}</span>
                 {label}
               </button>
             )

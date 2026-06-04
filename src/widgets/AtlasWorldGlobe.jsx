@@ -301,13 +301,16 @@ function formatIsoDate(iso) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+const POPUP_BODY_STYLE =
+  'padding:10px 12px;color:var(--color-text-primary);font-size:12px;line-height:1.45;min-width:200px;'
+
 function popupRowsHtml(rows) {
   return rows
     .map(
       ([label, value]) =>
         `<div style="margin-bottom:3px;font-size:12px;line-height:1.4;">
           <span style="color:var(--color-text-muted);">${escapeHtml(label)}</span>
-          <span style="color:var(--color-text);"> ${escapeHtml(value)}</span>
+          <span style="color:var(--color-text-primary);"> ${escapeHtml(value)}</span>
         </div>`,
     )
     .join('')
@@ -319,9 +322,9 @@ function buildPhotoBlock(photo) {
   const creditInner = photo.link
     ? `<a href="${escapeHtml(photo.link)}" target="_blank" rel="noopener" style="color:var(--color-text-muted);text-decoration:none;">© ${escapeHtml(photographer)} · Planespotters</a>`
     : `© ${escapeHtml(photographer)} · Planespotters`
-  return `<div style="margin:0 0 8px 0;">
-    <img src="${escapeHtml(photo.src)}" alt="" style="width:100%;max-height:180px;object-fit:cover;border-radius:3px;display:block;" />
-    <div style="font-size:9px;padding:4px 0 0;color:var(--color-text-muted);">${creditInner}</div>
+  return `<div>
+    <img src="${escapeHtml(photo.src)}" alt="" style="width:100%;max-height:180px;object-fit:cover;display:block;border-radius:3px 3px 0 0;" />
+    <div style="font-size:9px;padding:6px 12px;color:var(--color-text-muted);border-bottom:1px solid var(--color-border);background:var(--color-surface-2);">${creditInner}</div>
   </div>`
 }
 
@@ -329,12 +332,12 @@ function buildPopupCard({ dotColor, kicker, title, titleRows, rows, footer, phot
   const titleRowsHtml = titleRows?.length ? popupRowsHtml(titleRows) : ''
   const rowsHtml = rows?.length ? popupRowsHtml(rows) : ''
 
-  return `${photoHtml || ''}<div style="color:var(--color-text);font-size:12px;line-height:1.45;min-width:200px;">
+  return `${photoHtml || ''}<div style="${POPUP_BODY_STYLE}">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-      <span style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;border:1px solid rgba(8,11,19,0.35);"></span>
+      <span style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;border:1px solid var(--color-border);"></span>
       <span style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-text-muted);">${escapeHtml(kicker)}</span>
     </div>
-    <div style="font-weight:600;font-size:13px;margin-bottom:6px;line-height:1.35;">${escapeHtml(title)}</div>
+    <div style="font-weight:600;font-size:13px;margin-bottom:6px;line-height:1.35;color:var(--color-text-primary);">${escapeHtml(title)}</div>
     ${titleRowsHtml}
     ${rowsHtml}
     <div style="color:var(--color-text-muted);font-size:10px;margin-top:8px;padding-top:6px;border-top:1px solid var(--color-border);">${escapeHtml(footer)}</div>
