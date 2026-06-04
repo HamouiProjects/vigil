@@ -160,6 +160,41 @@ function countryNameFromProps(props) {
   return props.NAME || props.ADMIN || props.NAME_EN || props.NAME_LONG || null
 }
 
+function pointInRing(lng, lat, ring) {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1]
+    const xj = ring[j][0], yj = ring[j][1]
+    const hit = ((yi > lat) !== (yj > lat)) && (lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi)
+    if (hit) inside = !inside
+  }
+  return inside
+}
+
+function pointInGeometry(lng, lat, geometry) {
+  if (!geometry) return false
+  const polys = geometry.type === 'MultiPolygon' ? geometry.coordinates
+    : geometry.type === 'Polygon' ? [geometry.coordinates] : []
+  for (const poly of polys) {
+    if (!poly?.[0]?.length) continue
+    if (!pointInRing(lng, lat, poly[0])) continue
+    let inHole = false
+    for (let h = 1; h < poly.length; h++) {
+      if (pointInRing(lng, lat, poly[h])) { inHole = true; break }
+    }
+    if (!inHole) return true
+  }
+  return false
+}
+
+function countryNameAtLngLat(lng, lat, geo) {
+  if (!geo?.features) return null
+  for (const f of geo.features) {
+    if (pointInGeometry(lng, lat, f.geometry)) return countryNameFromProps(f.properties)
+  }
+  return null
+}
+
 /** Subtle dial-back for all place name labels (countries through cities); never hides layers. */
 function calmBasemapLabels(map) {
   const style = map.getStyle()
@@ -1303,10 +1338,8 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
           if (!feature) return
           const props = feature.properties || {}
 
-          const cprops = map.queryRenderedFeatures(e.point, {
-            layers: [COUNTRIES_FILL_LAYER_ID],
-          })?.[0]?.properties
-          const country = cprops ? countryNameFromProps(cprops) : null
+          const ll = e.lngLat
+          const country = countryNameAtLngLat(ll.lng, ll.lat, countriesGeoRef.current)
           const wildfireQuery = country ? `${country} wildfire` : 'wildfire'
 
           popup?.remove()
