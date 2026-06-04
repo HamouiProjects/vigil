@@ -479,7 +479,7 @@ function stormNewsSearchQuery(name) {
 function buildNewsSearchButtonHtml(query) {
   const q = (query || '').trim()
   if (!q) return ''
-  return `<button type="button" class="vigil-popup-news-search" data-vigil-search="${escapeAttr(q)}" style="display:block;width:100%;margin-top:6px;padding:4px 0;border:none;background:transparent;color:var(--color-text-secondary);font-size:10px;text-align:left;cursor:pointer;font-family:inherit;">Search news ↗</button>`
+  return `<button type="button" class="vigil-popup-news-search" data-vigil-search="${escapeAttr(q)}" style="display:inline-flex;align-items:center;gap:5px;margin-top:10px;padding:5px 10px;border:1px solid var(--color-brand);border-radius:3px;background:var(--color-brand-tint);color:var(--color-brand);font-size:11px;letter-spacing:0.04em;cursor:pointer;font-family:inherit;">Search news ↗</button>`
 }
 
 function attachPopupNewsSearchButton(popup) {
@@ -488,10 +488,12 @@ function attachPopupNewsSearchButton(popup) {
   const btn = root.querySelector('[data-vigil-search]')
   if (!btn) return
   btn.addEventListener('mouseenter', () => {
-    btn.style.color = 'var(--color-brand)'
+    btn.style.background = 'var(--color-brand)'
+    btn.style.color = 'var(--color-on-brand)'
   })
   btn.addEventListener('mouseleave', () => {
-    btn.style.color = 'var(--color-text-secondary)'
+    btn.style.background = 'var(--color-brand-tint)'
+    btn.style.color = 'var(--color-brand)'
   })
   btn.addEventListener('click', (ev) => {
     ev.preventDefault()
