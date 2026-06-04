@@ -993,6 +993,13 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
     })
     mapRef.current = map
 
+    map.on('click', (e) => {
+      const markerHits = map.queryRenderedFeatures(e.point, { layers: DATA_MARKER_LAYERS })
+      if (markerHits.length) return
+      const country = countryNameAtLngLat(e.lngLat.lng, e.lngLat.lat, countriesGeoRef.current)
+      if (country) dispatchNewsSearch(country)
+    })
+
     const applyTheme = () => {
       applyGlobeTheme(readGlobeTheme(), map, {
         wrapEl: wrapRef.current,
@@ -1088,13 +1095,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
 
         map.on('mouseleave', COUNTRIES_FILL_LAYER_ID, () => {
           clearCountryHover()
-        })
-
-        map.on('click', (e) => {
-          const markerHits = map.queryRenderedFeatures(e.point, { layers: DATA_MARKER_LAYERS })
-          if (markerHits.length) return
-          const country = countryNameAtLngLat(e.lngLat.lng, e.lngLat.lat, countriesGeoRef.current)
-          if (country) dispatchNewsSearch(country)
         })
       }
     }
