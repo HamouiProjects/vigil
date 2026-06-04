@@ -68,6 +68,8 @@ function applyGlobeTheme(theme, map, { wrapEl, mapContainerEl } = {}) {
     /* map not fully ready */
   }
 
+  if (!map.isStyleLoaded?.()) return
+
   if (typeof map.setProjection === 'function') {
     map.setProjection({ type: 'globe' })
   }
@@ -89,8 +91,6 @@ function applyGlobeTheme(theme, map, { wrapEl, mapContainerEl } = {}) {
       })
     }
   }
-
-  if (!map.isStyleLoaded?.()) return
 
   const style = map.getStyle()
   if (!style?.layers) return
