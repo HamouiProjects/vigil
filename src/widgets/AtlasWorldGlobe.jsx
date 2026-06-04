@@ -9,7 +9,9 @@ const IDLE_MS = 3000
 const ROTATE_LNG_PER_FRAME = 0.04
 const USGS_QUAKES_URL =
   'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson'
+const GDACS_STORMS_URL = 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP'
 const QUAKES_REFRESH_MS = 120_000
+const STORMS_REFRESH_MS = 300_000
 const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] }
 
 function buildStyleChain() {
@@ -32,6 +34,20 @@ function escapeHtml(value) {
 function formatTime(epochMs) {
   if (epochMs == null || Number.isNaN(Number(epochMs))) return '—'
   return new Date(Number(epochMs)).toLocaleString()
+}
+
+function formatIsoDate(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return String(iso)
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+function filterTcStorms(geojson) {
+  const features = (geojson?.features || []).filter(
+    (f) => f.properties?.eventtype === 'TC',
+  )
+  return { type: 'FeatureCollection', features }
 }
 
 /** Stub for later country-click phase — not wired yet. */
@@ -57,6 +73,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
   const idleTimerRef = useRef(null)
   const lngRef = useRef(0)
   const quakesGeoRef = useRef(null)
+  const stormsGeoRef = useRef(null)
   const lastFetchRef = useRef(null)
 
   pausedRef.current = paused
@@ -87,6 +104,30 @@ export default function AtlasWorldGlobe({ paused, layers }) {
   }, [])
 
   useEffect(() => {
+    let intervalId = null
+
+    const fetchStorms = async () => {
+      if (pausedRef.current) return
+      try {
+        const res = await fetch(GDACS_STORMS_URL)
+        if (!res.ok) return
+        const raw = await res.json()
+        const geojson = filterTcStorms(raw)
+        stormsGeoRef.current = geojson
+        const map = mapRef.current
+        map?.getSource('storms')?.setData(geojson)
+      } catch {
+        /* ignore network errors */
+      }
+    }
+
+    fetchStorms()
+    intervalId = setInterval(fetchStorms, STORMS_REFRESH_MS)
+
+    return () => clearInterval(intervalId)
+  }, [])
+
+  useEffect(() => {
     const map = mapRef.current
     if (!map || !map.isStyleLoaded()) return
     const layer = map.getLayer('quakes-layer')
@@ -94,6 +135,15 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     const visible = layers?.earthquakes ? 'visible' : 'none'
     map.setLayoutProperty('quakes-layer', 'visibility', visible)
   }, [layers?.earthquakes])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    const layer = map.getLayer('storms-layer')
+    if (!layer) return
+    const visible = layers?.storms ? 'visible' : 'none'
+    map.setLayoutProperty('storms-layer', 'visibility', visible)
+  }, [layers?.storms])
 
   useEffect(() => {
     const container = containerRef.current
@@ -106,6 +156,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     let watchdogTimer = null
     let popup = null
     let quakeListenersBound = false
+    let stormListenersBound = false
 
     const clearWatchdog = () => {
       if (watchdogTimer != null) {
@@ -221,6 +272,70 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       }
     }
 
+    const ensureStormsLayer = () => {
+      if (!map.getSource('storms')) {
+        map.addSource('storms', {
+          type: 'geojson',
+          data: stormsGeoRef.current || EMPTY_GEOJSON,
+        })
+      } else if (stormsGeoRef.current) {
+        map.getSource('storms').setData(stormsGeoRef.current)
+      }
+
+      if (!map.getLayer('storms-layer')) {
+        map.addLayer({
+          id: 'storms-layer',
+          type: 'circle',
+          source: 'storms',
+          paint: {
+            'circle-radius': 6,
+            'circle-color': '#38BDF8',
+            'circle-opacity': 0.8,
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 1,
+            'circle-stroke-opacity': 0.35,
+          },
+        })
+      }
+
+      const visible = layersRef.current?.storms ? 'visible' : 'none'
+      map.setLayoutProperty('storms-layer', 'visibility', visible)
+
+      if (!stormListenersBound) {
+        stormListenersBound = true
+
+        map.on('click', 'storms-layer', (e) => {
+          const feature = e.features?.[0]
+          if (!feature) return
+          const props = feature.properties || {}
+          const name = props.name || props.eventname || 'Unknown event'
+          const country = props.country || '—'
+          const alertLevel = props.alertlevel || '—'
+          const dateRange = `${formatIsoDate(props.fromdate)} – ${formatIsoDate(props.todate)}`
+
+          popup?.remove()
+          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
+            .setLngLat(e.lngLat)
+            .setHTML(
+              `<div style="color:var(--color-text);font-size:12px;line-height:1.45;">
+                <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(name)}</div>
+                <div style="color:var(--color-text-muted);margin-bottom:4px;">${escapeHtml(country)} · Alert: ${escapeHtml(alertLevel)}</div>
+                <div style="color:var(--color-text-muted);margin-bottom:6px;">${escapeHtml(dateRange)}</div>
+                <div style="color:var(--color-text-muted);font-size:11px;">Source: GDACS</div>
+              </div>`,
+            )
+            .addTo(map)
+        })
+
+        map.on('mouseenter', 'storms-layer', () => {
+          map.getCanvas().style.cursor = 'pointer'
+        })
+        map.on('mouseleave', 'storms-layer', () => {
+          map.getCanvas().style.cursor = ''
+        })
+      }
+    }
+
     const tryAdvanceStyle = () => {
       if (styleLocked) return
       if (map.isStyleLoaded()) {
@@ -247,6 +362,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       clearWatchdog()
       applyGlobeAtmosphere()
       ensureQuakesLayer()
+      ensureStormsLayer()
     }
 
     const markInteracting = () => {
