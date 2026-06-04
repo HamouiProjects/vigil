@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import AtlasWorldGlobe from './AtlasWorldGlobe'
 
 const DEFAULT_GLOBE_LAYERS = { wildfires: false, earthquakes: true, storms: false, aircraft: false }
@@ -32,6 +32,13 @@ const IFRAME_CREDIT = {
   cyber:    'via Check Point',
 }
 
+const EMBEDDED_SOURCE_LABELS = {
+  conflict: 'Conflict',
+  marine: 'Marine',
+  flights: 'Flights',
+  cyber: 'Cyber',
+}
+
 const TABS = [
   { key: 'world',    label: 'WORLD' },
   { key: 'conflict', label: 'CONFLICT' },
@@ -55,7 +62,24 @@ const tabBtnStyle = (active) => ({
   transition: 'color 0.15s, border-color 0.15s',
 })
 
-export default function AtlasWidget({ id, paused, config, onSaveConfig }) {
+const sourcesPanelStyle = {
+  position: 'absolute',
+  top: 8,
+  right: 8,
+  zIndex: 25,
+  maxWidth: 280,
+  padding: '10px 28px 10px 12px',
+  background: 'var(--color-surface-2)',
+  border: '1px solid var(--color-border)',
+  borderRadius: 3,
+  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
+  fontFamily: 'var(--font-sans)',
+  fontSize: 11,
+  lineHeight: 1.45,
+  color: 'var(--color-text-secondary)',
+}
+
+export default function AtlasWidget({ id, paused, config, onSaveConfig, setActions }) {
   const layers = config.layers ?? DEFAULT_GLOBE_LAYERS
   const mapMode = config.mapMode ?? 'world'
 
@@ -65,6 +89,12 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig }) {
   onSaveConfigRef.current = onSaveConfig
 
   const [barsCollapsed, setBarsCollapsed] = useState(false)
+  const [showSources, setShowSources] = useState(false)
+  const [refreshNonce, setRefreshNonce] = useState(0)
+  const [refreshSpinning, setRefreshSpinning] = useState(false)
+
+  const sourcesPanelRef = useRef(null)
+  const sourcesToggleRef = useRef(null)
 
   function toggleLayer(key) {
     const cur = configRef.current.layers ?? DEFAULT_GLOBE_LAYERS
@@ -75,6 +105,63 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig }) {
     if (mode === (configRef.current.mapMode ?? 'world')) return
     onSaveConfigRef.current({ ...configRef.current, mapMode: mode })
   }
+
+  function handleRefresh() {
+    setRefreshNonce((n) => n + 1)
+    setRefreshSpinning(true)
+    window.setTimeout(() => setRefreshSpinning(false), 800)
+  }
+
+  useEffect(() => {
+    if (!showSources) return
+    const onPointerDown = (e) => {
+      if (sourcesPanelRef.current?.contains(e.target)) return
+      if (sourcesToggleRef.current?.contains(e.target)) return
+      setShowSources(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [showSources])
+
+  useEffect(() => {
+    setActions?.(
+      <>
+        <button
+          type="button"
+          className="widget-btn"
+          onClick={() => setBarsCollapsed((v) => !v)}
+          title={barsCollapsed ? 'Expand' : 'Collapse'}
+        >
+          {barsCollapsed ? '▴' : '▾'}
+        </button>
+        <button
+          type="button"
+          className="widget-btn"
+          onClick={handleRefresh}
+          title="Refresh"
+        >
+          <span
+            style={
+              refreshSpinning
+                ? { display: 'inline-block', animation: 'ns-spin 0.8s linear infinite' }
+                : undefined
+            }
+          >
+            ↻
+          </span>
+        </button>
+        <button
+          ref={sourcesToggleRef}
+          type="button"
+          className="widget-btn"
+          onClick={() => setShowSources((v) => !v)}
+          title="Sources & attribution"
+        >
+          ?
+        </button>
+      </>,
+    )
+  }, [setActions, barsCollapsed, showSources, refreshSpinning])
 
   const iframeSrc = (key) => (mapMode === key && !paused) ? IFRAME_URLS[key] : 'about:blank'
 
@@ -87,11 +174,6 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig }) {
               {label}
             </button>
           ))}
-          <button
-            onClick={() => setBarsCollapsed(true)}
-            title="Collapse"
-            style={{ marginLeft: 'auto', width: 20, height: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid var(--border)', borderRadius: 2, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 10, padding: 0 }}
-          >▾</button>
         </div>
       )}
 
@@ -153,17 +235,74 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig }) {
       )}
 
       <div style={{ flex: 1, minHeight: 0, width: '100%', position: 'relative', overflow: 'hidden' }}>
-        {barsCollapsed && (
-          <button
-            onClick={() => setBarsCollapsed(false)}
-            title="Expand"
-            style={{ position: 'absolute', top: 8, right: 8, zIndex: 20, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13,17,23,0.85)', border: '1px solid var(--border)', borderRadius: 2, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 10, padding: 0 }}
-          >▴</button>
+        {showSources && (
+          <div
+            ref={sourcesPanelRef}
+            style={sourcesPanelStyle}
+            onPointerDownCapture={e => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowSources(false)}
+              title="Close"
+              style={{
+                position: 'absolute',
+                top: 6,
+                right: 6,
+                width: 18,
+                height: 18,
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--color-text-muted)',
+                cursor: 'pointer',
+                fontSize: 12,
+                lineHeight: 1,
+              }}
+            >
+              ✕
+            </button>
+            <div style={{ fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              Sources & attribution
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ color: 'var(--color-text-muted)', marginBottom: 4, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                Globe layers
+              </div>
+              <div>Earthquakes — USGS · Storms — GDACS · Aircraft — adsb.lol · Wildfires — NASA FIRMS</div>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ color: 'var(--color-text-muted)', marginBottom: 4, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                Embedded views
+              </div>
+              <div>
+                {['conflict', 'marine', 'flights', 'cyber'].map((key, i, arr) => (
+                  <span key={key}>
+                    {EMBEDDED_SOURCE_LABELS[key]} — {IFRAME_CREDIT[key].replace(/^via /i, '')}
+                    {i < arr.length - 1 ? ' · ' : ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ color: 'var(--color-text-muted)', marginBottom: 4, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                Basemap
+              </div>
+              <div>© MapTiler · © OpenStreetMap</div>
+            </div>
+            <div style={{ color: 'var(--color-text-muted)', fontSize: 10, borderTop: '1px solid var(--color-border)', paddingTop: 6 }}>
+              Vigil tracks, it does not verify.
+            </div>
+          </div>
         )}
 
         {/* WORLD globe: stays mounted; paused when it is not the active tab so its pollers stop */}
         <div style={{ display: mapMode === 'world' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
-          <AtlasWorldGlobe paused={paused || mapMode !== 'world'} layers={layers} />
+          <AtlasWorldGlobe
+            paused={paused || mapMode !== 'world'}
+            layers={layers}
+            refreshNonce={refreshNonce}
+          />
         </div>
 
         {['conflict', 'marine', 'flights', 'cyber'].map(key => (
@@ -174,9 +313,6 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig }) {
               title={`Atlas ${key}`}
               allowFullScreen
             />
-            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, textAlign: 'center', padding: '2px 0', fontSize: 9, color: 'var(--text-muted)', background: 'rgba(10,12,16,0.6)', letterSpacing: '0.04em', pointerEvents: 'none' }}>
-              {IFRAME_CREDIT[key]} · tracks, does not verify
-            </div>
           </div>
         ))}
 

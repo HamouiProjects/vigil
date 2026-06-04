@@ -81,7 +81,7 @@ function fitBoundsStub(map, bounds, padding = 40) {
 void flyToStub
 void fitBoundsStub
 
-export default function AtlasWorldGlobe({ paused, layers }) {
+export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const rafRef = useRef(null)
@@ -121,7 +121,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     intervalId = setInterval(fetchQuakes, QUAKES_REFRESH_MS)
 
     return () => clearInterval(intervalId)
-  }, [])
+  }, [refreshNonce])
 
   useEffect(() => {
     let intervalId = null
@@ -145,7 +145,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     intervalId = setInterval(fetchStorms, STORMS_REFRESH_MS)
 
     return () => clearInterval(intervalId)
-  }, [])
+  }, [refreshNonce])
 
   useEffect(() => {
     let intervalId = null
@@ -168,7 +168,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     intervalId = setInterval(fetchAircraft, AIRCRAFT_REFRESH_MS)
 
     return () => clearInterval(intervalId)
-  }, [])
+  }, [refreshNonce])
 
   useEffect(() => {
     let intervalId = null
@@ -191,7 +191,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     intervalId = setInterval(fetchWildfires, WILDFIRES_REFRESH_MS)
 
     return () => clearInterval(intervalId)
-  }, [])
+  }, [refreshNonce])
 
   useEffect(() => {
     const map = mapRef.current
