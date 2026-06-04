@@ -2,18 +2,20 @@ import { useRef, useEffect } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
-const FALLBACK_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
-const FALLBACK_STYLE_2 = 'https://demotiles.maplibre.org/style.json'
+const OPENFREEMAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
+const DEMOTILES_STYLE = 'https://demotiles.maplibre.org/style.json'
+const STYLE_WATCHDOG_MS = 2500
 const IDLE_MS = 3000
 const ROTATE_LNG_PER_FRAME = 0.04
 
-function resolveStyleUrl() {
+function buildStyleChain() {
   const key = import.meta.env.VITE_MAPTILER_KEY
+  const chain = []
   if (key) {
-    return { url: `https://api.maptiler.com/maps/hybrid/style.json?key=${key}`, usedFallback: false }
+    chain.push(`https://api.maptiler.com/maps/hybrid/style.json?key=${key}`)
   }
-  console.info('[AtlasWorldGlobe] VITE_MAPTILER_KEY is missing; using fallback map style.')
-  return { url: FALLBACK_STYLE, usedFallback: true }
+  chain.push(OPENFREEMAP_STYLE, DEMOTILES_STYLE)
+  return chain
 }
 
 /** Stub for later country-click phase — not wired yet. */
@@ -39,7 +41,6 @@ export default function AtlasWorldGlobe({ paused, layers }) {
   const interactingRef = useRef(false)
   const idleTimerRef = useRef(null)
   const lngRef = useRef(0)
-  const styleFallbackAppliedRef = useRef(false)
 
   pausedRef.current = paused
 
@@ -47,11 +48,36 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     const container = containerRef.current
     if (!container) return
 
-    const { url: initialStyle, usedFallback } = resolveStyleUrl()
+    const chain = buildStyleChain()
+    let styleIndex = 0
+    let styleLocked = false
+    let advanceInFlight = false
+    let watchdogTimer = null
+
+    const clearWatchdog = () => {
+      if (watchdogTimer != null) {
+        clearTimeout(watchdogTimer)
+        watchdogTimer = null
+      }
+    }
+
+    const scheduleWatchdog = () => {
+      clearWatchdog()
+      watchdogTimer = setTimeout(() => {
+        watchdogTimer = null
+        if (styleLocked || map.isStyleLoaded()) {
+          styleLocked = true
+          clearWatchdog()
+          return
+        }
+        advanceInFlight = false
+        tryAdvanceStyle()
+      }, STYLE_WATCHDOG_MS)
+    }
 
     const map = new maplibregl.Map({
       container,
-      style: initialStyle,
+      style: chain[styleIndex],
       center: [lngRef.current, 20],
       zoom: 1.4,
       attributionControl: true,
@@ -71,6 +97,33 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       }
     }
 
+    const tryAdvanceStyle = () => {
+      if (styleLocked) return
+      if (map.isStyleLoaded()) {
+        styleLocked = true
+        clearWatchdog()
+        return
+      }
+      if (styleIndex >= chain.length - 1) return
+      if (advanceInFlight) return
+
+      const failed = chain[styleIndex]
+      styleIndex += 1
+      const next = chain[styleIndex]
+      console.info(`[AtlasWorldGlobe] Basemap style failed (${failed}); trying ${next}.`)
+
+      advanceInFlight = true
+      map.setStyle(next)
+      scheduleWatchdog()
+    }
+
+    const onStyleLoad = () => {
+      advanceInFlight = false
+      styleLocked = true
+      clearWatchdog()
+      applyGlobeAtmosphere()
+    }
+
     const markInteracting = () => {
       interactingRef.current = true
       clearTimeout(idleTimerRef.current)
@@ -79,7 +132,11 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       }, IDLE_MS)
     }
 
-    map.on('load', applyGlobeAtmosphere)
+    map.on('style.load', onStyleLoad)
+    map.on('error', () => {
+      if (styleLocked) return
+      if (!map.isStyleLoaded()) tryAdvanceStyle()
+    })
     map.on('dragstart', markInteracting)
     map.on('zoomstart', markInteracting)
     map.on('rotatestart', markInteracting)
@@ -87,14 +144,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     map.on('mousedown', markInteracting)
     map.on('wheel', markInteracting)
 
-    if (usedFallback) {
-      map.on('error', () => {
-        if (styleFallbackAppliedRef.current) return
-        styleFallbackAppliedRef.current = true
-        map.setStyle(FALLBACK_STYLE_2)
-        map.once('load', applyGlobeAtmosphere)
-      })
-    }
+    scheduleWatchdog()
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
@@ -112,6 +162,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     return () => {
       cancelAnimationFrame(rafRef.current)
       clearTimeout(idleTimerRef.current)
+      clearWatchdog()
       map.remove()
       mapRef.current = null
     }
