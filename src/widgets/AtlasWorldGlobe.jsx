@@ -658,7 +658,7 @@ function buildStormPopupHtml(props) {
   })
 }
 
-function buildWildfirePopupHtml(props) {
+function buildWildfirePopupHtml(props, newsSearchQuery) {
   const rows = []
   if (props.frp != null && props.frp !== '' && !Number.isNaN(Number(props.frp))) {
     rows.push(['Radiative power', `${props.frp} MW`])
@@ -673,6 +673,7 @@ function buildWildfirePopupHtml(props) {
     title: 'Active fire detection',
     rows,
     footer: 'Source: NASA FIRMS (VIIRS NOAA-20)',
+    newsSearchQuery,
   })
 }
 
@@ -1302,11 +1303,18 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
           if (!feature) return
           const props = feature.properties || {}
 
+          const cprops = map.queryRenderedFeatures(e.point, {
+            layers: [COUNTRIES_FILL_LAYER_ID],
+          })?.[0]?.properties
+          const country = cprops ? countryNameFromProps(cprops) : null
+          const wildfireQuery = country ? `${country} wildfire` : 'wildfire'
+
           popup?.remove()
           popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
             .setLngLat(e.lngLat)
-            .setHTML(buildWildfirePopupHtml(props))
+            .setHTML(buildWildfirePopupHtml(props, wildfireQuery))
             .addTo(map)
+          attachPopupNewsSearchButton(popup)
         })
 
         map.on('mouseenter', 'wildfires-layer', () => {
