@@ -13,12 +13,10 @@ const DEFAULT_GLOBE_LAT = 20
 const USGS_QUAKES_URL =
   'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson'
 const GDACS_STORMS_URL = 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP'
-const CONFLICT_GEO_URL = '/api/geo?source=gdelt'
 const AIRCRAFT_GEO_URL = '/api/geo?source=aircraft'
 const WILDFIRES_GEO_URL = '/api/geo?source=firms'
 const QUAKES_REFRESH_MS = 120_000
 const STORMS_REFRESH_MS = 300_000
-const CONFLICT_REFRESH_MS = 600_000
 const AIRCRAFT_REFRESH_MS = 20_000
 const WILDFIRES_REFRESH_MS = 600_000
 const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] }
@@ -94,7 +92,6 @@ export default function AtlasWorldGlobe({ paused, layers }) {
   const lngRef = useRef(0)
   const quakesGeoRef = useRef(null)
   const stormsGeoRef = useRef(null)
-  const conflictGeoRef = useRef(null)
   const aircraftGeoRef = useRef(null)
   const wildfiresGeoRef = useRef(null)
   const lastFetchRef = useRef(null)
@@ -146,29 +143,6 @@ export default function AtlasWorldGlobe({ paused, layers }) {
 
     fetchStorms()
     intervalId = setInterval(fetchStorms, STORMS_REFRESH_MS)
-
-    return () => clearInterval(intervalId)
-  }, [])
-
-  useEffect(() => {
-    let intervalId = null
-
-    const fetchConflict = async () => {
-      if (pausedRef.current) return
-      try {
-        const res = await fetch(CONFLICT_GEO_URL)
-        if (!res.ok) return
-        const geojson = await res.json()
-        conflictGeoRef.current = geojson
-        const map = mapRef.current
-        map?.getSource('conflict')?.setData(geojson)
-      } catch {
-        /* ignore network errors */
-      }
-    }
-
-    fetchConflict()
-    intervalId = setInterval(fetchConflict, CONFLICT_REFRESH_MS)
 
     return () => clearInterval(intervalId)
   }, [])
@@ -240,15 +214,6 @@ export default function AtlasWorldGlobe({ paused, layers }) {
   useEffect(() => {
     const map = mapRef.current
     if (!map || !map.isStyleLoaded()) return
-    const layer = map.getLayer('conflict-layer')
-    if (!layer) return
-    const visible = layers?.conflict ? 'visible' : 'none'
-    map.setLayoutProperty('conflict-layer', 'visibility', visible)
-  }, [layers?.conflict])
-
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !map.isStyleLoaded()) return
     const layer = map.getLayer('aircraft-layer')
     if (!layer) return
     const visible = layers?.aircraft ? 'visible' : 'none'
@@ -276,7 +241,6 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     let popup = null
     let quakeListenersBound = false
     let stormListenersBound = false
-    let conflictListenersBound = false
     let aircraftListenersBound = false
     let wildfiresListenersBound = false
 
@@ -458,75 +422,6 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       }
     }
 
-    const ensureConflictLayer = () => {
-      if (!map.getSource('conflict')) {
-        map.addSource('conflict', {
-          type: 'geojson',
-          data: conflictGeoRef.current || EMPTY_GEOJSON,
-        })
-      } else if (conflictGeoRef.current) {
-        map.getSource('conflict').setData(conflictGeoRef.current)
-      }
-
-      if (!map.getLayer('conflict-layer')) {
-        map.addLayer({
-          id: 'conflict-layer',
-          type: 'circle',
-          source: 'conflict',
-          paint: {
-            'circle-radius': [
-              'interpolate',
-              ['linear'],
-              ['coalesce', ['get', 'count'], 1],
-              1,
-              4,
-              50,
-              12,
-            ],
-            'circle-color': '#FF3333',
-            'circle-opacity': 0.7,
-            'circle-stroke-color': '#ffffff',
-            'circle-stroke-width': 1,
-            'circle-stroke-opacity': 0.35,
-          },
-        })
-      }
-
-      const visible = layersRef.current?.conflict ? 'visible' : 'none'
-      map.setLayoutProperty('conflict-layer', 'visibility', visible)
-
-      if (!conflictListenersBound) {
-        conflictListenersBound = true
-
-        map.on('click', 'conflict-layer', (e) => {
-          const feature = e.features?.[0]
-          if (!feature) return
-          const props = feature.properties || {}
-          const name = props.name || 'Unknown location'
-          const count = props.count != null ? props.count : '—'
-
-          popup?.remove()
-          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
-            .setLngLat(e.lngLat)
-            .setHTML(
-              `<div style="color:var(--color-text);font-size:12px;line-height:1.45;">
-                <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(name)}</div>
-                <div style="color:var(--color-text-muted);margin-bottom:6px;">${escapeHtml(count)} mentions</div>
-                <div style="color:var(--color-text-muted);font-size:11px;">Source: GDELT · activity signal · last 24h</div>
-              </div>`,
-            )
-            .addTo(map)
-        })
-
-        map.on('mouseenter', 'conflict-layer', () => {
-          map.getCanvas().style.cursor = 'pointer'
-        })
-        map.on('mouseleave', 'conflict-layer', () => {
-          map.getCanvas().style.cursor = ''
-        })
-      }
-    }
-
     const ensureAircraftLayer = () => {
       if (!map.getSource('aircraft')) {
         map.addSource('aircraft', {
@@ -688,7 +583,6 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       applyGlobeAtmosphere()
       ensureQuakesLayer()
       ensureStormsLayer()
-      ensureConflictLayer()
       ensureAircraftLayer()
       ensureWildfiresLayer()
     }

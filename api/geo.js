@@ -2,7 +2,6 @@ const EMPTY_FC = { type: 'FeatureCollection', features: [] }
 const AIRCRAFT_UPSTREAM = 'https://api.adsb.lol/v2/mil'
 
 const SOURCE_TTL_MS = {
-  gdelt: 600_000,
   aircraft: 15_000,
   firms: 900_000,
 }
@@ -51,19 +50,8 @@ function getFirmsUpstreamUrl() {
   return `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${mapKey}/VIIRS_NOAA20_NRT/world/1`
 }
 
-function getGdeltUpstreamUrl(query) {
-  const q =
-    query ||
-    '(airstrike OR shelling OR clashes OR militants OR offensive OR insurgents OR "armed conflict")'
-  return `https://api.gdeltproject.org/api/v2/geo/geo?query=${encodeURIComponent(q)}&format=GeoJSON&maxpoints=250`
-}
-
 function getUpstreamUrl(source, req) {
   switch (source) {
-    case 'gdelt': {
-      const q = (req.query.q || '').trim() || undefined
-      return getGdeltUpstreamUrl(q)
-    }
     case 'aircraft':
       return AIRCRAFT_UPSTREAM
     case 'firms':
@@ -130,29 +118,6 @@ function normalizeFirms(csvText) {
   }
 }
 
-function normalizeGdelt(raw) {
-  const features = (raw?.features || [])
-    .map((f) => {
-      if (!f?.geometry) return null
-      const props = f.properties || {}
-      const rawName = props.name ?? props.location ?? 'Unknown location'
-      const name = String(rawName).replace(/<[^>]*>/g, '').trim() || 'Unknown location'
-      let count = props.count
-      if (count == null && props.featurecount != null) count = props.featurecount
-      if (count == null) count = 1
-      count = Number(count)
-      if (Number.isNaN(count)) count = 1
-      return {
-        type: 'Feature',
-        geometry: f.geometry,
-        properties: { name, count },
-      }
-    })
-    .filter(Boolean)
-
-  return { type: 'FeatureCollection', features }
-}
-
 function normalizeAircraft(raw) {
   const ac = raw?.ac
   if (!Array.isArray(ac)) return EMPTY_FC
@@ -182,19 +147,6 @@ function normalizeAircraft(raw) {
   return { type: 'FeatureCollection', features }
 }
 
-async function fetchGdelt(query) {
-  const url = getGdeltUpstreamUrl(query)
-  const res = await fetch(url, { signal: AbortSignal.timeout(8000) })
-  let raw = null
-  try {
-    raw = await res.json()
-  } catch {
-    return EMPTY_FC
-  }
-  if (!res.ok || !raw?.features) return EMPTY_FC
-  return normalizeGdelt(raw)
-}
-
 async function fetchFirms() {
   if (!process.env.FIRMS_MAP_KEY) return EMPTY_FC
 
@@ -220,24 +172,6 @@ async function fetchAircraft() {
   }
   if (!res.ok || !Array.isArray(raw?.ac)) return EMPTY_FC
   return normalizeAircraft(raw)
-}
-
-async function handleGdelt(req) {
-  const q = (req.query.q || '').trim() || undefined
-  const params = { q: q ?? '' }
-  const key = cacheKey('gdelt', params)
-  const ttl = SOURCE_TTL_MS.gdelt
-
-  const fresh = getFreshCache(key, ttl)
-  if (fresh) return fresh
-
-  try {
-    const body = await fetchGdelt(q)
-    setCache(key, body)
-    return body
-  } catch {
-    return getStaleCache(key) ?? EMPTY_FC
-  }
 }
 
 async function handleFirms() {
@@ -300,10 +234,7 @@ async function handleDebugPassthrough(req, res, source) {
   }
 }
 
-function staleCacheKey(source, req) {
-  if (source === 'gdelt') {
-    return cacheKey('gdelt', { q: (req.query.q || '').trim() || '' })
-  }
+function staleCacheKey(source) {
   if (source === 'aircraft') return cacheKey('aircraft', {})
   if (source === 'firms') return cacheKey('firms', {})
   return null
@@ -325,9 +256,6 @@ export default async function handler(req, res) {
     let body = EMPTY_FC
 
     switch (source) {
-      case 'gdelt':
-        body = await handleGdelt(req)
-        break
       case 'aircraft':
         body = await handleAircraft()
         break
@@ -341,7 +269,7 @@ export default async function handler(req, res) {
     setGeoHeaders(res)
     return res.status(200).json(body)
   } catch {
-    const key = staleCacheKey(source, req)
+    const key = staleCacheKey(source)
     const stale = key ? getStaleCache(key) : null
     setGeoHeaders(res)
     return res.status(200).json(stale ?? EMPTY_FC)

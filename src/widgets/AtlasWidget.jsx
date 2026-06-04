@@ -1,14 +1,21 @@
 import { useState, useRef } from 'react'
 import AtlasWorldGlobe from './AtlasWorldGlobe'
 
-const DEFAULT_GLOBE_LAYERS = { conflict: true, wildfires: false, earthquakes: false, storms: false, aircraft: false }
+const DEFAULT_GLOBE_LAYERS = { wildfires: false, earthquakes: true, storms: false, aircraft: false }
 
 const LAYER_DEFS = [
-  { key: 'conflict',    label: 'Conflict',    color: '#FF3333' },
   { key: 'wildfires',   label: 'Wildfires',   color: '#FFD700' },
   { key: 'earthquakes', label: 'Earthquakes', color: '#FF8C42' },
   { key: 'storms',      label: 'Storms',      color: '#38BDF8' },
   { key: 'aircraft',    label: 'Aircraft',    color: '#4ADE80' },
+]
+
+const COMING_SOON = [
+  {
+    label: 'Conflict',
+    tag: 'SOON',
+    tooltip: 'Verified conflict feed — coming soon',
+  },
 ]
 
 const IFRAME_URLS = {
@@ -103,6 +110,45 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig }) {
               </button>
             )
           })}
+          {COMING_SOON.map(({ label, tag, tooltip }) => (
+            <span
+              key={label}
+              title={tooltip}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 6px',
+                border: '1px solid var(--color-border-muted, rgba(255,255,255,0.1))',
+                borderRadius: 2,
+                background: 'transparent',
+                color: 'var(--color-text-muted, #484f58)',
+                fontFamily: 'var(--font-mono, JetBrains Mono)',
+                fontSize: 11,
+                textTransform: 'uppercase',
+                cursor: 'default',
+                lineHeight: 1,
+                letterSpacing: '0.5px',
+                opacity: 0.55,
+                flexShrink: 0,
+              }}
+            >
+              <span style={{ fontSize: 9 }}>○</span>
+              {label}
+              <span
+                style={{
+                  fontSize: 8,
+                  padding: '1px 3px',
+                  border: '1px solid var(--color-border-muted, rgba(255,255,255,0.12))',
+                  borderRadius: 2,
+                  letterSpacing: '0.08em',
+                  opacity: 0.9,
+                }}
+              >
+                {tag}
+              </span>
+            </span>
+          ))}
         </div>
       )}
 
