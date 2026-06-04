@@ -5,8 +5,11 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 const OPENFREEMAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
 const DEMOTILES_STYLE = 'https://demotiles.maplibre.org/style.json'
 const STYLE_WATCHDOG_MS = 2500
-const IDLE_MS = 3000
-const ROTATE_LNG_PER_FRAME = 0.04
+const IDLE_MS = 180_000
+const ROTATE_LNG_PER_FRAME = 0.02
+const ROTATE_MAX_ZOOM = 2
+const DEFAULT_GLOBE_ZOOM = 1.4
+const DEFAULT_GLOBE_LAT = 20
 const USGS_QUAKES_URL =
   'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson'
 const GDACS_STORMS_URL = 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP'
@@ -301,8 +304,8 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     const map = new maplibregl.Map({
       container,
       style: chain[styleIndex],
-      center: [lngRef.current, 20],
-      zoom: 1.4,
+      center: [lngRef.current, DEFAULT_GLOBE_LAT],
+      zoom: DEFAULT_GLOBE_ZOOM,
       attributionControl: true,
     })
     mapRef.current = map
@@ -690,12 +693,47 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       ensureWildfiresLayer()
     }
 
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    let rotateSuppressed = false
+    let resetEaseToken = 0
+
+    const onIdleExpired = () => {
+      interactingRef.current = false
+      if (reducedMotion.matches) return
+
+      const m = mapRef.current
+      if (!m) return
+
+      if (m.getZoom() > ROTATE_MAX_ZOOM) {
+        const lng = m.getCenter().lng
+        lngRef.current = lng
+        rotateSuppressed = true
+        const token = ++resetEaseToken
+
+        m.easeTo({
+          center: [lng, DEFAULT_GLOBE_LAT],
+          zoom: DEFAULT_GLOBE_ZOOM,
+          duration: 1500,
+        })
+
+        const onMoveEnd = () => {
+          m.off('moveend', onMoveEnd)
+          if (token !== resetEaseToken) return
+          rotateSuppressed = false
+          lngRef.current = m.getCenter().lng
+        }
+        m.on('moveend', onMoveEnd)
+      } else {
+        lngRef.current = m.getCenter().lng
+      }
+    }
+
     const markInteracting = () => {
       interactingRef.current = true
+      resetEaseToken += 1
+      rotateSuppressed = false
       clearTimeout(idleTimerRef.current)
-      idleTimerRef.current = setTimeout(() => {
-        interactingRef.current = false
-      }, IDLE_MS)
+      idleTimerRef.current = setTimeout(onIdleExpired, IDLE_MS)
     }
 
     map.on('style.load', onStyleLoad)
@@ -712,20 +750,27 @@ export default function AtlasWorldGlobe({ paused, layers }) {
 
     scheduleWatchdog()
 
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
-
     const tick = () => {
       const m = mapRef.current
-      if (m && !pausedRef.current && !interactingRef.current && !reducedMotion.matches) {
+      const mayRotate =
+        m &&
+        !pausedRef.current &&
+        !interactingRef.current &&
+        !rotateSuppressed &&
+        !reducedMotion.matches &&
+        m.getZoom() <= ROTATE_MAX_ZOOM
+
+      if (mayRotate) {
         lngRef.current = (lngRef.current + ROTATE_LNG_PER_FRAME) % 360
         if (lngRef.current > 180) lngRef.current -= 360
-        m.setCenter([lngRef.current, 20], { duration: 0 })
+        m.setCenter([lngRef.current, DEFAULT_GLOBE_LAT], { duration: 0 })
       }
       rafRef.current = requestAnimationFrame(tick)
     }
     rafRef.current = requestAnimationFrame(tick)
 
     return () => {
+      resetEaseToken += 1
       popup?.remove()
       cancelAnimationFrame(rafRef.current)
       clearTimeout(idleTimerRef.current)
