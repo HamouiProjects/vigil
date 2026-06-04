@@ -12,10 +12,12 @@ const USGS_QUAKES_URL =
 const GDACS_STORMS_URL = 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP'
 const CONFLICT_GEO_URL = '/api/geo?source=gdelt'
 const AIRCRAFT_GEO_URL = '/api/geo?source=aircraft'
+const WILDFIRES_GEO_URL = '/api/geo?source=firms'
 const QUAKES_REFRESH_MS = 120_000
 const STORMS_REFRESH_MS = 300_000
 const CONFLICT_REFRESH_MS = 600_000
 const AIRCRAFT_REFRESH_MS = 20_000
+const WILDFIRES_REFRESH_MS = 600_000
 const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] }
 
 function buildStyleChain() {
@@ -91,6 +93,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
   const stormsGeoRef = useRef(null)
   const conflictGeoRef = useRef(null)
   const aircraftGeoRef = useRef(null)
+  const wildfiresGeoRef = useRef(null)
   const lastFetchRef = useRef(null)
 
   pausedRef.current = paused
@@ -191,6 +194,29 @@ export default function AtlasWorldGlobe({ paused, layers }) {
   }, [])
 
   useEffect(() => {
+    let intervalId = null
+
+    const fetchWildfires = async () => {
+      if (pausedRef.current) return
+      try {
+        const res = await fetch(WILDFIRES_GEO_URL)
+        if (!res.ok) return
+        const geojson = await res.json()
+        wildfiresGeoRef.current = geojson
+        const map = mapRef.current
+        map?.getSource('wildfires')?.setData(geojson)
+      } catch {
+        /* ignore network errors */
+      }
+    }
+
+    fetchWildfires()
+    intervalId = setInterval(fetchWildfires, WILDFIRES_REFRESH_MS)
+
+    return () => clearInterval(intervalId)
+  }, [])
+
+  useEffect(() => {
     const map = mapRef.current
     if (!map || !map.isStyleLoaded()) return
     const layer = map.getLayer('quakes-layer')
@@ -227,6 +253,15 @@ export default function AtlasWorldGlobe({ paused, layers }) {
   }, [layers?.aircraft])
 
   useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    const layer = map.getLayer('wildfires-layer')
+    if (!layer) return
+    const visible = layers?.wildfires ? 'visible' : 'none'
+    map.setLayoutProperty('wildfires-layer', 'visibility', visible)
+  }, [layers?.wildfires])
+
+  useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
@@ -240,6 +275,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     let stormListenersBound = false
     let conflictListenersBound = false
     let aircraftListenersBound = false
+    let wildfiresListenersBound = false
 
     const clearWatchdog = () => {
       if (watchdogTimer != null) {
@@ -549,6 +585,79 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       }
     }
 
+    const ensureWildfiresLayer = () => {
+      if (!map.getSource('wildfires')) {
+        map.addSource('wildfires', {
+          type: 'geojson',
+          data: wildfiresGeoRef.current || EMPTY_GEOJSON,
+        })
+      } else if (wildfiresGeoRef.current) {
+        map.getSource('wildfires').setData(wildfiresGeoRef.current)
+      }
+
+      if (!map.getLayer('wildfires-layer')) {
+        map.addLayer({
+          id: 'wildfires-layer',
+          type: 'circle',
+          source: 'wildfires',
+          paint: {
+            'circle-radius': [
+              'interpolate',
+              ['linear'],
+              ['get', 'frp'],
+              0,
+              2,
+              100,
+              5,
+              500,
+              8,
+            ],
+            'circle-color': '#FFD700',
+            'circle-opacity': 0.85,
+            'circle-stroke-color': '#0B0E13',
+            'circle-stroke-width': 0.5,
+            'circle-stroke-opacity': 0.5,
+          },
+        })
+      }
+
+      const visible = layersRef.current?.wildfires ? 'visible' : 'none'
+      map.setLayoutProperty('wildfires-layer', 'visibility', visible)
+
+      if (!wildfiresListenersBound) {
+        wildfiresListenersBound = true
+
+        map.on('click', 'wildfires-layer', (e) => {
+          const feature = e.features?.[0]
+          if (!feature) return
+          const props = feature.properties || {}
+          const frp = props.frp != null ? props.frp : '—'
+          const confidence = props.confidence || '—'
+          const detected = `${props.acq_date || '—'} ${props.acq_time || ''}`.trim()
+
+          popup?.remove()
+          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
+            .setLngLat(e.lngLat)
+            .setHTML(
+              `<div style="color:var(--color-text);font-size:12px;line-height:1.45;">
+                <div style="font-weight:600;margin-bottom:4px;">Active fire detection</div>
+                <div style="color:var(--color-text-muted);margin-bottom:4px;">FRP: ${escapeHtml(frp)} MW · Confidence: ${escapeHtml(confidence)}</div>
+                <div style="color:var(--color-text-muted);margin-bottom:6px;">Detected: ${escapeHtml(detected)} UTC</div>
+                <div style="color:var(--color-text-muted);font-size:11px;">Source: NASA FIRMS (VIIRS NOAA-20)</div>
+              </div>`,
+            )
+            .addTo(map)
+        })
+
+        map.on('mouseenter', 'wildfires-layer', () => {
+          map.getCanvas().style.cursor = 'pointer'
+        })
+        map.on('mouseleave', 'wildfires-layer', () => {
+          map.getCanvas().style.cursor = ''
+        })
+      }
+    }
+
     const tryAdvanceStyle = () => {
       if (styleLocked) return
       if (map.isStyleLoaded()) {
@@ -578,6 +687,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       ensureStormsLayer()
       ensureConflictLayer()
       ensureAircraftLayer()
+      ensureWildfiresLayer()
     }
 
     const markInteracting = () => {
