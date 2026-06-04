@@ -7,6 +7,10 @@ const DEMOTILES_STYLE = 'https://demotiles.maplibre.org/style.json'
 const STYLE_WATCHDOG_MS = 2500
 const IDLE_MS = 3000
 const ROTATE_LNG_PER_FRAME = 0.04
+const USGS_QUAKES_URL =
+  'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson'
+const QUAKES_REFRESH_MS = 120_000
+const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] }
 
 function buildStyleChain() {
   const key = import.meta.env.VITE_MAPTILER_KEY
@@ -16,6 +20,18 @@ function buildStyleChain() {
   }
   chain.push(OPENFREEMAP_STYLE, DEMOTILES_STYLE)
   return chain
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function formatTime(epochMs) {
+  if (epochMs == null || Number.isNaN(Number(epochMs))) return '—'
+  return new Date(Number(epochMs)).toLocaleString()
 }
 
 /** Stub for later country-click phase — not wired yet. */
@@ -32,17 +48,52 @@ void flyToStub
 void fitBoundsStub
 
 export default function AtlasWorldGlobe({ paused, layers }) {
-  void layers
-
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const rafRef = useRef(null)
   const pausedRef = useRef(paused)
+  const layersRef = useRef(layers)
   const interactingRef = useRef(false)
   const idleTimerRef = useRef(null)
   const lngRef = useRef(0)
+  const quakesGeoRef = useRef(null)
+  const lastFetchRef = useRef(null)
 
   pausedRef.current = paused
+  layersRef.current = layers
+
+  useEffect(() => {
+    let intervalId = null
+
+    const fetchQuakes = async () => {
+      if (pausedRef.current) return
+      try {
+        const res = await fetch(USGS_QUAKES_URL)
+        if (!res.ok) return
+        const geojson = await res.json()
+        quakesGeoRef.current = geojson
+        lastFetchRef.current = Date.now()
+        const map = mapRef.current
+        map?.getSource('quakes')?.setData(geojson)
+      } catch {
+        /* ignore network errors */
+      }
+    }
+
+    fetchQuakes()
+    intervalId = setInterval(fetchQuakes, QUAKES_REFRESH_MS)
+
+    return () => clearInterval(intervalId)
+  }, [])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    const layer = map.getLayer('quakes-layer')
+    if (!layer) return
+    const visible = layers?.earthquakes ? 'visible' : 'none'
+    map.setLayoutProperty('quakes-layer', 'visibility', visible)
+  }, [layers?.earthquakes])
 
   useEffect(() => {
     const container = containerRef.current
@@ -53,6 +104,8 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     let styleLocked = false
     let advanceInFlight = false
     let watchdogTimer = null
+    let popup = null
+    let quakeListenersBound = false
 
     const clearWatchdog = () => {
       if (watchdogTimer != null) {
@@ -97,6 +150,77 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       }
     }
 
+    const ensureQuakesLayer = () => {
+      if (!map.getSource('quakes')) {
+        map.addSource('quakes', {
+          type: 'geojson',
+          data: quakesGeoRef.current || EMPTY_GEOJSON,
+        })
+      } else if (quakesGeoRef.current) {
+        map.getSource('quakes').setData(quakesGeoRef.current)
+      }
+
+      if (!map.getLayer('quakes-layer')) {
+        map.addLayer({
+          id: 'quakes-layer',
+          type: 'circle',
+          source: 'quakes',
+          paint: {
+            'circle-radius': [
+              'interpolate',
+              ['linear'],
+              ['coalesce', ['get', 'mag'], 2],
+              2,
+              3,
+              7,
+              14,
+            ],
+            'circle-color': '#FF8C42',
+            'circle-opacity': 0.8,
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 1,
+            'circle-stroke-opacity': 0.35,
+          },
+        })
+      }
+
+      const visible = layersRef.current?.earthquakes ? 'visible' : 'none'
+      map.setLayoutProperty('quakes-layer', 'visibility', visible)
+
+      if (!quakeListenersBound) {
+        quakeListenersBound = true
+
+        map.on('click', 'quakes-layer', (e) => {
+          const feature = e.features?.[0]
+          if (!feature) return
+          const props = feature.properties || {}
+          const mag = props.mag != null ? props.mag : '—'
+          const place = props.place || 'Unknown location'
+          const eventTime = formatTime(props.time)
+          const updatedAt = formatTime(props.updated ?? lastFetchRef.current)
+
+          popup?.remove()
+          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
+            .setLngLat(e.lngLat)
+            .setHTML(
+              `<div style="color:var(--color-text);font-size:12px;line-height:1.45;">
+                <div style="font-weight:600;margin-bottom:4px;">M${escapeHtml(mag)} — ${escapeHtml(place)}</div>
+                <div style="color:var(--color-text-muted);margin-bottom:6px;">${escapeHtml(eventTime)}</div>
+                <div style="color:var(--color-text-muted);font-size:11px;">Source: USGS · updated ${escapeHtml(updatedAt)}</div>
+              </div>`,
+            )
+            .addTo(map)
+        })
+
+        map.on('mouseenter', 'quakes-layer', () => {
+          map.getCanvas().style.cursor = 'pointer'
+        })
+        map.on('mouseleave', 'quakes-layer', () => {
+          map.getCanvas().style.cursor = ''
+        })
+      }
+    }
+
     const tryAdvanceStyle = () => {
       if (styleLocked) return
       if (map.isStyleLoaded()) {
@@ -122,6 +246,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       styleLocked = true
       clearWatchdog()
       applyGlobeAtmosphere()
+      ensureQuakesLayer()
     }
 
     const markInteracting = () => {
@@ -160,6 +285,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     rafRef.current = requestAnimationFrame(tick)
 
     return () => {
+      popup?.remove()
       cancelAnimationFrame(rafRef.current)
       clearTimeout(idleTimerRef.current)
       clearWatchdog()
