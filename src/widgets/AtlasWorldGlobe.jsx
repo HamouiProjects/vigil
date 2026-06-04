@@ -445,6 +445,62 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
 }
 
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/"/g, '&quot;')
+}
+
+const DATA_MARKER_LAYERS = [
+  'quakes-layer',
+  'storms-layer',
+  'aircraft-layer',
+  'wildfires-layer',
+]
+
+function dispatchNewsSearch(query) {
+  const q = (query || '').trim()
+  if (!q) return
+  window.dispatchEvent(new CustomEvent('vigil:search', { detail: { query: q } }))
+}
+
+function earthquakeNewsSearchQuery(place) {
+  const p = (place || '').trim()
+  if (!p) return 'earthquake'
+  const parts = p.split(',')
+  const region = (parts[parts.length - 1] || p).trim()
+  return region ? `${region} earthquake` : 'earthquake'
+}
+
+function stormNewsSearchQuery(name) {
+  const n = (name || '').trim()
+  if (!n) return ''
+  return n.replace(/-\d+$/, '').trim()
+}
+
+function buildNewsSearchButtonHtml(query) {
+  const q = (query || '').trim()
+  if (!q) return ''
+  return `<button type="button" class="vigil-popup-news-search" data-vigil-search="${escapeAttr(q)}" style="display:block;width:100%;margin-top:6px;padding:4px 0;border:none;background:transparent;color:var(--color-text-secondary);font-size:10px;text-align:left;cursor:pointer;font-family:inherit;">Search news ↗</button>`
+}
+
+function attachPopupNewsSearchButton(popup) {
+  const root = popup.getElement()
+  if (!root) return
+  const btn = root.querySelector('[data-vigil-search]')
+  if (!btn) return
+  btn.addEventListener('mouseenter', () => {
+    btn.style.color = 'var(--color-brand)'
+  })
+  btn.addEventListener('mouseleave', () => {
+    btn.style.color = 'var(--color-text-secondary)'
+  })
+  btn.addEventListener('click', (ev) => {
+    ev.preventDefault()
+    ev.stopPropagation()
+    dispatchNewsSearch(btn.getAttribute('data-vigil-search'))
+    popup.remove()
+  })
+}
+
 function formatTime(epochMs) {
   if (epochMs == null || Number.isNaN(Number(epochMs))) return '—'
   return new Date(Number(epochMs)).toLocaleString()
@@ -484,9 +540,19 @@ function buildPhotoBlock(photo) {
   </div>`
 }
 
-function buildPopupCard({ dotColor, kicker, title, titleRows, rows, footer, photoHtml }) {
+function buildPopupCard({
+  dotColor,
+  kicker,
+  title,
+  titleRows,
+  rows,
+  footer,
+  photoHtml,
+  newsSearchQuery,
+}) {
   const titleRowsHtml = titleRows?.length ? popupRowsHtml(titleRows) : ''
   const rowsHtml = rows?.length ? popupRowsHtml(rows) : ''
+  const searchBtn = buildNewsSearchButtonHtml(newsSearchQuery)
 
   return `${photoHtml || ''}<div style="${POPUP_BODY_STYLE}">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
@@ -497,6 +563,7 @@ function buildPopupCard({ dotColor, kicker, title, titleRows, rows, footer, phot
     ${titleRowsHtml}
     ${rowsHtml}
     <div style="color:var(--color-text-muted);font-size:10px;margin-top:8px;padding-top:6px;border-top:1px solid var(--color-border);">${escapeHtml(footer)}</div>
+    ${searchBtn}
   </div>`
 }
 
@@ -563,6 +630,7 @@ function buildEarthquakePopupHtml(feature, updatedAt) {
     title,
     rows,
     footer,
+    newsSearchQuery: earthquakeNewsSearchQuery(place),
   })
 }
 
@@ -584,6 +652,7 @@ function buildStormPopupHtml(props) {
     title: name,
     rows,
     footer: 'Source: GDACS',
+    newsSearchQuery: stormNewsSearchQuery(name),
   })
 }
 
@@ -982,6 +1051,14 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
         map.on('mouseleave', COUNTRIES_FILL_LAYER_ID, () => {
           clearCountryHover()
         })
+
+        map.on('click', COUNTRIES_FILL_LAYER_ID, (e) => {
+          const hits = map.queryRenderedFeatures(e.point, { layers: DATA_MARKER_LAYERS })
+          if (hits.length) return
+          const feature = e.features?.[0]
+          if (!feature) return
+          dispatchNewsSearch(countryNameFromProps(feature.properties))
+        })
       }
     }
 
@@ -1033,6 +1110,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
             .setLngLat(e.lngLat)
             .setHTML(buildEarthquakePopupHtml(feature, lastFetchRef.current))
             .addTo(map)
+          attachPopupNewsSearchButton(popup)
         })
 
         map.on('mouseenter', 'quakes-layer', () => {
@@ -1086,6 +1164,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
             .setLngLat(e.lngLat)
             .setHTML(buildStormPopupHtml(props))
             .addTo(map)
+          attachPopupNewsSearchButton(popup)
         })
 
         map.on('mouseenter', 'storms-layer', () => {

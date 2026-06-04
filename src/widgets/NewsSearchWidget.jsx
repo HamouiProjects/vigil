@@ -58,6 +58,7 @@ export default function NewsSearchWidget({ paused, config, onSaveConfig, setActi
   const configRef = useRef(config); configRef.current = config
   const onSaveConfigRef = useRef(onSaveConfig); onSaveConfigRef.current = onSaveConfig
   const didMountRef = useRef(false)
+  const containerRef = useRef(null)
 
   function patch(p) { onSaveConfigRef.current({ ...configRef.current, ...p }) }
   function saveTabs(next) { patch({ tabs: next }) }
@@ -70,6 +71,26 @@ export default function NewsSearchWidget({ paused, config, onSaveConfig, setActi
     } catch (e) {
       setError(e.message === 'No results' ? 'No results' : e.message === 'rate_limited' ? 'Rate limited — retrying shortly' : 'Search unavailable')
     } finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => {
+    const onVigilSearch = (e) => {
+      const q = e.detail?.query?.trim()
+      if (!q) return
+      const existing = tabsRef.current.find(
+        (t) => t.keyword.toLowerCase() === q.toLowerCase(),
+      )
+      if (existing) {
+        setActiveId(existing.id)
+      } else {
+        const newTab = { id: `tab-${Date.now()}`, keyword: q }
+        saveTabs([...tabsRef.current, newTab])
+        setActiveId(newTab.id)
+      }
+      containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+    window.addEventListener('vigil:search', onVigilSearch)
+    return () => window.removeEventListener('vigil:search', onVigilSearch)
   }, [])
 
   useEffect(() => {
@@ -140,7 +161,7 @@ export default function NewsSearchWidget({ paused, config, onSaveConfig, setActi
   const displayArticles = filtered.length > 0 ? filtered : rawArticles
 
   return (
-    <div className="ns-body" onPointerDownCapture={e => e.stopPropagation()} style={{ flex: 1, minHeight: 0 }}>
+    <div ref={containerRef} className="ns-body" onPointerDownCapture={e => e.stopPropagation()} style={{ flex: 1, minHeight: 0 }}>
       {sidebarOpen ? (
         <div className="ns-sidebar">
           <div className="ns-sidebar-header">
