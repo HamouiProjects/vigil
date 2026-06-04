@@ -21,6 +21,40 @@ const AIRCRAFT_REFRESH_MS = 20_000
 const WILDFIRES_REFRESH_MS = 600_000
 const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] }
 
+/** Interim palette — Phase D will align with design tokens */
+export const LAYER_COLORS = {
+  earthquakes: '#C7873E',
+  storms: '#5B93B8',
+  aircraft: '#C2CAD4',
+  wildfires: '#BD5A39',
+}
+
+const MARKER_STROKE = '#0B0E13'
+const AIRCRAFT_ICON_ID = 'vigil-aircraft-plane'
+
+function createAircraftPlaneImageData(color = LAYER_COLORS.aircraft) {
+  const size = 18
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const cx = size / 2
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.moveTo(cx, 2)
+  ctx.lineTo(cx + 5, 14)
+  ctx.lineTo(cx, 11)
+  ctx.lineTo(cx - 5, 14)
+  ctx.closePath()
+  ctx.fill()
+  return ctx.getImageData(0, 0, size, size)
+}
+
+function registerAircraftIcon(map) {
+  if (map.hasImage(AIRCRAFT_ICON_ID)) map.removeImage(AIRCRAFT_ICON_ID)
+  map.addImage(AIRCRAFT_ICON_ID, createAircraftPlaneImageData())
+}
+
 function buildStyleChain() {
   const key = import.meta.env.VITE_MAPTILER_KEY
   const chain = []
@@ -50,15 +84,40 @@ function formatIsoDate(iso) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-function formatAircraftStats(props) {
-  const parts = []
-  const type = props.type
-  if (type) parts.push(`Type: ${type}`)
-  const alt = props.alt
-  if (alt != null && alt !== '' && !Number.isNaN(Number(alt))) parts.push(`Alt: ${alt} ft`)
-  const speed = props.speed
-  if (speed != null && speed !== '' && !Number.isNaN(Number(speed))) parts.push(`${speed} kts`)
-  return parts.join(' · ') || '—'
+function buildAircraftPopupHtml(props) {
+  const title = (props.callsign || '').trim() || props.hex || 'Unknown aircraft'
+  const milLine = props.type
+    ? `Military aircraft · ${props.type}`
+    : 'Military aircraft'
+
+  const rows = []
+  if (props.reg) rows.push(['Registration', props.reg])
+  if (props.alt != null && props.alt !== '' && !Number.isNaN(Number(props.alt))) {
+    rows.push(['Altitude', `${props.alt} ft`])
+  }
+  if (props.speed != null && props.speed !== '' && !Number.isNaN(Number(props.speed))) {
+    rows.push(['Speed', `${props.speed} kts`])
+  }
+  if (typeof props.track === 'number' && !Number.isNaN(props.track)) {
+    rows.push(['Heading', `${props.track}°`])
+  }
+  if (props.squawk != null && props.squawk !== '') {
+    rows.push(['Squawk', props.squawk])
+  }
+
+  const rowsHtml = rows
+    .map(
+      ([label, value]) =>
+        `<div style="color:var(--color-text-muted);margin-bottom:2px;"><span style="color:var(--color-text-secondary);">${escapeHtml(label)}:</span> ${escapeHtml(value)}</div>`,
+    )
+    .join('')
+
+  return `<div style="color:var(--color-text);font-size:12px;line-height:1.45;">
+    <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(title)}</div>
+    <div style="color:var(--color-text-muted);margin-bottom:6px;">${escapeHtml(milLine)}</div>
+    ${rowsHtml}
+    <div style="color:var(--color-text-muted);font-size:11px;margin-top:6px;">Source: adsb.lol</div>
+  </div>`
 }
 
 function filterTcStorms(geojson) {
@@ -312,11 +371,11 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
               7,
               14,
             ],
-            'circle-color': '#FF8C42',
-            'circle-opacity': 0.8,
-            'circle-stroke-color': '#ffffff',
-            'circle-stroke-width': 1,
-            'circle-stroke-opacity': 0.35,
+            'circle-color': LAYER_COLORS.earthquakes,
+            'circle-opacity': 0.85,
+            'circle-stroke-color': MARKER_STROKE,
+            'circle-stroke-width': 0.5,
+            'circle-stroke-opacity': 0.45,
           },
         })
       }
@@ -375,11 +434,11 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
           source: 'storms',
           paint: {
             'circle-radius': 6,
-            'circle-color': '#38BDF8',
-            'circle-opacity': 0.8,
-            'circle-stroke-color': '#ffffff',
-            'circle-stroke-width': 1,
-            'circle-stroke-opacity': 0.35,
+            'circle-color': LAYER_COLORS.storms,
+            'circle-opacity': 0.85,
+            'circle-stroke-color': MARKER_STROKE,
+            'circle-stroke-width': 0.5,
+            'circle-stroke-opacity': 0.45,
           },
         })
       }
@@ -432,18 +491,20 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
         map.getSource('aircraft').setData(aircraftGeoRef.current)
       }
 
+      registerAircraftIcon(map)
+
       if (!map.getLayer('aircraft-layer')) {
         map.addLayer({
           id: 'aircraft-layer',
-          type: 'circle',
+          type: 'symbol',
           source: 'aircraft',
-          paint: {
-            'circle-radius': 4,
-            'circle-color': '#4ADE80',
-            'circle-opacity': 0.9,
-            'circle-stroke-color': '#0B0E13',
-            'circle-stroke-width': 0.5,
-            'circle-stroke-opacity': 0.5,
+          layout: {
+            'icon-image': AIRCRAFT_ICON_ID,
+            'icon-size': 0.9,
+            'icon-rotate': ['coalesce', ['get', 'track'], 0],
+            'icon-rotation-alignment': 'map',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
           },
         })
       }
@@ -458,19 +519,10 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
           const feature = e.features?.[0]
           if (!feature) return
           const props = feature.properties || {}
-          const title = (props.callsign || '').trim() || props.hex || 'Unknown aircraft'
-          const stats = formatAircraftStats(props)
-
           popup?.remove()
           popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
             .setLngLat(e.lngLat)
-            .setHTML(
-              `<div style="color:var(--color-text);font-size:12px;line-height:1.45;">
-                <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(title)}</div>
-                <div style="color:var(--color-text-muted);margin-bottom:6px;">${escapeHtml(stats)}</div>
-                <div style="color:var(--color-text-muted);font-size:11px;">Source: adsb.lol</div>
-              </div>`,
-            )
+            .setHTML(buildAircraftPopupHtml(props))
             .addTo(map)
         })
 
@@ -510,11 +562,11 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
               500,
               8,
             ],
-            'circle-color': '#FFD700',
+            'circle-color': LAYER_COLORS.wildfires,
             'circle-opacity': 0.85,
-            'circle-stroke-color': '#0B0E13',
+            'circle-stroke-color': MARKER_STROKE,
             'circle-stroke-width': 0.5,
-            'circle-stroke-opacity': 0.5,
+            'circle-stroke-opacity': 0.45,
           },
         })
       }

@@ -139,6 +139,7 @@ function normalizeAircraft(raw) {
           alt: a.alt_baro ?? null,
           speed: a.gs ?? null,
           track,
+          squawk: a.squawk ?? null,
         },
       }
     })

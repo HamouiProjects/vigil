@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
-import AtlasWorldGlobe from './AtlasWorldGlobe'
+import AtlasWorldGlobe, { LAYER_COLORS } from './AtlasWorldGlobe'
 
 const DEFAULT_GLOBE_LAYERS = { wildfires: false, earthquakes: true, storms: false, aircraft: false }
 
 const LAYER_DEFS = [
-  { key: 'wildfires',   label: 'Wildfires',   color: '#FFD700' },
-  { key: 'earthquakes', label: 'Earthquakes', color: '#FF8C42' },
-  { key: 'storms',      label: 'Storms',      color: '#38BDF8' },
-  { key: 'aircraft',    label: 'Aircraft',    color: '#4ADE80' },
+  { key: 'wildfires',   label: 'Wildfires',   color: LAYER_COLORS.wildfires },
+  { key: 'earthquakes', label: 'Earthquakes', color: LAYER_COLORS.earthquakes },
+  { key: 'storms',      label: 'Storms',      color: LAYER_COLORS.storms },
+  { key: 'aircraft',    label: 'Aircraft',    color: LAYER_COLORS.aircraft },
 ]
 
 const COMING_SOON = [
@@ -15,6 +15,16 @@ const COMING_SOON = [
     label: 'Conflict',
     tag: 'SOON',
     tooltip: 'Verified conflict feed — coming soon',
+  },
+  {
+    label: 'Your sources on the map',
+    tag: 'SOON',
+    tooltip: 'Your own feeds & sources plotted on the globe — coming soon',
+  },
+  {
+    label: 'Military ships',
+    tag: 'SOON',
+    tooltip: 'Live military vessel tracking — coming soon',
   },
 ]
 
@@ -54,13 +64,42 @@ const barStyle = {
 }
 
 const tabBtnStyle = (active) => ({
-  padding: '3px 8px', border: `1px solid ${active ? 'var(--accent, #00D4FF)' : 'rgba(255,255,255,0.15)'}`,
-  borderRadius: 2, background: active ? 'var(--accent-dim, rgba(0,212,255,0.15))' : 'transparent',
-  color: active ? 'var(--accent, #00D4FF)' : 'var(--text-muted, #484f58)',
+  padding: '3px 8px',
+  border: `1px solid ${active ? 'var(--color-brand)' : 'rgba(255,255,255,0.15)'}`,
+  borderRadius: 2,
+  background: active ? 'var(--color-brand-tint)' : 'transparent',
+  color: active ? 'var(--color-brand)' : 'var(--text-muted, #484f58)',
   fontFamily: 'var(--font-mono, JetBrains Mono)', fontSize: 11, textTransform: 'uppercase',
   letterSpacing: '0.5px', lineHeight: 1, cursor: 'pointer', flexShrink: 0,
   transition: 'color 0.15s, border-color 0.15s',
 })
+
+function LegendSwatch({ layerKey, color }) {
+  if (layerKey === 'aircraft') {
+    return (
+      <span
+        style={{
+          width: 10,
+          height: 10,
+          flexShrink: 0,
+          background: color,
+          clipPath: 'polygon(50% 0%, 65% 100%, 50% 72%, 35% 100%)',
+        }}
+      />
+    )
+  }
+  return (
+    <span
+      style={{
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        flexShrink: 0,
+        background: color,
+      }}
+    />
+  )
+}
 
 const sourcesPanelStyle = {
   position: 'absolute',
@@ -164,6 +203,9 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
   }, [setActions, barsCollapsed, showSources, refreshSpinning])
 
   const iframeSrc = (key) => (mapMode === key && !paused) ? IFRAME_URLS[key] : 'about:blank'
+
+  const activeLegendLayers = LAYER_DEFS.filter(({ key }) => layers[key])
+  const showLegend = mapMode === 'world' && activeLegendLayers.length > 0
 
   return (
     <>
@@ -303,6 +345,36 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
             layers={layers}
             refreshNonce={refreshNonce}
           />
+          {showLegend && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 8,
+                left: 8,
+                zIndex: 15,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+                padding: '6px 8px',
+                background: 'var(--color-surface-2)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 3,
+                opacity: 0.92,
+                pointerEvents: 'none',
+                fontFamily: 'var(--font-sans)',
+                fontSize: 10,
+                lineHeight: 1.3,
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              {activeLegendLayers.map(({ key, label, color }) => (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <LegendSwatch layerKey={key} color={color} />
+                  <span>{label}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {['conflict', 'marine', 'flights', 'cyber'].map(key => (
