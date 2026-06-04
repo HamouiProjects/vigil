@@ -1090,12 +1090,11 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
           clearCountryHover()
         })
 
-        map.on('click', COUNTRIES_FILL_LAYER_ID, (e) => {
-          const hits = map.queryRenderedFeatures(e.point, { layers: DATA_MARKER_LAYERS })
-          if (hits.length) return
-          const feature = e.features?.[0]
-          if (!feature) return
-          dispatchNewsSearch(countryNameFromProps(feature.properties))
+        map.on('click', (e) => {
+          const markerHits = map.queryRenderedFeatures(e.point, { layers: DATA_MARKER_LAYERS })
+          if (markerHits.length) return
+          const country = countryNameAtLngLat(e.lngLat.lng, e.lngLat.lat, countriesGeoRef.current)
+          if (country) dispatchNewsSearch(country)
         })
       }
     }
