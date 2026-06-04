@@ -187,6 +187,27 @@ function pointInGeometry(lng, lat, geometry) {
   return false
 }
 
+function bboxOfGeometry(geometry) {
+  if (!geometry) return null
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  const polys = geometry.type === 'MultiPolygon' ? geometry.coordinates : geometry.type === 'Polygon' ? [geometry.coordinates] : []
+  for (const poly of polys) for (const ring of poly) for (const [x, y] of ring) {
+    if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y
+  }
+  return [minX, minY, maxX, maxY]
+}
+
+function countryFeatureAtLngLat(lng, lat, geo, bboxes) {
+  if (!geo?.features) return null
+  const feats = geo.features
+  for (let i = 0; i < feats.length; i++) {
+    const b = bboxes?.[i]
+    if (b && (lng < b[0] || lng > b[2] || lat < b[1] || lat > b[3])) continue
+    if (pointInGeometry(lng, lat, feats[i].geometry)) return feats[i]
+  }
+  return null
+}
+
 function countryNameAtLngLat(lng, lat, geo) {
   if (!geo?.features) return null
   for (const f of geo.features) {
@@ -784,6 +805,9 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
   const lastFetchRef = useRef(null)
   const aircraftPhotoCacheRef = useRef(new Map())
   const countriesGeoRef = useRef(null)
+  const countryBBoxesRef = useRef(null)
+  const hoverRAFRef = useRef(0)
+  const lastHoverLngLatRef = useRef(null)
   const hoveredCountryIdRef = useRef(null)
 
   pausedRef.current = paused
@@ -1000,6 +1024,33 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
       if (country) dispatchNewsSearch(country)
     })
 
+    const processCountryHover = () => {
+      hoverRAFRef.current = 0
+      const ll = lastHoverLngLatRef.current
+      const hl = map.getSource('country-highlight')
+      if (!ll) {
+        hl?.setData({ type: 'FeatureCollection', features: [] })
+        updateCountryReadout(null)
+        return
+      }
+      const feat = countryFeatureAtLngLat(
+        ll.lng,
+        ll.lat,
+        countriesGeoRef.current,
+        countryBBoxesRef.current,
+      )
+      hl?.setData({ type: 'FeatureCollection', features: feat ? [feat] : [] })
+      updateCountryReadout(feat ? countryNameFromProps(feat.properties) : null)
+    }
+    map.on('mousemove', (e) => {
+      lastHoverLngLatRef.current = e.lngLat
+      if (!hoverRAFRef.current) hoverRAFRef.current = requestAnimationFrame(processCountryHover)
+    })
+    map.on('mouseout', () => {
+      lastHoverLngLatRef.current = null
+      if (!hoverRAFRef.current) hoverRAFRef.current = requestAnimationFrame(processCountryHover)
+    })
+
     const applyTheme = () => {
       applyGlobeTheme(readGlobeTheme(), map, {
         wrapEl: wrapRef.current,
@@ -1016,6 +1067,38 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
       attributes: true,
       attributeFilter: ['data-theme'],
     })
+
+    const ensureCountryHighlightLayer = () => {
+      if (!map.getSource('country-highlight')) {
+        map.addSource('country-highlight', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        })
+      }
+      const beforeId = map.getLayer('quakes-layer') ? 'quakes-layer' : undefined
+      if (!map.getLayer('country-highlight-fill')) {
+        map.addLayer(
+          {
+            id: 'country-highlight-fill',
+            type: 'fill',
+            source: 'country-highlight',
+            paint: { 'fill-color': 'rgba(226,232,240,0.10)' },
+          },
+          beforeId,
+        )
+      }
+      if (!map.getLayer('country-highlight-line')) {
+        map.addLayer(
+          {
+            id: 'country-highlight-line',
+            type: 'line',
+            source: 'country-highlight',
+            paint: { 'line-color': 'rgba(226,232,240,0.45)', 'line-width': 1 },
+          },
+          beforeId,
+        )
+      }
+    }
 
     const ensureCountryHoverLayers = () => {
       const geo = countriesGeoRef.current
@@ -1385,6 +1468,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
       clearCountryHover()
       applyTheme()
       calmBasemapLabels(map)
+      ensureCountryHighlightLayer()
       ensureCountryHoverLayers()
       ensureQuakesLayer()
       ensureStormsLayer()
@@ -1477,6 +1561,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
       })
       .then((data) => {
         countriesGeoRef.current = data
+        countryBBoxesRef.current = data.features?.map((f) => bboxOfGeometry(f.geometry)) || []
         if (map.isStyleLoaded()) ensureCountryHoverLayers()
       })
       .catch(() => {})
@@ -1487,6 +1572,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
       clearCountryHover()
       popup?.remove()
       cancelAnimationFrame(rafRef.current)
+      cancelAnimationFrame(hoverRAFRef.current)
       clearTimeout(idleTimerRef.current)
       clearWatchdog()
       map.remove()
