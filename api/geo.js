@@ -1,7 +1,9 @@
 const EMPTY_FC = { type: 'FeatureCollection', features: [] }
+const AIRCRAFT_UPSTREAM = 'https://api.adsb.lol/v2/mil'
 
 const SOURCE_TTL_MS = {
   gdelt: 600_000,
+  aircraft: 15_000,
 }
 
 /** @type {Map<string, { body: object, storedAt: number }>} */
@@ -30,6 +32,38 @@ function setGeoHeaders(res) {
   res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300')
 }
 
+function redactUpstreamUrl(url) {
+  try {
+    const u = new URL(url)
+    for (const param of ['key', 'api_key', 'MAP_KEY']) {
+      if (u.searchParams.has(param)) u.searchParams.set(param, 'REDACTED')
+    }
+    return u.toString()
+  } catch {
+    return url
+  }
+}
+
+function getGdeltUpstreamUrl(query) {
+  const q =
+    query ||
+    '(airstrike OR shelling OR clashes OR militants OR offensive OR insurgents OR "armed conflict")'
+  return `https://api.gdeltproject.org/api/v2/geo/geo?query=${encodeURIComponent(q)}&format=GeoJSON&maxpoints=250`
+}
+
+function getUpstreamUrl(source, req) {
+  switch (source) {
+    case 'gdelt': {
+      const q = (req.query.q || '').trim() || undefined
+      return getGdeltUpstreamUrl(q)
+    }
+    case 'aircraft':
+      return AIRCRAFT_UPSTREAM
+    default:
+      return null
+  }
+}
+
 function normalizeGdelt(raw) {
   const features = (raw?.features || [])
     .map((f) => {
@@ -53,11 +87,37 @@ function normalizeGdelt(raw) {
   return { type: 'FeatureCollection', features }
 }
 
+function normalizeAircraft(raw) {
+  const ac = raw?.ac
+  if (!Array.isArray(ac)) return EMPTY_FC
+
+  const features = ac
+    .map((a) => {
+      const lat = Number(a.lat)
+      const lon = Number(a.lon)
+      if (Number.isNaN(lat) || Number.isNaN(lon)) return null
+      const track = typeof a.track === 'number' ? a.track : null
+      return {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [lon, lat] },
+        properties: {
+          callsign: (a.flight || '').trim(),
+          hex: a.hex ?? '',
+          type: a.t ?? '',
+          reg: a.r ?? '',
+          alt: a.alt_baro ?? null,
+          speed: a.gs ?? null,
+          track,
+        },
+      }
+    })
+    .filter(Boolean)
+
+  return { type: 'FeatureCollection', features }
+}
+
 async function fetchGdelt(query) {
-  const q =
-    query ||
-    '(airstrike OR shelling OR clashes OR militants OR offensive OR insurgents OR "armed conflict")'
-  const url = `https://api.gdeltproject.org/api/v2/geo/geo?query=${encodeURIComponent(q)}&format=GeoJSON&maxpoints=250`
+  const url = getGdeltUpstreamUrl(query)
   const res = await fetch(url, { signal: AbortSignal.timeout(8000) })
   let raw = null
   try {
@@ -67,6 +127,18 @@ async function fetchGdelt(query) {
   }
   if (!res.ok || !raw?.features) return EMPTY_FC
   return normalizeGdelt(raw)
+}
+
+async function fetchAircraft() {
+  const res = await fetch(AIRCRAFT_UPSTREAM, { signal: AbortSignal.timeout(8000) })
+  let raw = null
+  try {
+    raw = await res.json()
+  } catch {
+    return EMPTY_FC
+  }
+  if (!res.ok || !Array.isArray(raw?.ac)) return EMPTY_FC
+  return normalizeAircraft(raw)
 }
 
 async function handleGdelt(req) {
@@ -87,6 +159,58 @@ async function handleGdelt(req) {
   }
 }
 
+async function handleAircraft() {
+  const key = cacheKey('aircraft', {})
+  const ttl = SOURCE_TTL_MS.aircraft
+
+  const fresh = getFreshCache(key, ttl)
+  if (fresh) return fresh
+
+  try {
+    const body = await fetchAircraft()
+    setCache(key, body)
+    return body
+  } catch {
+    return getStaleCache(key) ?? EMPTY_FC
+  }
+}
+
+async function handleDebugPassthrough(req, res, source) {
+  const upstreamUrl = getUpstreamUrl(source, req)
+  if (!upstreamUrl) {
+    return res.status(400).json({ error: 'invalid source' })
+  }
+
+  try {
+    const upstream = await fetch(upstreamUrl, { signal: AbortSignal.timeout(8000) })
+    const contentType = upstream.headers.get('content-type') || ''
+    const text = await upstream.text()
+    return res.status(200).json({
+      source,
+      upstreamUrl: redactUpstreamUrl(upstreamUrl),
+      upstreamStatus: upstream.status,
+      contentType,
+      bodySnippet: text.slice(0, 800),
+    })
+  } catch (err) {
+    return res.status(200).json({
+      source,
+      upstreamUrl: redactUpstreamUrl(upstreamUrl),
+      upstreamStatus: null,
+      contentType: '',
+      bodySnippet: String(err?.message ?? 'fetch failed').slice(0, 800),
+    })
+  }
+}
+
+function staleCacheKey(source, req) {
+  if (source === 'gdelt') {
+    return cacheKey('gdelt', { q: (req.query.q || '').trim() || '' })
+  }
+  if (source === 'aircraft') return cacheKey('aircraft', {})
+  return null
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -95,12 +219,19 @@ export default async function handler(req, res) {
 
   const source = (req.query.source || '').toLowerCase()
 
+  if (req.query.debug === '1') {
+    return handleDebugPassthrough(req, res, source)
+  }
+
   try {
     let body = EMPTY_FC
 
     switch (source) {
       case 'gdelt':
         body = await handleGdelt(req)
+        break
+      case 'aircraft':
+        body = await handleAircraft()
         break
       default:
         return res.status(400).json({ error: 'invalid source' })
@@ -109,10 +240,7 @@ export default async function handler(req, res) {
     setGeoHeaders(res)
     return res.status(200).json(body)
   } catch {
-    const key =
-      source === 'gdelt'
-        ? cacheKey('gdelt', { q: (req.query.q || '').trim() || '' })
-        : null
+    const key = staleCacheKey(source, req)
     const stale = key ? getStaleCache(key) : null
     setGeoHeaders(res)
     return res.status(200).json(stale ?? EMPTY_FC)

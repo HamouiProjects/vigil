@@ -11,9 +11,11 @@ const USGS_QUAKES_URL =
   'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson'
 const GDACS_STORMS_URL = 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP'
 const CONFLICT_GEO_URL = '/api/geo?source=gdelt'
+const AIRCRAFT_GEO_URL = '/api/geo?source=aircraft'
 const QUAKES_REFRESH_MS = 120_000
 const STORMS_REFRESH_MS = 300_000
 const CONFLICT_REFRESH_MS = 600_000
+const AIRCRAFT_REFRESH_MS = 20_000
 const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] }
 
 function buildStyleChain() {
@@ -43,6 +45,17 @@ function formatIsoDate(iso) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return String(iso)
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+function formatAircraftStats(props) {
+  const parts = []
+  const type = props.type
+  if (type) parts.push(`Type: ${type}`)
+  const alt = props.alt
+  if (alt != null && alt !== '' && !Number.isNaN(Number(alt))) parts.push(`Alt: ${alt} ft`)
+  const speed = props.speed
+  if (speed != null && speed !== '' && !Number.isNaN(Number(speed))) parts.push(`${speed} kts`)
+  return parts.join(' · ') || '—'
 }
 
 function filterTcStorms(geojson) {
@@ -77,6 +90,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
   const quakesGeoRef = useRef(null)
   const stormsGeoRef = useRef(null)
   const conflictGeoRef = useRef(null)
+  const aircraftGeoRef = useRef(null)
   const lastFetchRef = useRef(null)
 
   pausedRef.current = paused
@@ -154,6 +168,29 @@ export default function AtlasWorldGlobe({ paused, layers }) {
   }, [])
 
   useEffect(() => {
+    let intervalId = null
+
+    const fetchAircraft = async () => {
+      if (pausedRef.current) return
+      try {
+        const res = await fetch(AIRCRAFT_GEO_URL)
+        if (!res.ok) return
+        const geojson = await res.json()
+        aircraftGeoRef.current = geojson
+        const map = mapRef.current
+        map?.getSource('aircraft')?.setData(geojson)
+      } catch {
+        /* ignore network errors */
+      }
+    }
+
+    fetchAircraft()
+    intervalId = setInterval(fetchAircraft, AIRCRAFT_REFRESH_MS)
+
+    return () => clearInterval(intervalId)
+  }, [])
+
+  useEffect(() => {
     const map = mapRef.current
     if (!map || !map.isStyleLoaded()) return
     const layer = map.getLayer('quakes-layer')
@@ -181,6 +218,15 @@ export default function AtlasWorldGlobe({ paused, layers }) {
   }, [layers?.conflict])
 
   useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    const layer = map.getLayer('aircraft-layer')
+    if (!layer) return
+    const visible = layers?.aircraft ? 'visible' : 'none'
+    map.setLayoutProperty('aircraft-layer', 'visibility', visible)
+  }, [layers?.aircraft])
+
+  useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
@@ -193,6 +239,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
     let quakeListenersBound = false
     let stormListenersBound = false
     let conflictListenersBound = false
+    let aircraftListenersBound = false
 
     const clearWatchdog = () => {
       if (watchdogTimer != null) {
@@ -441,6 +488,67 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       }
     }
 
+    const ensureAircraftLayer = () => {
+      if (!map.getSource('aircraft')) {
+        map.addSource('aircraft', {
+          type: 'geojson',
+          data: aircraftGeoRef.current || EMPTY_GEOJSON,
+        })
+      } else if (aircraftGeoRef.current) {
+        map.getSource('aircraft').setData(aircraftGeoRef.current)
+      }
+
+      if (!map.getLayer('aircraft-layer')) {
+        map.addLayer({
+          id: 'aircraft-layer',
+          type: 'circle',
+          source: 'aircraft',
+          paint: {
+            'circle-radius': 4,
+            'circle-color': '#4ADE80',
+            'circle-opacity': 0.9,
+            'circle-stroke-color': '#0B0E13',
+            'circle-stroke-width': 0.5,
+            'circle-stroke-opacity': 0.5,
+          },
+        })
+      }
+
+      const visible = layersRef.current?.aircraft ? 'visible' : 'none'
+      map.setLayoutProperty('aircraft-layer', 'visibility', visible)
+
+      if (!aircraftListenersBound) {
+        aircraftListenersBound = true
+
+        map.on('click', 'aircraft-layer', (e) => {
+          const feature = e.features?.[0]
+          if (!feature) return
+          const props = feature.properties || {}
+          const title = (props.callsign || '').trim() || props.hex || 'Unknown aircraft'
+          const stats = formatAircraftStats(props)
+
+          popup?.remove()
+          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
+            .setLngLat(e.lngLat)
+            .setHTML(
+              `<div style="color:var(--color-text);font-size:12px;line-height:1.45;">
+                <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(title)}</div>
+                <div style="color:var(--color-text-muted);margin-bottom:6px;">${escapeHtml(stats)}</div>
+                <div style="color:var(--color-text-muted);font-size:11px;">Source: adsb.lol</div>
+              </div>`,
+            )
+            .addTo(map)
+        })
+
+        map.on('mouseenter', 'aircraft-layer', () => {
+          map.getCanvas().style.cursor = 'pointer'
+        })
+        map.on('mouseleave', 'aircraft-layer', () => {
+          map.getCanvas().style.cursor = ''
+        })
+      }
+    }
+
     const tryAdvanceStyle = () => {
       if (styleLocked) return
       if (map.isStyleLoaded()) {
@@ -469,6 +577,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       ensureQuakesLayer()
       ensureStormsLayer()
       ensureConflictLayer()
+      ensureAircraftLayer()
     }
 
     const markInteracting = () => {

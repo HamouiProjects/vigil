@@ -1,14 +1,14 @@
 import { useState, useRef } from 'react'
 import AtlasWorldGlobe from './AtlasWorldGlobe'
 
-const DEFAULT_GLOBE_LAYERS = { conflict: true, wildfires: false, earthquakes: false, storms: false, piracy: false }
+const DEFAULT_GLOBE_LAYERS = { conflict: true, wildfires: false, earthquakes: false, storms: false, aircraft: false }
 
 const LAYER_DEFS = [
   { key: 'conflict',    label: 'Conflict',    color: '#FF3333' },
   { key: 'wildfires',   label: 'Wildfires',   color: '#FFD700' },
   { key: 'earthquakes', label: 'Earthquakes', color: '#FF8C42' },
   { key: 'storms',      label: 'Storms',      color: '#38BDF8' },
-  { key: 'piracy',      label: 'Piracy',      color: '#1E6BFF' },
+  { key: 'aircraft',    label: 'Aircraft',    color: '#4ADE80' },
 ]
 
 const IFRAME_URLS = {
