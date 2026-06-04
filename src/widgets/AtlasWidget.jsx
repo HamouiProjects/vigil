@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import AtlasGlobe from './AtlasGlobe'
+import AtlasWorldGlobe from './AtlasWorldGlobe'
 
 const DEFAULT_GLOBE_LAYERS = { conflict: true, wildfires: false, earthquakes: false, storms: false, piracy: false }
 
@@ -117,7 +117,7 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig }) {
 
         {/* WORLD globe: stays mounted; paused when it is not the active tab so its pollers stop */}
         <div style={{ display: mapMode === 'world' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
-          <AtlasGlobe paused={paused || mapMode !== 'world'} layers={layers} />
+          <AtlasWorldGlobe paused={paused || mapMode !== 'world'} layers={layers} />
         </div>
 
         {['conflict', 'marine', 'flights', 'cyber'].map(key => (
