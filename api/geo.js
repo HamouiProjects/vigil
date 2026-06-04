@@ -57,7 +57,7 @@ async function fetchGdelt(query) {
   const q =
     query ||
     '(airstrike OR shelling OR clashes OR militants OR offensive OR insurgents OR "armed conflict")'
-  const url = `https://api.gdeltproject.org/api/v2/geo/geo?query=${encodeURIComponent(q)}&format=GeoJSON&mode=pointdata&maxpoints=250&timespan=24H`
+  const url = `https://api.gdeltproject.org/api/v2/geo/geo?query=${encodeURIComponent(q)}&format=GeoJSON&maxpoints=250`
   const res = await fetch(url, { signal: AbortSignal.timeout(8000) })
   let raw = null
   try {
