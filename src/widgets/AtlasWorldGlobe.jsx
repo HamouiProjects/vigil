@@ -720,6 +720,7 @@ export default function AtlasWorldGlobe({ paused, layers }) {
           m.off('moveend', onMoveEnd)
           if (token !== resetEaseToken) return
           rotateSuppressed = false
+          interactingRef.current = false
           lngRef.current = m.getCenter().lng
         }
         m.on('moveend', onMoveEnd)
@@ -728,7 +729,8 @@ export default function AtlasWorldGlobe({ paused, layers }) {
       }
     }
 
-    const markInteracting = () => {
+    const markInteracting = (e) => {
+      if (e && e.originalEvent == null) return
       interactingRef.current = true
       resetEaseToken += 1
       rotateSuppressed = false
