@@ -68,58 +68,64 @@ function applyGlobeTheme(theme, map, { wrapEl, mapContainerEl } = {}) {
     /* map not fully ready */
   }
 
-  if (!map.isStyleLoaded?.()) return
-
-  if (typeof map.setProjection === 'function') {
-    map.setProjection({ type: 'globe' })
-  }
-
-  if (typeof map.setSky === 'function') {
-    if (mode === 'light') {
-      map.setSky({
-        'sky-type': 'atmosphere',
-        'sky-atmosphere-sun': [0.0, 0.0],
-        'sky-atmosphere-sun-intensity': 6,
-        'sky-atmosphere-color': 'rgb(210, 205, 195)',
-      })
-    } else {
-      map.setSky({
-        'sky-type': 'atmosphere',
-        'sky-atmosphere-sun': [0.0, 0.0],
-        'sky-atmosphere-sun-intensity': 4,
-        'sky-atmosphere-color': 'rgb(18, 24, 38)',
-      })
-    }
-  }
-
-  const style = map.getStyle()
-  if (!style?.layers) return
-
-  for (const layer of style.layers) {
-    if (layer.type === 'background') {
-      try {
-        map.setPaintProperty(layer.id, 'background-color', spaceBg)
-      } catch {
-        /* ignore */
-      }
-      continue
+  // Apply the map-style parts only once the style SPEC is loaded. Do NOT gate on
+  // map.isStyleLoaded() — at the style.load moment it returns false (sources still
+  // loading), so the globe projection would never apply (flat map). A pre-style.load
+  // init call throws here; we catch and no-op — style.load and the theme observer re-apply.
+  try {
+    if (typeof map.setProjection === 'function') {
+      map.setProjection({ type: 'globe' })
     }
 
-    if (layer.type !== 'raster') continue
-
-    try {
+    if (typeof map.setSky === 'function') {
       if (mode === 'light') {
-        map.setPaintProperty(layer.id, 'raster-brightness-max', 0.9)
-        map.setPaintProperty(layer.id, 'raster-saturation', -0.1)
-        map.setPaintProperty(layer.id, 'raster-contrast', 0)
+        map.setSky({
+          'sky-type': 'atmosphere',
+          'sky-atmosphere-sun': [0.0, 0.0],
+          'sky-atmosphere-sun-intensity': 6,
+          'sky-atmosphere-color': 'rgb(210, 205, 195)',
+        })
       } else {
-        map.setPaintProperty(layer.id, 'raster-brightness-max', 0.72)
-        map.setPaintProperty(layer.id, 'raster-saturation', -0.15)
-        map.setPaintProperty(layer.id, 'raster-contrast', -0.05)
+        map.setSky({
+          'sky-type': 'atmosphere',
+          'sky-atmosphere-sun': [0.0, 0.0],
+          'sky-atmosphere-sun-intensity': 4,
+          'sky-atmosphere-color': 'rgb(18, 24, 38)',
+        })
       }
-    } catch {
-      /* raster paint may be unavailable on this layer */
     }
+
+    const style = map.getStyle()
+    if (style?.layers) {
+      for (const layer of style.layers) {
+        if (layer.type === 'background') {
+          try {
+            map.setPaintProperty(layer.id, 'background-color', spaceBg)
+          } catch {
+            /* ignore */
+          }
+          continue
+        }
+
+        if (layer.type !== 'raster') continue
+
+        try {
+          if (mode === 'light') {
+            map.setPaintProperty(layer.id, 'raster-brightness-max', 0.9)
+            map.setPaintProperty(layer.id, 'raster-saturation', -0.1)
+            map.setPaintProperty(layer.id, 'raster-contrast', 0)
+          } else {
+            map.setPaintProperty(layer.id, 'raster-brightness-max', 0.72)
+            map.setPaintProperty(layer.id, 'raster-saturation', -0.15)
+            map.setPaintProperty(layer.id, 'raster-contrast', -0.05)
+          }
+        } catch {
+          /* raster paint may be unavailable on this layer */
+        }
+      }
+    }
+  } catch {
+    /* style spec not loaded yet (pre style.load) — re-applied on style.load and theme toggle */
   }
 }
 
