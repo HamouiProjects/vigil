@@ -31,11 +31,13 @@
 .nav-collapse-btn:hover { color: var(--color-text-secondary); background: var(--color-surface-hover); }
 
 .nav-reveal-handle {
-  height: 6px; width: 100%; flex-shrink: 0; cursor: pointer;
+  height: 14px; width: 100%; flex-shrink: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
   background: var(--color-surface-1); border-bottom: 1px solid var(--color-border);
-  transition: background 0.15s;
+  color: var(--color-text-muted);
+  transition: background 0.15s, color 0.15s;
 }
-.nav-reveal-handle:hover { background: var(--color-surface-hover); }
+.nav-reveal-handle:hover { background: var(--color-surface-hover); color: var(--color-text-secondary); }
 
 .account-avatar {
   width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;

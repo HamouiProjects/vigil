@@ -279,7 +279,9 @@ export default function Shell() {
       />
 
       {navCollapsed
-        ? <div className="nav-reveal-handle" onClick={() => setNavCollapsedPersisted(false)} title="Show toolbar" />
+        ? <div className="nav-reveal-handle" onClick={() => setNavCollapsedPersisted(false)} title="Show toolbar" aria-label="Show toolbar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </div>
         : (<nav className="navbar">
         <div className="navbar-left">
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--accent)' }}>VIGIL</span>
@@ -416,7 +418,7 @@ export default function Shell() {
         </div>
       </nav>)}
 
-      <div ref={scrollRef} style={{ width: '100%', height: navCollapsed ? 'calc(100vh - 6px)' : 'calc(100vh - 40px)', position: 'relative', overflow: 'auto' }}>
+      <div ref={scrollRef} style={{ width: '100%', height: navCollapsed ? 'calc(100vh - 14px)' : 'calc(100vh - 40px)', position: 'relative', overflow: 'auto' }}>
         <Grid />
         <div aria-hidden="true" style={{ height: 36 }} />
       </div>
