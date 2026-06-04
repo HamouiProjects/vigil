@@ -40,6 +40,89 @@ const COUNTRIES_GEO_URL = '/ne_110m_admin_0_countries.geojson'
 const COUNTRIES_SOURCE_ID = 'countries-admin0'
 const COUNTRIES_FILL_LAYER_ID = 'countries-hover-fill'
 const COUNTRIES_LINE_LAYER_ID = 'countries-hover-outline'
+const GLOBE_SPACE_BG = {
+  dark: '#05070B',
+  light: '#D9D3C6',
+}
+
+function readGlobeTheme() {
+  const raw = document.documentElement.getAttribute('data-theme')
+  return raw === 'light' ? 'light' : 'dark'
+}
+
+function applyGlobeTheme(theme, map, { wrapEl, mapContainerEl } = {}) {
+  const mode = theme === 'light' ? 'light' : 'dark'
+  const spaceBg = GLOBE_SPACE_BG[mode]
+
+  if (wrapEl) wrapEl.style.background = spaceBg
+  if (mapContainerEl) mapContainerEl.style.background = spaceBg
+
+  if (!map) return
+
+  try {
+    const mapContainer = map.getContainer()
+    if (mapContainer) mapContainer.style.background = spaceBg
+    const canvas = map.getCanvas?.()
+    if (canvas) canvas.style.background = spaceBg
+  } catch {
+    /* map not fully ready */
+  }
+
+  if (typeof map.setProjection === 'function') {
+    map.setProjection({ type: 'globe' })
+  }
+
+  if (typeof map.setSky === 'function') {
+    if (mode === 'light') {
+      map.setSky({
+        'sky-type': 'atmosphere',
+        'sky-atmosphere-sun': [0.0, 0.0],
+        'sky-atmosphere-sun-intensity': 6,
+        'sky-atmosphere-color': 'rgb(210, 205, 195)',
+      })
+    } else {
+      map.setSky({
+        'sky-type': 'atmosphere',
+        'sky-atmosphere-sun': [0.0, 0.0],
+        'sky-atmosphere-sun-intensity': 4,
+        'sky-atmosphere-color': 'rgb(18, 24, 38)',
+      })
+    }
+  }
+
+  if (!map.isStyleLoaded?.()) return
+
+  const style = map.getStyle()
+  if (!style?.layers) return
+
+  for (const layer of style.layers) {
+    if (layer.type === 'background') {
+      try {
+        map.setPaintProperty(layer.id, 'background-color', spaceBg)
+      } catch {
+        /* ignore */
+      }
+      continue
+    }
+
+    if (layer.type !== 'raster') continue
+
+    try {
+      if (mode === 'light') {
+        map.setPaintProperty(layer.id, 'raster-brightness-max', 0.9)
+        map.setPaintProperty(layer.id, 'raster-saturation', -0.1)
+        map.setPaintProperty(layer.id, 'raster-contrast', 0)
+      } else {
+        map.setPaintProperty(layer.id, 'raster-brightness-max', 0.72)
+        map.setPaintProperty(layer.id, 'raster-saturation', -0.15)
+        map.setPaintProperty(layer.id, 'raster-contrast', -0.05)
+      }
+    } catch {
+      /* raster paint may be unavailable on this layer */
+    }
+  }
+}
+
 const PLACE_LABEL_LAYER_RE =
   /(?:^|[-_])(?:country|countries|city|cities|town|towns|village|hamlet|suburb|neighbour|neighbor|locality|metropolis|settlement|municipal|state|province|region|county|district|capital|adm0|admin-0|admin0|adm1|admin-1|admin1|sovereign|nation|place-country|place_country|place-2|place-3|place_2|place_3|label_city|label_town|label_country|place-label)(?:$|[-_])/i
 const NON_PLACE_LABEL_LAYER_RE =
@@ -571,6 +654,7 @@ void flyToStub
 void fitBoundsStub
 
 export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
+  const wrapRef = useRef(null)
   const containerRef = useRef(null)
   const countryReadoutRef = useRef(null)
   const mapRef = useRef(null)
@@ -796,18 +880,22 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
     })
     mapRef.current = map
 
-    const applyGlobeAtmosphere = () => {
-      if (typeof map.setProjection === 'function') {
-        map.setProjection({ type: 'globe' })
-      }
-      if (typeof map.setSky === 'function') {
-        map.setSky({
-          'sky-type': 'atmosphere',
-          'sky-atmosphere-sun': [0.0, 0.0],
-          'sky-atmosphere-sun-intensity': 12,
-        })
-      }
+    const applyTheme = () => {
+      applyGlobeTheme(readGlobeTheme(), map, {
+        wrapEl: wrapRef.current,
+        mapContainerEl: containerRef.current,
+      })
     }
+
+    applyTheme()
+
+    const themeObserver = new MutationObserver(() => {
+      applyTheme()
+    })
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    })
 
     const ensureCountryHoverLayers = () => {
       const geo = countriesGeoRef.current
@@ -1168,7 +1256,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
       styleLocked = true
       clearWatchdog()
       clearCountryHover()
-      applyGlobeAtmosphere()
+      applyTheme()
       calmBasemapLabels(map)
       ensureCountryHoverLayers()
       ensureQuakesLayer()
@@ -1267,6 +1355,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
       .catch(() => {})
 
     return () => {
+      themeObserver.disconnect()
       resetEaseToken += 1
       clearCountryHover()
       popup?.remove()
@@ -1280,13 +1369,13 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
 
   return (
     <div
+      ref={wrapRef}
       className="atlas-world-globe-wrap"
       style={{
         position: 'relative',
         width: '100%',
         height: '100%',
         minHeight: 0,
-        background: 'var(--color-bg)',
       }}
     >
       <div
