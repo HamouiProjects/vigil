@@ -3,7 +3,7 @@ import AtlasWorldGlobe, { LAYER_COLORS } from './AtlasWorldGlobe'
 
 const DEFAULT_GLOBE_LAYERS = { wildfires: false, earthquakes: true, storms: false, aircraft: false }
 
-/** Muted chip only — globe marker + legend stay on LAYER_COLORS.aircraft */
+/** Muted chip only — globe marker stays on LAYER_COLORS.aircraft */
 const AIRCRAFT_CHIP_COLOR = '#92A2B5'
 
 const LAYER_DEFS = [
@@ -81,33 +81,6 @@ const tabBtnStyle = (active) => ({
   letterSpacing: '0.5px', lineHeight: 1, cursor: 'pointer', flexShrink: 0,
   transition: 'color 0.15s, border-color 0.15s',
 })
-
-function LegendSwatch({ layerKey, color }) {
-  if (layerKey === 'aircraft') {
-    return (
-      <span
-        style={{
-          width: 10,
-          height: 10,
-          flexShrink: 0,
-          background: color,
-          clipPath: 'polygon(50% 0%, 65% 100%, 50% 72%, 35% 100%)',
-        }}
-      />
-    )
-  }
-  return (
-    <span
-      style={{
-        width: 8,
-        height: 8,
-        borderRadius: '50%',
-        flexShrink: 0,
-        background: color,
-      }}
-    />
-  )
-}
 
 const sourcesPanelStyle = {
   position: 'absolute',
@@ -211,9 +184,6 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
   }, [setActions, barsCollapsed, showSources, refreshSpinning])
 
   const iframeSrc = (key) => (mapMode === key && !paused) ? IFRAME_URLS[key] : 'about:blank'
-
-  const activeLegendLayers = LAYER_DEFS.filter(({ key }) => layers[key])
-  const showLegend = mapMode === 'world' && activeLegendLayers.length > 0
 
   return (
     <>
@@ -372,36 +342,6 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
             layers={layers}
             refreshNonce={refreshNonce}
           />
-          {showLegend && (
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 8,
-                left: 8,
-                zIndex: 15,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 4,
-                padding: '6px 8px',
-                background: 'var(--color-surface-2)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 3,
-                opacity: 0.92,
-                pointerEvents: 'none',
-                fontFamily: 'var(--font-sans)',
-                fontSize: 10,
-                lineHeight: 1.3,
-                color: 'var(--color-text-secondary)',
-              }}
-            >
-              {activeLegendLayers.map(({ key, label, color }) => (
-                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <LegendSwatch layerKey={key} color={color} />
-                  <span>{label}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         {['conflict', 'marine', 'flights', 'cyber'].map(key => (

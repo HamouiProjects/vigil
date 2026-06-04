@@ -755,7 +755,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
           const feature = e.features?.[0]
           if (!feature) return
           popup?.remove()
-          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
+          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
             .setLngLat(e.lngLat)
             .setHTML(buildEarthquakePopupHtml(feature, lastFetchRef.current))
             .addTo(map)
@@ -808,7 +808,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
           const props = feature.properties || {}
 
           popup?.remove()
-          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
+          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
             .setLngLat(e.lngLat)
             .setHTML(buildStormPopupHtml(props))
             .addTo(map)
@@ -872,7 +872,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
           }
 
           popup?.remove()
-          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
+          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
             .setLngLat(e.lngLat)
             .setHTML(buildAircraftPopupHtml(props, { country, photo: null }))
             .addTo(map)
@@ -948,7 +948,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
           const props = feature.properties || {}
 
           popup?.remove()
-          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px' })
+          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
             .setLngLat(e.lngLat)
             .setHTML(buildWildfirePopupHtml(props))
             .addTo(map)
