@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 
-// Verified TradingView heatmap presets (stock-heatmap + etf-heatmap).
-// Crypto (crypto-coins-heatmap) intentionally omitted until its embed params are verified.
+// Verified TradingView heatmap presets (stock-heatmap + etf-heatmap + crypto-coins-heatmap).
 const MARKETS = {
-  sp500:  { label: 'S&P 500', widget: 'stock-heatmap', dataSource: 'SPX500',   blockSize: 'market_cap_basic', groups: [{ id: 'sector', label: 'Sector' }, { id: 'no_group', label: 'Flat' }] },
-  nasdaq: { label: 'Nasdaq',  widget: 'stock-heatmap', dataSource: 'NASDAQ',   blockSize: 'market_cap_basic', groups: [{ id: 'sector', label: 'Sector' }, { id: 'no_group', label: 'Flat' }] },
-  dow:    { label: 'Dow',     widget: 'stock-heatmap', dataSource: 'DowJones', blockSize: 'market_cap_basic', groups: [{ id: 'sector', label: 'Sector' }, { id: 'no_group', label: 'Flat' }] },
-  etf:    { label: 'ETFs',    widget: 'etf-heatmap',   dataSource: 'AllUSEtf', blockSize: 'volume',           groups: [{ id: 'asset_class', label: 'Asset class' }, { id: 'no_group', label: 'Flat' }] },
+  sp500:  { label: 'S&P 500', widget: 'stock-heatmap',        dataSource: 'SPX500',   blockSize: 'market_cap_basic', groups: [{ id: 'sector', label: 'Sector' }, { id: 'no_group', label: 'Flat' }] },
+  nasdaq: { label: 'Nasdaq',  widget: 'stock-heatmap',        dataSource: 'NASDAQ',   blockSize: 'market_cap_basic', groups: [{ id: 'sector', label: 'Sector' }, { id: 'no_group', label: 'Flat' }] },
+  dow:    { label: 'Dow',     widget: 'stock-heatmap',        dataSource: 'DowJones', blockSize: 'market_cap_basic', groups: [{ id: 'sector', label: 'Sector' }, { id: 'no_group', label: 'Flat' }] },
+  etf:    { label: 'ETFs',    widget: 'etf-heatmap',          dataSource: 'AllUSEtf', blockSize: 'volume',           groups: [{ id: 'asset_class', label: 'Asset class' }, { id: 'no_group', label: 'Flat' }] },
+  crypto: { label: 'Crypto',  widget: 'crypto-coins-heatmap', dataSource: 'Crypto',   blockSize: 'market_cap_calc',  groups: [{ id: 'no_group', label: 'Flat' }] },
 }
-const MARKET_ORDER = ['sp500', 'nasdaq', 'dow', 'etf']
+const MARKET_ORDER = ['sp500', 'nasdaq', 'dow', 'etf', 'crypto']
 
 const COLOR_OPTIONS = [
   { id: 'change',   label: '1D'  },
@@ -119,12 +119,16 @@ export default function HeatmapWidget({ paused, config, onSaveConfig, setTitle, 
           ))}
         </div>
 
-        <span style={labelStyle}>Group</span>
-        <div style={{ display: 'flex', gap: 2 }}>
-          {m.groups.map(g => (
-            <button key={g.id} type="button" style={chipStyle(g.id === group)} onClick={() => setConfig({ group: g.id })}>{g.label}</button>
-          ))}
-        </div>
+        {m.groups.length > 1 && (
+          <>
+            <span style={labelStyle}>Group</span>
+            <div style={{ display: 'flex', gap: 2 }}>
+              {m.groups.map(g => (
+                <button key={g.id} type="button" style={chipStyle(g.id === group)} onClick={() => setConfig({ group: g.id })}>{g.label}</button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       <iframe
