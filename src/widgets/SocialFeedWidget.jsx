@@ -523,7 +523,6 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
           ) : (
             displayPosts.map((post, i) => {
               const bodyText = decodeEntities(post.title || post.description)
-              const avatarUrl = post._avatar?.trim()
               return (
                 <a
                   key={`${post.link}-${i}`}
@@ -531,40 +530,13 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
                   href={post.link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ display: 'flex', alignItems: 'flex-start', gap: avatarUrl ? 10 : 0 }}
                 >
-                  {avatarUrl && (
-                    <div style={{ position: 'relative', width: 28, height: 28, flexShrink: 0, marginTop: 2 }}>
-                      <img
-                        src={avatarUrl}
-                        width={28}
-                        height={28}
-                        alt=""
-                        referrerPolicy="no-referrer"
-                        style={{ borderRadius: '50%', objectFit: 'cover', display: 'block' }}
-                      />
-                      <div
-                        style={{
-                          position: 'absolute',
-                          right: -2,
-                          bottom: -2,
-                          width: 15,
-                          height: 15,
-                          borderRadius: '50%',
-                          background: 'var(--color-surface-2)',
-                          border: '1px solid var(--color-border)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'var(--color-text-secondary)',
-                        }}
-                      >
-                        <PlatformIcon platform={post._platform} size={10} />
-                      </div>
-                    </div>
-                  )}
                   <div className="rss-art-body" style={{ flex: 1, minWidth: 0 }}>
-                    <div className="rss-art-meta">
+                    <div
+                      className="rss-art-meta"
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}
+                    >
+                      <PlatformIcon platform={post._platform} size={14} />
                       <span className="rss-art-source" style={{ fontWeight: 'bold' }} dir="auto">
                         {post._accLabel}
                       </span>
