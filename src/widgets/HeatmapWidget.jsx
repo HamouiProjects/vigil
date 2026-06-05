@@ -5,10 +5,11 @@ const MARKETS = {
   sp500:  { label: 'S&P 500', widget: 'stock-heatmap',        dataSource: 'SPX500',   blockSize: 'market_cap_basic', groups: [{ id: 'sector', label: 'Sector' }, { id: 'no_group', label: 'Flat' }] },
   nasdaq: { label: 'Nasdaq',  widget: 'stock-heatmap',        dataSource: 'NASDAQ',   blockSize: 'market_cap_basic', groups: [{ id: 'sector', label: 'Sector' }, { id: 'no_group', label: 'Flat' }] },
   dow:    { label: 'Dow',     widget: 'stock-heatmap',        dataSource: 'DowJones', blockSize: 'market_cap_basic', groups: [{ id: 'sector', label: 'Sector' }, { id: 'no_group', label: 'Flat' }] },
+  dax:    { label: 'DAX',     widget: 'stock-heatmap',        dataSource: 'DAX',      blockSize: 'market_cap_basic', groups: [{ id: 'sector', label: 'Sector' }, { id: 'no_group', label: 'Flat' }] },
   etf:    { label: 'ETFs',    widget: 'etf-heatmap',          dataSource: 'AllUSEtf', blockSize: 'volume',           groups: [{ id: 'asset_class', label: 'Asset class' }, { id: 'no_group', label: 'Flat' }] },
   crypto: { label: 'Crypto',  widget: 'crypto-coins-heatmap', dataSource: 'Crypto',   blockSize: 'market_cap_calc',  groups: [{ id: 'no_group', label: 'Flat' }] },
 }
-const MARKET_ORDER = ['sp500', 'nasdaq', 'dow', 'etf', 'crypto']
+const MARKET_ORDER = ['sp500', 'nasdaq', 'dow', 'dax', 'etf', 'crypto']
 
 const COLOR_OPTIONS = [
   { id: 'change',   label: '1D'  },
@@ -84,6 +85,17 @@ export default function HeatmapWidget({ paused, config, onSaveConfig, setTitle, 
   // Refresh: bump a nonce to force a clean re-mount of the iframe.
   const [nonce, setNonce] = useState(0)
 
+  // Loading shimmer: the embed reads its config from the URL only at mount, so every
+  // market/color/group/theme/refresh change re-mounts the iframe and shows a grey skeleton for a few
+  // seconds. Mask that with a clean "Updating…" overlay so the controls feel responsive, not frozen.
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    if (paused) { setLoading(false); return }
+    setLoading(true)
+    const t = setTimeout(() => setLoading(false), 2800)
+    return () => clearTimeout(t)
+  }, [marketKey, colorBy, group, theme, nonce, paused])
+
   const configRef = useRef(config); configRef.current = config
   const onSaveRef = useRef(onSaveConfig); onSaveRef.current = onSaveConfig
   function setConfig(patch) { onSaveRef.current?.({ ...configRef.current, ...patch }) }
@@ -131,13 +143,34 @@ export default function HeatmapWidget({ paused, config, onSaveConfig, setTitle, 
         )}
       </div>
 
-      <iframe
-        key={`${marketKey}|${colorBy}|${group}|${theme}|${nonce}`}
-        src={paused ? '' : url}
-        style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
-        title="Market Heatmap"
-        allow="clipboard-write"
-      />
+      <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex' }}>
+        <iframe
+          key={`${marketKey}|${colorBy}|${group}|${theme}|${nonce}`}
+          src={paused ? '' : url}
+          style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
+          title="Market Heatmap"
+          allow="clipboard-write"
+        />
+        {!paused && loading && (
+          <div
+            style={{
+              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--color-surface-1)', pointerEvents: 'none', zIndex: 2,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: mono, fontSize: 11, fontWeight: 600, letterSpacing: '0.14em',
+                textTransform: 'uppercase', color: 'var(--color-text-muted)',
+                animation: 'vigilHeatmapPulse 1.1s ease-in-out infinite',
+              }}
+            >
+              Updating…
+            </span>
+          </div>
+        )}
+        <style>{`@keyframes vigilHeatmapPulse { 0%, 100% { opacity: .35 } 50% { opacity: 1 } }`}</style>
+      </div>
     </>
   )
 }
