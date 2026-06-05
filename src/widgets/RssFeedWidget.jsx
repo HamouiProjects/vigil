@@ -85,6 +85,7 @@ export default function RssFeedWidget({
   const savedFilters = config.savedFilters ?? DEFAULT_SAVED_FILTERS
   const sourcesCollapsed = config.sourcesCollapsed ?? false
   const filtersCollapsed = config.filtersCollapsed ?? false
+  const sidebarOpen = config.sidebarOpen ?? true
 
   const feedRows = useMemo(
     () => (config.feeds ?? [])
@@ -368,14 +369,25 @@ export default function RssFeedWidget({
   return (
     <>
       <div className="rss-body">
+        {sidebarOpen ? (
         <div className="rss-sidebar" onPointerDownCapture={e => e.stopPropagation()}>
-          <div
-            className="rss-sidebar-label"
-            style={{ cursor: 'pointer', userSelect: 'none' }}
-            onClick={() => saveConfig({ sourcesCollapsed: !sourcesCollapsed })}
-          >
-            <span style={{ marginRight: 4 }}>{sourcesCollapsed ? '▶' : '▼'}</span>
-            SOURCES
+          <div className="ns-sidebar-header">
+            <div
+              className="rss-sidebar-label"
+              style={{ cursor: 'pointer', userSelect: 'none', borderBottom: 'none', padding: 0 }}
+              onClick={() => saveConfig({ sourcesCollapsed: !sourcesCollapsed })}
+            >
+              <span style={{ marginRight: 4 }}>{sourcesCollapsed ? '▶' : '▼'}</span>
+              SOURCES
+            </div>
+            <button
+              type="button"
+              className="ns-sidebar-toggle"
+              onClick={() => saveConfig({ sidebarOpen: false })}
+              title="Collapse"
+            >
+              ‹
+            </button>
           </div>
           {!sourcesCollapsed && (
             <div className="rss-source-list">
@@ -507,6 +519,15 @@ export default function RssFeedWidget({
             </div>
           )}
         </div>
+        ) : (
+          <div
+            className="rss-slim-strip"
+            onClick={() => saveConfig({ sidebarOpen: true })}
+            title="Expand sources"
+          >
+            <span className="rss-slim-chevron">›</span>
+          </div>
+        )}
 
         <div className="rss-right" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div className="rss-filters-strip" onPointerDownCapture={e => e.stopPropagation()}>
