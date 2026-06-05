@@ -209,6 +209,7 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
       : DEFAULT_ACCOUNTS
   )
   const sidebarOpen = config.sidebarOpen ?? true
+  const accountsSig = accounts.map(a => `${a.id}:${a.platform}:${a.value}:${a.enabled ? 1 : 0}`).join('|')
 
   const [posts, setPosts] = useState([])
   const [errorByAccount, setErrorByAccount] = useState({})
@@ -266,6 +267,8 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
     })
     setLoading(false)
   }, [])
+
+  useEffect(() => { fetchAll() }, [accountsSig]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleRefresh() {
     if (loading || paused) return
