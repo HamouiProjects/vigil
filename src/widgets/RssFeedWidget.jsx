@@ -80,10 +80,8 @@ export default function RssFeedWidget({
   onAddSource,
   setActions,
 }) {
-  const density = config.density ?? 'compact'
   const activeSource = config.activeSource ?? 'all'
   const savedFilters = config.savedFilters ?? DEFAULT_SAVED_FILTERS
-  const sourcesCollapsed = config.sourcesCollapsed ?? false
   const filtersCollapsed = config.filtersCollapsed ?? false
   const sidebarOpen = config.sidebarOpen ?? true
 
@@ -346,14 +344,6 @@ export default function RssFeedWidget({
         <button
           type="button"
           className="widget-btn"
-          onClick={() => saveConfig({ density: density === 'compact' ? 'comfortable' : 'compact' })}
-          title={density === 'compact' ? 'Comfortable view' : 'Compact view'}
-        >
-          {density === 'compact' ? '☰' : '≡'}
-        </button>
-        <button
-          type="button"
-          className="widget-btn"
           onClick={handleRefresh}
           title="Refresh"
           disabled={paused}
@@ -364,7 +354,7 @@ export default function RssFeedWidget({
         </button>
       </>
     )
-  }, [setActions, density, paused, loading])
+  }, [setActions, paused, loading])
 
   return (
     <>
@@ -372,14 +362,7 @@ export default function RssFeedWidget({
         {sidebarOpen ? (
         <div className="rss-sidebar" onPointerDownCapture={e => e.stopPropagation()}>
           <div className="ns-sidebar-header">
-            <div
-              className="rss-sidebar-label"
-              style={{ cursor: 'pointer', userSelect: 'none', borderBottom: 'none', padding: 0 }}
-              onClick={() => saveConfig({ sourcesCollapsed: !sourcesCollapsed })}
-            >
-              <span style={{ marginRight: 4 }}>{sourcesCollapsed ? '▶' : '▼'}</span>
-              SOURCES
-            </div>
+            <span className="ns-sidebar-title">SOURCES</span>
             <button
               type="button"
               className="ns-sidebar-toggle"
@@ -389,7 +372,6 @@ export default function RssFeedWidget({
               ‹
             </button>
           </div>
-          {!sourcesCollapsed && (
             <div className="rss-source-list">
               <div
                 className={`rss-source-item${activeSource === 'all' ? ' active' : ''}`}
@@ -517,7 +499,6 @@ export default function RssFeedWidget({
                 ＋ Add Source
               </button>
             </div>
-          )}
         </div>
         ) : (
           <div
@@ -652,7 +633,7 @@ export default function RssFeedWidget({
                 return (
                   <a
                     key={`${item.link}-${i}`}
-                    className={`rss-article${density === 'comfortable' ? ' rss-comfortable' : ''}`}
+                    className="rss-article rss-comfortable"
                     href={item.link}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -668,7 +649,7 @@ export default function RssFeedWidget({
                         <span className="rss-art-time">· {rssRelTime(item.pubDate)}</span>
                       </div>
                       <div className="rss-art-title" dir="auto">{item.title}</div>
-                      {density === 'comfortable' && desc && (
+                      {desc && (
                         <div className="rss-art-desc" dir="auto">{desc}</div>
                       )}
                     </div>
