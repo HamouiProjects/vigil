@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { widgetRegistry, widgetRegistryMeta, SOURCE_BACKED_TYPES } from './widgetRegistry.js'
+import WidgetErrorBoundary from './WidgetErrorBoundary.jsx'
 
 const FS_STYLE = {
   position: 'fixed',
@@ -125,15 +126,17 @@ export default function WidgetHost({
         </div>
       </div>
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        <Component
-          id={widget.id}
-          paused={effectivePaused}
-          config={widget.config ?? {}}
-          onSaveConfig={onSaveConfig}
-          setTitle={setWidgetTitle}
-          setActions={setWidgetActions}
-          {...(SOURCE_BACKED_TYPES.has(widget.type) ? { sources, onAddSource, onRemoveSource } : {})}
-        />
+        <WidgetErrorBoundary resetKeys={[widget.id, JSON.stringify(widget.config ?? {})]} title={title}>
+          <Component
+            id={widget.id}
+            paused={effectivePaused}
+            config={widget.config ?? {}}
+            onSaveConfig={onSaveConfig}
+            setTitle={setWidgetTitle}
+            setActions={setWidgetActions}
+            {...(SOURCE_BACKED_TYPES.has(widget.type) ? { sources, onAddSource, onRemoveSource } : {})}
+          />
+        </WidgetErrorBoundary>
       </div>
     </div>
   )
