@@ -276,7 +276,7 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
   useEffect(() => {
     setActions?.(
       <button type="button" className="widget-btn" onClick={handleRefresh} title="Refresh" disabled={paused}>
-        <span style={loading ? { display: 'inline-block', animation: 'ns-spin 0.8s linear infinite' } : undefined }}>↻</span>
+        <span style={loading ? { display: 'inline-block', animation: 'ns-spin 0.8s linear infinite' } : undefined}>↻</span>
       </button>
     )
   }, [setActions, paused, loading])
