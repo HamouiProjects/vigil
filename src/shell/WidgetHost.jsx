@@ -99,7 +99,7 @@ export default function WidgetHost({
               onClick={onToggleCollapse}
               title={collapsed ? 'Expand' : 'Collapse'}
             >
-              {collapsed ? '⌄' : '⌃'}
+              {collapsed ? '+' : '−'}
             </button>
           )}
           {widgetActions}
