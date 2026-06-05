@@ -50,7 +50,7 @@ function buildUrl(m, colorBy, group, theme) {
 }
 
 const labelStyle = {
-  fontFamily: mono, fontSize: 10, fontWeight: 600, letterSpacing: '0.12em',
+  fontFamily: mono, fontSize: 10, fontWeight: 500, letterSpacing: '0.12em',
   textTransform: 'uppercase', color: 'var(--color-text-muted)', flexShrink: 0,
 }
 function chipStyle(active) {
@@ -118,28 +118,30 @@ export default function HeatmapWidget({ paused, config, onSaveConfig, setTitle, 
       <div
         className="tvchart-bar"
         onPointerDownCapture={e => e.stopPropagation()}
-        style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
+        style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}
       >
         <select value={marketKey} onChange={e => setConfig({ market: e.target.value })} style={selectStyle} aria-label="Market">
           {MARKET_ORDER.map(k => (<option key={k} value={k}>{MARKETS[k].label}</option>))}
         </select>
 
-        <span style={labelStyle}>Color</span>
-        <div style={{ display: 'flex', gap: 2 }}>
-          {COLOR_OPTIONS.map(o => (
-            <button key={o.id} type="button" style={chipStyle(o.id === colorBy)} onClick={() => setConfig({ colorBy: o.id })}>{o.label}</button>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={labelStyle}>Color</span>
+          <div style={{ display: 'flex', gap: 2 }}>
+            {COLOR_OPTIONS.map(o => (
+              <button key={o.id} type="button" style={chipStyle(o.id === colorBy)} onClick={() => setConfig({ colorBy: o.id })}>{o.label}</button>
+            ))}
+          </div>
         </div>
 
         {m.groups.length > 1 && (
-          <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={labelStyle}>Group</span>
             <div style={{ display: 'flex', gap: 2 }}>
               {m.groups.map(g => (
                 <button key={g.id} type="button" style={chipStyle(g.id === group)} onClick={() => setConfig({ group: g.id })}>{g.label}</button>
               ))}
             </div>
-          </>
+          </div>
         )}
       </div>
 
