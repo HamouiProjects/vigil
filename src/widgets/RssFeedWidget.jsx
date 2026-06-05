@@ -386,7 +386,6 @@ export default function RssFeedWidget({
                   <div
                     key={f.sourceId}
                     className={`rss-source-item${activeSource === f.sourceId ? ' active' : ''}${!f.enabled ? ' rss-source-off' : ''}`}
-                    style={{ borderLeftColor: f.enabled ? f.color : undefined }}
                   >
                     <span
                       className="rss-source-name"
