@@ -217,7 +217,6 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
   const [loading, setLoading] = useState(true)
   const [filterInput, setFilterInput] = useState('')
   const [filter, setFilter] = useState('')
-  const [hiddenAccounts, setHiddenAccounts] = useState(new Set())
   const [addingAccount, setAddingAccount] = useState(false)
   const [selectedPlatform, setSelectedPlatform] = useState('reddit')
   const [newAccountInput, setNewAccountInput] = useState('')
@@ -321,7 +320,6 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
 
   function removeAccount(id) {
     saveAccounts(accounts.filter(a => a.id !== id))
-    setHiddenAccounts(prev => { const next = new Set(prev); next.delete(id); return next })
     setErrorByAccount(prev => { const next = { ...prev }; delete next[id]; return next })
     setMetaByAccount(prev => { const next = { ...prev }; delete next[id]; return next })
   }
@@ -330,18 +328,7 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
     saveAccounts(accounts.map(a => (a.id === id ? { ...a, enabled: !a.enabled } : a)))
   }
 
-  function toggleAccountVisible(id) {
-    setHiddenAccounts(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const enabledAccounts = accounts.filter(a => a.enabled)
   const displayPosts = posts.filter(p => {
-    if (hiddenAccounts.has(p._accId)) return false
     if (filter) {
       const hay = `${p.title || ''} ${p.description || ''}`.toLowerCase()
       if (!hay.includes(filter.toLowerCase())) return false
@@ -497,26 +484,6 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
       )}
 
       <div className="rss-right" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {enabledAccounts.length > 0 && (
-          <div className="rss-filters-strip" onPointerDownCapture={e => e.stopPropagation()}>
-            <div className="rss-filters-chips">
-              {enabledAccounts.map(acc => (
-                <div
-                  key={acc.id}
-                  className={`rss-filter-chip${!hiddenAccounts.has(acc.id) ? ' active' : ''}`}
-                  onClick={() => toggleAccountVisible(acc.id)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                >
-                  <PlatformIcon platform={acc.platform} size={12} />
-                  <span className="rss-filter-chip-text" dir="auto">
-                    {accountLabel(acc, metaByAccount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div className="rss-filter-bar" onPointerDownCapture={e => e.stopPropagation()}>
           <input
             className="rss-input rss-filter-input"
@@ -556,6 +523,7 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
           ) : (
             displayPosts.map((post, i) => {
               const bodyText = decodeEntities(post.title || post.description)
+              const avatarUrl = post._avatar?.trim()
               return (
                 <a
                   key={`${post.link}-${i}`}
@@ -563,56 +531,38 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
                   href={post.link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: avatarUrl ? 10 : 0 }}
                 >
-                  <div style={{ position: 'relative', width: 28, height: 28, flexShrink: 0, marginTop: 2 }}>
-                    {post._avatar ? (
+                  {avatarUrl && (
+                    <div style={{ position: 'relative', width: 28, height: 28, flexShrink: 0, marginTop: 2 }}>
                       <img
-                        src={post._avatar}
+                        src={avatarUrl}
                         width={28}
                         height={28}
                         alt=""
                         referrerPolicy="no-referrer"
                         style={{ borderRadius: '50%', objectFit: 'cover', display: 'block' }}
                       />
-                    ) : (
                       <div
                         style={{
-                          width: 28,
-                          height: 28,
+                          position: 'absolute',
+                          right: -2,
+                          bottom: -2,
+                          width: 15,
+                          height: 15,
                           borderRadius: '50%',
-                          background: 'var(--color-brand-tint)',
-                          color: 'var(--color-brand)',
+                          background: 'var(--color-surface-2)',
+                          border: '1px solid var(--color-border)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 12,
-                          fontWeight: 600,
+                          color: 'var(--color-text-secondary)',
                         }}
                       >
-                        {(post._accLabel || '?')[0].toUpperCase()}
+                        <PlatformIcon platform={post._platform} size={10} />
                       </div>
-                    )}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        right: -2,
-                        bottom: -2,
-                        width: 15,
-                        height: 15,
-                        borderRadius: '50%',
-                        background: 'var(--color-surface-2)',
-                        border: '1px solid var(--color-border)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--color-text-secondary)',
-                      }}
-                    >
-                      <PlatformIcon platform={post._platform} size={10} />
                     </div>
-                  </div>
+                  )}
                   <div className="rss-art-body" style={{ flex: 1, minWidth: 0 }}>
                     <div className="rss-art-meta">
                       <span className="rss-art-source" style={{ fontWeight: 'bold' }} dir="auto">
