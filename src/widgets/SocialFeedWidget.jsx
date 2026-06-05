@@ -25,8 +25,9 @@ async function fetchSub(name) {
   return json.items.map(item => ({ ...item, subName: name }))
 }
 
-export default function SocialFeedWidget({ paused, config, onSaveConfig }) {
+export default function SocialFeedWidget({ paused, config, onSaveConfig, setActions }) {
   const subs = config.subs ?? DEFAULT_SUBS
+  const sidebarOpen = config.sidebarOpen ?? true
 
   const [posts, setPosts] = useState([])
   const [errorBySub, setErrorBySub] = useState({})
@@ -34,7 +35,6 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig }) {
   const [filterInput, setFilterInput] = useState('')
   const [filter, setFilter] = useState('')
   const [hiddenSubs, setHiddenSubs] = useState(new Set())
-  const [sourcesCollapsed, setSourcesCollapsed] = useState(config.sourcesCollapsed ?? false)
   const [addingSub, setAddingSub] = useState(false)
   const [newSubInput, setNewSubInput] = useState('')
 
@@ -63,6 +63,20 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig }) {
     setPosts(allPosts); setErrorBySub(newErrors); setLoading(false)
   }, [])
 
+  function handleRefresh() {
+    if (loading || paused) return
+    setPosts([])
+    fetchAll()
+  }
+
+  useEffect(() => {
+    setActions?.(
+      <button type="button" className="widget-btn" onClick={handleRefresh} title="Refresh" disabled={paused}>
+        <span style={loading ? { display: 'inline-block', animation: 'ns-spin 0.8s linear infinite' } : undefined}>↻</span>
+      </button>
+    )
+  }, [setActions, paused, loading])
+
   usePolling(fetchAll, 10 * 60_000, { isLive: !paused })
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,8 +100,6 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig }) {
   function toggleSubVisible(id) {
     setHiddenSubs(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
   }
-  function toggleSourcesCollapsed() { setSourcesCollapsed(v => { patch({ sourcesCollapsed: !v }); return !v }) }
-
   const enabledSubs = subs.filter(s => s.enabled)
   const displayPosts = posts.filter(p => {
     const sub = subs.find(s => s.name.toLowerCase() === (p.subName ?? '').toLowerCase())
@@ -99,11 +111,19 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig }) {
 
   return (
     <div className="rss-body" style={{ flex: 1, minHeight: 0 }}>
-      <div className="rss-sidebar" onPointerDownCapture={e => e.stopPropagation()}>
-        <div className="rss-sidebar-label" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={toggleSourcesCollapsed}>
-          <span style={{ marginRight: 4 }}>{sourcesCollapsed ? '▶' : '▼'}</span>SUBREDDITS
-        </div>
-        {!sourcesCollapsed && (
+      {sidebarOpen ? (
+        <div className="rss-sidebar" onPointerDownCapture={e => e.stopPropagation()}>
+          <div className="ns-sidebar-header">
+            <span className="ns-sidebar-title">SUBREDDITS</span>
+            <button
+              type="button"
+              className="ns-sidebar-toggle"
+              onClick={() => patch({ sidebarOpen: false })}
+              title="Collapse"
+            >
+              ‹
+            </button>
+          </div>
           <div className="rss-source-list">
             {subs.map(s => (
               <div key={s.id} className="rss-source-item">
@@ -125,8 +145,16 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig }) {
             )}
             <button className="rss-add-source-btn" style={{ margin: '4px 8px', width: 'calc(100% - 16px)' }} onClick={() => setAddingSub(v => !v)}>＋ Add</button>
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div
+          className="rss-slim-strip"
+          onClick={() => patch({ sidebarOpen: true })}
+          title="Expand"
+        >
+          <span className="rss-slim-chevron">›</span>
+        </div>
+      )}
 
       <div className="rss-right" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {enabledSubs.length > 0 && (
