@@ -1,6 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 
-// Confirmed TradingView stock-heatmap field IDs.
+// Verified TradingView heatmap presets (stock-heatmap + etf-heatmap).
+// Crypto (crypto-coins-heatmap) intentionally omitted until its embed params are verified.
+const MARKETS = {
+  sp500:  { label: 'S&P 500', widget: 'stock-heatmap', dataSource: 'SPX500',   blockSize: 'market_cap_basic', groups: [{ id: 'sector', label: 'Sector' }, { id: 'no_group', label: 'Flat' }] },
+  nasdaq: { label: 'Nasdaq',  widget: 'stock-heatmap', dataSource: 'NASDAQ',   blockSize: 'market_cap_basic', groups: [{ id: 'sector', label: 'Sector' }, { id: 'no_group', label: 'Flat' }] },
+  dow:    { label: 'Dow',     widget: 'stock-heatmap', dataSource: 'DowJones', blockSize: 'market_cap_basic', groups: [{ id: 'sector', label: 'Sector' }, { id: 'no_group', label: 'Flat' }] },
+  etf:    { label: 'ETFs',    widget: 'etf-heatmap',   dataSource: 'AllUSEtf', blockSize: 'volume',           groups: [{ id: 'asset_class', label: 'Asset class' }, { id: 'no_group', label: 'Flat' }] },
+}
+const MARKET_ORDER = ['sp500', 'nasdaq', 'dow', 'etf']
+
 const COLOR_OPTIONS = [
   { id: 'change',   label: '1D'  },
   { id: 'Perf.W',   label: '1W'  },
@@ -9,12 +18,8 @@ const COLOR_OPTIONS = [
   { id: 'Perf.YTD', label: 'YTD' },
   { id: 'Perf.Y',   label: '1Y'  },
 ]
-const GROUP_OPTIONS = [
-  { id: 'sector',   label: 'Sector' },
-  { id: 'no_group', label: 'Flat'   },
-]
+const DEFAULT_MARKET = 'sp500'
 const DEFAULT_COLOR = 'change'
-const DEFAULT_GROUP = 'sector'
 
 const mono = 'var(--font-mono, "JetBrains Mono", monospace)'
 
@@ -22,12 +27,12 @@ function currentTheme() {
   return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'
 }
 
-function buildHeatmapUrl({ colorBy, group, theme }) {
+function buildUrl(m, colorBy, group, theme) {
   const cfg = {
     exchanges: [],
-    dataSource: 'SPX500',
+    dataSource: m.dataSource,
     grouping: group,
-    blockSize: 'market_cap_basic',
+    blockSize: m.blockSize,
     blockColor: colorBy,
     locale: 'en',
     symbolUrl: '',
@@ -40,7 +45,7 @@ function buildHeatmapUrl({ colorBy, group, theme }) {
     width: '100%',
     height: '100%',
   }
-  return `https://s.tradingview.com/embed-widget/stock-heatmap/?locale=en#${encodeURIComponent(JSON.stringify(cfg))}`
+  return `https://s.tradingview.com/embed-widget/${m.widget}/?locale=en#${encodeURIComponent(JSON.stringify(cfg))}`
 }
 
 const labelStyle = {
@@ -55,10 +60,18 @@ function chipStyle(active) {
     background: active ? 'var(--color-brand)' : 'transparent',
   }
 }
+const selectStyle = {
+  fontFamily: mono, fontSize: 11, fontWeight: 600, padding: '2px 6px', borderRadius: 3,
+  color: 'var(--color-text-primary)', background: 'var(--color-surface-2)',
+  border: '1px solid var(--color-border)', cursor: 'pointer', flexShrink: 0,
+}
 
 export default function HeatmapWidget({ paused, config, onSaveConfig, setTitle, setActions }) {
-  const colorBy = config.colorBy ?? DEFAULT_COLOR
-  const group = config.group ?? DEFAULT_GROUP
+  const marketKey = MARKETS[config.market] ? config.market : DEFAULT_MARKET
+  const m = MARKETS[marketKey]
+  const colorBy = COLOR_OPTIONS.some(o => o.id === config.colorBy) ? config.colorBy : DEFAULT_COLOR
+  // Effective grouping: keep the saved value if valid for this market, else this market's first option.
+  const group = m.groups.some(g => g.id === config.group) ? config.group : m.groups[0].id
 
   // Theme-follow: track data-theme and re-mount the embed on change (same approach as AtlasWorldGlobe).
   const [theme, setTheme] = useState(currentTheme())
@@ -77,8 +90,8 @@ export default function HeatmapWidget({ paused, config, onSaveConfig, setTitle, 
 
   useEffect(() => {
     const lbl = COLOR_OPTIONS.find(o => o.id === colorBy)?.label ?? '1D'
-    setTitle?.(`Heatmap · S&P 500 · ${lbl}`)
-  }, [setTitle, colorBy])
+    setTitle?.(`Heatmap · ${m.label} · ${lbl}`)
+  }, [setTitle, m.label, colorBy])
 
   useEffect(() => {
     setActions?.(
@@ -86,7 +99,7 @@ export default function HeatmapWidget({ paused, config, onSaveConfig, setTitle, 
     )
   }, [setActions])
 
-  const url = buildHeatmapUrl({ colorBy, group, theme })
+  const url = buildUrl(m, colorBy, group, theme)
 
   return (
     <>
@@ -95,22 +108,27 @@ export default function HeatmapWidget({ paused, config, onSaveConfig, setTitle, 
         onPointerDownCapture={e => e.stopPropagation()}
         style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
       >
+        <select value={marketKey} onChange={e => setConfig({ market: e.target.value })} style={selectStyle} aria-label="Market">
+          {MARKET_ORDER.map(k => (<option key={k} value={k}>{MARKETS[k].label}</option>))}
+        </select>
+
         <span style={labelStyle}>Color</span>
         <div style={{ display: 'flex', gap: 2 }}>
           {COLOR_OPTIONS.map(o => (
             <button key={o.id} type="button" style={chipStyle(o.id === colorBy)} onClick={() => setConfig({ colorBy: o.id })}>{o.label}</button>
           ))}
         </div>
+
         <span style={labelStyle}>Group</span>
         <div style={{ display: 'flex', gap: 2 }}>
-          {GROUP_OPTIONS.map(o => (
-            <button key={o.id} type="button" style={chipStyle(o.id === group)} onClick={() => setConfig({ group: o.id })}>{o.label}</button>
+          {m.groups.map(g => (
+            <button key={g.id} type="button" style={chipStyle(g.id === group)} onClick={() => setConfig({ group: g.id })}>{g.label}</button>
           ))}
         </div>
       </div>
 
       <iframe
-        key={`${colorBy}|${group}|${theme}|${nonce}`}
+        key={`${marketKey}|${colorBy}|${group}|${theme}|${nonce}`}
         src={paused ? '' : url}
         style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
         title="Market Heatmap"
