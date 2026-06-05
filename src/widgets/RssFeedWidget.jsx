@@ -28,6 +28,12 @@ const SUGGESTIONS = [
   { name: 'Politico', url: 'https://rss.politico.com/politics-news.xml', color: '#1a1a2e' },
   { name: 'Foreign Policy', url: 'https://foreignpolicy.com/feed/', color: '#2c3e50' },
   { name: 'The Economist', url: 'https://www.economist.com/the-world-this-week/rss.xml', color: '#e2001a' },
+  { name: 'BBC Arabic', url: 'https://feeds.bbci.co.uk/arabic/rss.xml', color: '#bb1919' },
+  { name: 'France 24 Arabic', url: 'https://www.france24.com/ar/rss', color: '#003f8a' },
+  { name: 'France 24 FR', url: 'https://www.france24.com/fr/rss', color: '#003f8a' },
+  { name: 'BBC Mundo', url: 'https://feeds.bbci.co.uk/mundo/rss.xml', color: '#bb1919' },
+  { name: 'DW Deutsch', url: 'https://rss.dw.com/rdf/rss-de-all', color: '#c8102e' },
+  { name: 'BBC Russian', url: 'https://feeds.bbci.co.uk/russian/rss.xml', color: '#bb1919' },
 ].filter(s => !EXCLUDED_DOMAINS.some(d => s.url.includes(d)))
 
 function rssRelTime(pubDate) {
@@ -389,6 +395,7 @@ export default function RssFeedWidget({
                   >
                     <span
                       className="rss-source-name"
+                      dir="auto"
                       onClick={() => saveConfig({ activeSource: f.sourceId })}
                     >
                       {f.name}
@@ -638,9 +645,9 @@ export default function RssFeedWidget({
                         </span>
                         <span className="rss-art-time">· {rssRelTime(item.pubDate)}</span>
                       </div>
-                      <div className="rss-art-title">{item.title}</div>
+                      <div className="rss-art-title" dir="auto">{item.title}</div>
                       {density === 'comfortable' && desc && (
-                        <div className="rss-art-desc">{desc}</div>
+                        <div className="rss-art-desc" dir="auto">{desc}</div>
                       )}
                     </div>
                     <span className="rss-art-ext">→</span>
