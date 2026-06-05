@@ -4,6 +4,11 @@ import { XMLParser } from 'fast-xml-parser'
 const FRESH_MS = 120_000
 const MAX_ITEMS = 30
 
+const FETCH_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (compatible; VigilRSS/1.0; +https://thevigilroom.com)',
+  Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+}
+
 // ---------- rss2json (primary) ----------
 function isRateLimited(httpStatus, data) {
   if (httpStatus === 429) return true
@@ -51,11 +56,27 @@ const textOf = v => {
 }
 const stripTags = s => String(s ?? '').replace(/<[^>]*>/g, '').trim()
 
+function decodeHtmlEntities(s) {
+  return String(s ?? '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+}
+
 function atomLink(link) {
   const links = asArray(link)
   const alt = links.find(l => (l?.['@_rel'] ?? 'alternate') === 'alternate') ?? links[0]
   if (!alt) return ''
   return typeof alt === 'string' ? alt : (alt['@_href'] ?? '')
+}
+
+function rssChannelImage(ch) {
+  return textOf(ch.image?.url) || textOf(ch['webfeeds:icon']) || ''
 }
 
 function parseFeedXml(xml) {
@@ -65,6 +86,7 @@ function parseFeedXml(xml) {
     const ch = doc.rss.channel
     return {
       title: textOf(ch.title),
+      image: rssChannelImage(ch),
       items: asArray(ch.item).map(it => ({
         title: textOf(it.title),
         link: textOf(it.link),
@@ -79,6 +101,7 @@ function parseFeedXml(xml) {
     const f = doc.feed
     return {
       title: textOf(f.title),
+      image: textOf(f.icon) || textOf(f.logo) || '',
       items: asArray(f.entry).map(e => ({
         title: textOf(e.title),
         link: atomLink(e.link),
@@ -93,6 +116,7 @@ function parseFeedXml(xml) {
   if (rdf) {
     return {
       title: textOf(rdf.channel?.title),
+      image: '',
       items: asArray(rdf.item).map(it => ({
         title: textOf(it.title),
         link: textOf(it.link),
@@ -103,27 +127,110 @@ function parseFeedXml(xml) {
     }
   }
 
-  return { title: '', items: [] }
+  return { title: '', image: '', items: [] }
 }
 
 async function fetchViaDirect(feedUrl) {
   const res = await fetch(feedUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; VigilRSS/1.0; +https://thevigilroom.com)',
-      Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
-    },
+    headers: FETCH_HEADERS,
     signal: AbortSignal.timeout(8000),
   })
   if (!res.ok) return { ok: false }
   const xml = await res.text()
-  const { title, items } = parseFeedXml(xml)
+  const { title, image, items } = parseFeedXml(xml)
   if (!items.length) return { ok: false }
-  return { ok: true, title, items: items.slice(0, MAX_ITEMS) }
+  return { ok: true, title, image, items: items.slice(0, MAX_ITEMS) }
+}
+
+// ---------- Telegram public channels (t.me/s scrape) ----------
+function isTelegramUrl(feedUrl) {
+  try {
+    const host = new URL(feedUrl).hostname.toLowerCase()
+    return host === 't.me' || host === 'telegram.me'
+  } catch {
+    return false
+  }
+}
+
+function telegramChannelFromUrl(feedUrl) {
+  try {
+    let path = new URL(feedUrl).pathname.replace(/^\/+/, '')
+    if (path.startsWith('s/')) path = path.slice(2)
+    return path.split('/').filter(Boolean)[0] ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function metaOgContent(html, prop) {
+  const patterns = [
+    new RegExp(`<meta[^>]+property=["']og:${prop}["'][^>]+content=["']([^"']*)["']`, 'i'),
+    new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:${prop}["']`, 'i'),
+    new RegExp(`<meta[^>]+name=["']og:${prop}["'][^>]+content=["']([^"']*)["']`, 'i'),
+    new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+name=["']og:${prop}["']`, 'i'),
+  ]
+  for (const re of patterns) {
+    const m = html.match(re)
+    if (m?.[1]) return decodeHtmlEntities(m[1].trim())
+  }
+  return ''
+}
+
+function parseTelegramHtml(html, channel) {
+  const channelName = metaOgContent(html, 'title') || channel
+  const channelAvatar = metaOgContent(html, 'image') || ''
+  const items = []
+  const postRe = /data-post="([^"]+)"/g
+  const posts = []
+  let match
+  while ((match = postRe.exec(html)) !== null) {
+    posts.push({ post: match[1], start: match.index })
+  }
+
+  for (let i = 0; i < posts.length; i++) {
+    const chunk = html.slice(posts[i].start, posts[i + 1]?.start ?? html.length)
+    const postId = posts[i].post
+    const link = `https://t.me/${postId}`
+
+    const timeMatch = chunk.match(/<time[^>]+datetime=["']([^"']+)["']/i)
+    const pubDate = timeMatch?.[1] ?? ''
+
+    const textMatch = chunk.match(
+      /<div[^>]*class="[^"]*tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+    )
+    const text = textMatch ? stripTags(decodeHtmlEntities(textMatch[1])) : ''
+    if (!text) continue
+
+    items.push({ title: '', link, pubDate, description: text, author: '' })
+  }
+
+  items.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+  return {
+    title: channelName,
+    image: channelAvatar,
+    items: items.slice(0, MAX_ITEMS),
+  }
+}
+
+async function fetchViaTelegram(feedUrl) {
+  const channel = telegramChannelFromUrl(feedUrl)
+  if (!channel) return { ok: false }
+
+  const res = await fetch(`https://t.me/s/${channel}`, {
+    headers: FETCH_HEADERS,
+    signal: AbortSignal.timeout(8000),
+  })
+  if (!res.ok) return { ok: false }
+
+  const html = await res.text()
+  const { title, image, items } = parseTelegramHtml(html, channel)
+  if (!items.length) return { ok: false }
+  return { ok: true, title, image, items }
 }
 
 // ---------- cache + response helpers ----------
-function okPayload(url, title, items) {
-  return { status: 'ok', source: { title: title ?? '', url }, items }
+function okPayload(url, title, items, image) {
+  return { status: 'ok', source: { title: title ?? '', url, image: image ?? '' }, items }
 }
 
 async function cacheWrite(url, title, items) {
@@ -136,6 +243,22 @@ async function cacheWrite(url, title, items) {
   } catch { /* best-effort */ }
 }
 
+async function readFeedCache(url) {
+  if (!supabase) return { cachedRow: null }
+  try {
+    const { data, error: dbErr } = await supabase
+      .from('feed_cache').select('*').eq('feed_url', url).maybeSingle()
+    if (dbErr || !data) return { cachedRow: null }
+    const age = Date.now() - new Date(data.updated_at).getTime()
+    if (age >= 0 && age < FRESH_MS) {
+      return { cachedRow: data, fresh: true }
+    }
+    return { cachedRow: data, fresh: false }
+  } catch {
+    return { cachedRow: null }
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -146,20 +269,28 @@ export default async function handler(req, res) {
     return res.status(400).json({ status: 'error', error: 'invalid url', items: [] })
   }
 
-  // 1) fresh cache
-  let cachedRow = null
-  if (supabase) {
+  if (isTelegramUrl(url)) {
+    const { cachedRow, fresh } = await readFeedCache(url)
+    if (fresh && cachedRow) {
+      return res.status(200).json(okPayload(url, cachedRow.title, cachedRow.items, ''))
+    }
+
     try {
-      const { data, error: dbErr } = await supabase
-        .from('feed_cache').select('*').eq('feed_url', url).maybeSingle()
-      if (!dbErr && data) {
-        cachedRow = data
-        const age = Date.now() - new Date(data.updated_at).getTime()
-        if (age >= 0 && age < FRESH_MS) {
-          return res.status(200).json(okPayload(url, data.title, data.items))
-        }
+      const telegram = await fetchViaTelegram(url)
+      if (telegram.ok) {
+        await cacheWrite(url, telegram.title, telegram.items)
+        return res.status(200).json(okPayload(url, telegram.title, telegram.items, telegram.image))
       }
-    } catch { cachedRow = null }
+    } catch { /* never throw */ }
+
+    if (cachedRow) return res.status(200).json(okPayload(url, cachedRow.title, cachedRow.items, ''))
+    return res.status(200).json({ status: 'error', error: 'telegram fetch failed', items: [] })
+  }
+
+  // 1) fresh cache
+  const { cachedRow, fresh } = await readFeedCache(url)
+  if (fresh && cachedRow) {
+    return res.status(200).json(okPayload(url, cachedRow.title, cachedRow.items, ''))
   }
 
   let rateLimited = false
@@ -170,9 +301,10 @@ export default async function handler(req, res) {
     const { httpStatus, data } = await fetchViaRss2Json(url)
     if (data?.status === 'ok') {
       const title = data.feed?.title ?? ''
+      const image = data.feed?.image ?? ''
       const items = mapRss2JsonItems(data)
       await cacheWrite(url, title, items)
-      return res.status(200).json(okPayload(url, title, items))
+      return res.status(200).json(okPayload(url, title, items, image))
     }
     if (isRateLimited(httpStatus, data)) rateLimited = true
     lastErr = data?.message ?? (httpStatus !== 200 ? `HTTP ${httpStatus}` : 'rss2json failed')
@@ -185,14 +317,14 @@ export default async function handler(req, res) {
     const direct = await fetchViaDirect(url)
     if (direct.ok) {
       await cacheWrite(url, direct.title, direct.items)
-      return res.status(200).json(okPayload(url, direct.title, direct.items))
+      return res.status(200).json(okPayload(url, direct.title, direct.items, direct.image))
     }
   } catch (e) {
     lastErr = String(e?.message ?? 'direct fetch error')
   }
 
   // 4) both failed -> stale cache, else honest error
-  if (cachedRow) return res.status(200).json(okPayload(url, cachedRow.title, cachedRow.items))
+  if (cachedRow) return res.status(200).json(okPayload(url, cachedRow.title, cachedRow.items, ''))
   if (rateLimited) return res.status(200).json({ status: 'rate_limited', items: [] })
   return res.status(200).json({ status: 'error', error: String(lastErr ?? 'fetch failed'), items: [] })
 }
