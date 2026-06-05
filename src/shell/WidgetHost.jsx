@@ -26,6 +26,8 @@ export default function WidgetHost({
   widget,
   workspacePaused,
   widgetPaused,
+  collapsed = false,
+  onToggleCollapse,
   onTogglePause,
   entitlements,
   onSaveConfig,
@@ -74,7 +76,11 @@ export default function WidgetHost({
 
   const title = widgetTitle ?? widgetRegistryMeta[widget.type]?.label ?? widget.type
   const cartridge = (
-    <div className="widget" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    <div
+      className="widget"
+      {...(collapsed ? { 'data-collapsed': '' } : {})}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}
+    >
       <div className="widget-header" style={{ cursor: 'grab', justifyContent: 'space-between' }}>
         <div className="widget-title-group">
           <span className="widget-title">{title}</span>
@@ -86,6 +92,16 @@ export default function WidgetHost({
           style={{ display: 'flex', alignItems: 'center', gap: 2 }}
           onPointerDownCapture={(e) => e.stopPropagation()}
         >
+          {onToggleCollapse && (
+            <button
+              type="button"
+              className="widget-btn"
+              onClick={onToggleCollapse}
+              title={collapsed ? 'Expand' : 'Collapse'}
+            >
+              {collapsed ? '⌄' : '⌃'}
+            </button>
+          )}
           {widgetActions}
           {!readOnly && (
             <button
@@ -129,7 +145,7 @@ export default function WidgetHost({
         style={{
           width: '100%',
           height: fullscreen ? 0 : '100%',
-          minHeight: fullscreen ? 0 : 280,
+          minHeight: fullscreen || collapsed ? 0 : 280,
           overflow: 'hidden',
         }}
       />

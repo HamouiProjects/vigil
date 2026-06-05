@@ -33,6 +33,16 @@ export default function Grid() {
   const pauseState = { globalLive, activeWs, pausedWorkspaces, inactiveTabPause }
   const workspacePaused = isWorkspacePaused(pauseState, activeWs)
 
+  function toggleCollapse(widget, gridItem) {
+    if (!widget.config?.collapsed) {
+      updateWidgetConfig(activeWs, widget.id, { ...widget.config, collapsed: true, expandedH: gridItem.h })
+      updateLayout(activeWs, workspace.layout.map(l => l.i === widget.id ? { ...l, h: 1, isResizable: false } : l))
+    } else {
+      updateWidgetConfig(activeWs, widget.id, { ...widget.config, collapsed: false })
+      updateLayout(activeWs, workspace.layout.map(l => l.i === widget.id ? { ...l, h: (widget.config?.expandedH ?? 6), isResizable: true } : l))
+    }
+  }
+
   return (
     <SizedGridLayout
       layout={workspace.layout}
@@ -51,6 +61,7 @@ export default function Grid() {
       {workspace.widgets.map(widget => {
         const gridItem = workspace.layout.find(item => item.i === widget.id)
         if (!gridItem) return null
+        const collapsed = !!widget.config?.collapsed
         return (
           <div
             key={widget.id}
@@ -61,6 +72,8 @@ export default function Grid() {
               widget={widget}
               workspacePaused={workspacePaused}
               widgetPaused={widget.paused === true}
+              collapsed={collapsed}
+              onToggleCollapse={() => toggleCollapse(widget, gridItem)}
               onTogglePause={() => toggleWidgetPause(activeWs, widget.id)}
               entitlements={entitlements}
               onSaveConfig={config => updateWidgetConfig(activeWs, widget.id, config)}
