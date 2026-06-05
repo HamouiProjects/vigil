@@ -29,6 +29,7 @@ const SUGGESTIONS = [
   { name: 'Foreign Policy', url: 'https://foreignpolicy.com/feed/', color: '#2c3e50' },
   { name: 'The Economist', url: 'https://www.economist.com/the-world-this-week/rss.xml', color: '#e2001a' },
   { name: 'BBC Arabic', url: 'https://feeds.bbci.co.uk/arabic/rss.xml', color: '#bb1919' },
+  { name: 'Al Jazeera Mubasher', url: 'https://www.aljazeeramubasher.net/rss.xml', color: '#009966' },
   { name: 'France 24 Arabic', url: 'https://www.france24.com/ar/rss', color: '#003f8a' },
   { name: 'France 24 FR', url: 'https://www.france24.com/fr/rss', color: '#003f8a' },
   { name: 'BBC Mundo', url: 'https://feeds.bbci.co.uk/mundo/rss.xml', color: '#bb1919' },
