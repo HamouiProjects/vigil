@@ -120,6 +120,7 @@ export default function Shell() {
   const [authView, setAuthView] = useState('login')
   const [navCollapsed, setNavCollapsed] = useState(() => { try { return localStorage.getItem('vigil_nav_collapsed') === '1' } catch { return false } })
   const [wsBarCollapsed, setWsBarCollapsed] = useState(() => { try { return localStorage.getItem('vigil_ws_bar_collapsed') === '1' } catch { return false } })
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const scrollRef = useRef(null)
   const [atBottom, setAtBottom] = useState(false)
   const [editingWs, setEditingWs] = useState(null)
@@ -134,6 +135,12 @@ export default function Shell() {
   useEffect(() => {
     const { globalLive: live, setGlobalLive } = useShellStore.getState()
     if (typeof live !== 'boolean') setGlobalLive(true)
+  }, [])
+
+  useEffect(() => {
+    const onFs = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', onFs)
+    return () => document.removeEventListener('fullscreenchange', onFs)
   }, [])
 
   useEffect(() => {
@@ -267,6 +274,11 @@ export default function Shell() {
     supabase.auth.updateUser({ data: { ws_bar_collapsed: v } }).catch(() => {})
   }
 
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen?.()
+    else document.documentElement.requestFullscreen?.().catch(() => {})
+  }
+
   if (!loaded) {
     return (
       <div
@@ -301,6 +313,24 @@ export default function Shell() {
         : (<nav className="navbar">
         <div className="navbar-left">
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-wordmark)' }}>VIGIL</span>
+          <button
+            type="button"
+            className="widget-btn"
+            onClick={toggleFullscreen}
+            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen (hide browser UI — for recording)'}
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            style={{ marginLeft: 10 }}
+          >
+            {isFullscreen ? (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 8V5a2 2 0 0 1 2-2h3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M21 16v3a2 2 0 0 1-2 2h-3"/>
+              </svg>
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/>
+              </svg>
+            )}
+          </button>
         </div>
 
         <div className="navbar-center">
@@ -310,10 +340,10 @@ export default function Shell() {
                 type="button"
                 className="ws-add-btn"
                 onClick={() => setWsBarCollapsedPersisted(!wsBarCollapsed)}
-                title={wsBarCollapsed ? `Show all workspaces (${workspaces.length - 1} hidden)` : 'Show only the active workspace'}
+                title={wsBarCollapsed ? 'Show all workspaces' : 'Show only the active workspace'}
                 aria-label={wsBarCollapsed ? 'Show all workspaces' : 'Show only the active workspace'}
               >
-                {wsBarCollapsed ? `${workspaces.length - 1} ›` : '‹'}
+                {wsBarCollapsed ? '‹' : '›'}
               </button>
             )}
             {visibleWorkspaces.map(ws => {
