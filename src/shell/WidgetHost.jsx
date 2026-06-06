@@ -2,23 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { widgetRegistry, widgetRegistryMeta, SOURCE_BACKED_TYPES } from './widgetRegistry.js'
 import WidgetErrorBoundary from './WidgetErrorBoundary.jsx'
 
-// Fullscreen is an in-place style swap on the wrapper — NOT a DOM reparent. Moving an <iframe>
-// in the DOM forces the browser to reload it (wiping in-session chart drawings), so the node must
-// never move. With useCSSTransforms={false} on the grid (Grid.jsx) no ancestor creates a containing
-// block, so this position:fixed resolves against the viewport and isn't clipped.
-const FS_STYLE = {
-  position: 'fixed',
-  top: '40px',
-  left: 0,
-  right: 0,
-  bottom: 0,
-  zIndex: 1000,
-  display: 'flex',
-  flexDirection: 'column',
-  background: 'var(--color-bg, #0A0C10)',
-  outline: 'none',
-}
-
 export default function WidgetHost({
   widget,
   workspacePaused,
@@ -39,21 +22,25 @@ export default function WidgetHost({
   const [widgetActions, setWidgetActions] = useState(null)
   const wrapRef = useRef(null)
 
-  // When entering fullscreen, pull keyboard focus out of the (cross-origin) widget iframe and onto
-  // the app, and let Escape exit. A focused TradingView iframe can otherwise swallow the parent's
-  // key events and leave the on-screen exit control unreliable — Escape + app focus guarantees an out.
+  // Native browser fullscreen. requestFullscreen() does NOT move the node in the DOM, so the widget's
+  // <iframe> is never reloaded — in-session chart drawings survive. Crucially, the BROWSER owns the
+  // exit gesture, so Esc always exits even when a cross-origin iframe (TradingView) holds focus —
+  // making it impossible to get trapped in fullscreen.
   useEffect(() => {
-    if (!fullscreen) return
-    wrapRef.current?.focus()
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        setFullscreen(false)
-      }
+    const onFsChange = () => setFullscreen(document.fullscreenElement === wrapRef.current)
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+
+  const toggleFullscreen = () => {
+    const el = wrapRef.current
+    if (!el) return
+    if (document.fullscreenElement === el) {
+      document.exitFullscreen?.()?.catch(() => {})
+    } else {
+      el.requestFullscreen?.()?.catch(() => {})
     }
-    document.addEventListener('keydown', onKey, true)
-    return () => document.removeEventListener('keydown', onKey, true)
-  }, [fullscreen])
+  }
 
   const Component = widgetRegistry[widget.type]
   if (!Component) {
@@ -72,11 +59,11 @@ export default function WidgetHost({
   const title = widgetTitle ?? widgetRegistryMeta[widget.type]?.label ?? widget.type
 
   const wrapStyle = fullscreen
-    ? FS_STYLE
+    ? { width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--color-bg, #0A0C10)' }
     : { width: '100%', height: '100%', minHeight: collapsed ? 0 : 280, display: 'flex', flexDirection: 'column' }
 
   return (
-    <div className="widget-fs-wrap" ref={wrapRef} tabIndex={-1} style={wrapStyle}>
+    <div className="widget-fs-wrap" ref={wrapRef} style={wrapStyle}>
       <div
         className="widget"
         {...(collapsed ? { 'data-collapsed': '' } : {})}
@@ -120,7 +107,7 @@ export default function WidgetHost({
                   : <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>}
               </button>
             )}
-            <button type="button" className="widget-btn" onClick={() => setFullscreen(f => !f)} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+            <button type="button" className="widget-btn" onClick={toggleFullscreen} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
               {fullscreen ? '⤡' : '⤢'}
             </button>
             {onRemove && (
