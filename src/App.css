@@ -1310,13 +1310,6 @@ button.status-dot:hover { opacity: 0.8; }
   display: flex; flex-shrink: 0; align-items: center; gap: 6px;
   padding: 5px 8px; border-bottom: 1px solid var(--border); background: var(--bg);
 }
-.tvchart-symbol-dot  { color: var(--green); font-size: 10px; flex-shrink: 0; }
-.tvchart-symbol-label {
-  font-size: 11px; font-weight: 700; color: var(--text-primary); letter-spacing: 0.08em;
-  font-family: 'JetBrains Mono', monospace;
-  white-space: nowrap; flex-shrink: 0; min-width: 56px;
-}
-.tvchart-input { flex: 1; min-width: 0; }
 
 /* ── Browser / Reader shared primitives ── */
 .browser-bar {

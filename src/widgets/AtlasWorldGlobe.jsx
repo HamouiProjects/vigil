@@ -37,9 +37,6 @@ const AIRCRAFT_REFRESH_MS = 20_000
 const WILDFIRES_REFRESH_MS = 600_000
 const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] }
 const COUNTRIES_GEO_URL = '/ne_110m_admin_0_countries.geojson'
-const COUNTRIES_SOURCE_ID = 'countries-admin0'
-const COUNTRIES_FILL_LAYER_ID = 'countries-hover-fill'
-const COUNTRIES_LINE_LAYER_ID = 'countries-hover-outline'
 const GLOBE_SPACE_BG = {
   dark: '#05070B',
   light: '#D9D3C6',
@@ -808,7 +805,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
   const countryBBoxesRef = useRef(null)
   const hoverRAFRef = useRef(0)
   const lastHoverLngLatRef = useRef(null)
-  const hoveredCountryIdRef = useRef(null)
 
   pausedRef.current = paused
   layersRef.current = layers
@@ -958,7 +954,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
     let stormListenersBound = false
     let aircraftListenersBound = false
     let wildfiresListenersBound = false
-    let countriesHoverListenersBound = false
 
     const updateCountryReadout = (name) => {
       const el = countryReadoutRef.current
@@ -970,19 +965,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
         el.textContent = ''
         el.style.display = 'none'
       }
-    }
-
-    const clearCountryHover = () => {
-      const hoveredId = hoveredCountryIdRef.current
-      if (hoveredId != null && map.getSource(COUNTRIES_SOURCE_ID)) {
-        try {
-          map.setFeatureState({ source: COUNTRIES_SOURCE_ID, id: hoveredId }, { hover: false })
-        } catch {
-          /* feature may have been removed on style swap */
-        }
-      }
-      hoveredCountryIdRef.current = null
-      updateCountryReadout(null)
     }
 
     const clearWatchdog = () => {
@@ -1097,88 +1079,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
           },
           beforeId,
         )
-      }
-    }
-
-    const ensureCountryHoverLayers = () => {
-      const geo = countriesGeoRef.current
-      if (!geo) return
-
-      if (!map.getSource(COUNTRIES_SOURCE_ID)) {
-        map.addSource(COUNTRIES_SOURCE_ID, {
-          type: 'geojson',
-          data: geo,
-          generateId: true,
-        })
-      } else {
-        map.getSource(COUNTRIES_SOURCE_ID).setData(geo)
-      }
-
-      const beforeId = map.getLayer('quakes-layer') ? 'quakes-layer' : undefined
-
-      if (!map.getLayer(COUNTRIES_FILL_LAYER_ID)) {
-        map.addLayer(
-          {
-            id: COUNTRIES_FILL_LAYER_ID,
-            type: 'fill',
-            source: COUNTRIES_SOURCE_ID,
-            paint: {
-              'fill-color': '#E2E8F0',
-              'fill-opacity': [
-                'case',
-                ['boolean', ['feature-state', 'hover'], false],
-                0.1,
-                0,
-              ],
-            },
-          },
-          beforeId,
-        )
-      }
-
-      if (!map.getLayer(COUNTRIES_LINE_LAYER_ID)) {
-        map.addLayer(
-          {
-            id: COUNTRIES_LINE_LAYER_ID,
-            type: 'line',
-            source: COUNTRIES_SOURCE_ID,
-            paint: {
-              'line-color': '#E2E8F0',
-              'line-width': 1,
-              'line-opacity': [
-                'case',
-                ['boolean', ['feature-state', 'hover'], false],
-                0.5,
-                0,
-              ],
-            },
-          },
-          beforeId,
-        )
-      }
-
-      if (!countriesHoverListenersBound) {
-        countriesHoverListenersBound = true
-
-        map.on('mousemove', COUNTRIES_FILL_LAYER_ID, (e) => {
-          const feature = e.features?.[0]
-          if (!feature) return
-
-          if (hoveredCountryIdRef.current != null && hoveredCountryIdRef.current !== feature.id) {
-            map.setFeatureState(
-              { source: COUNTRIES_SOURCE_ID, id: hoveredCountryIdRef.current },
-              { hover: false },
-            )
-          }
-
-          hoveredCountryIdRef.current = feature.id
-          map.setFeatureState({ source: COUNTRIES_SOURCE_ID, id: feature.id }, { hover: true })
-          updateCountryReadout(countryNameFromProps(feature.properties))
-        })
-
-        map.on('mouseleave', COUNTRIES_FILL_LAYER_ID, () => {
-          clearCountryHover()
-        })
       }
     }
 
@@ -1465,11 +1365,10 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
       advanceInFlight = false
       styleLocked = true
       clearWatchdog()
-      clearCountryHover()
+      updateCountryReadout(null)
       applyTheme()
       calmBasemapLabels(map)
       ensureCountryHighlightLayer()
-      ensureCountryHoverLayers()
       ensureQuakesLayer()
       ensureStormsLayer()
       ensureAircraftLayer()
@@ -1562,14 +1461,12 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
       .then((data) => {
         countriesGeoRef.current = data
         countryBBoxesRef.current = data.features?.map((f) => bboxOfGeometry(f.geometry)) || []
-        if (map.isStyleLoaded()) ensureCountryHoverLayers()
       })
       .catch(() => {})
 
     return () => {
       themeObserver.disconnect()
       resetEaseToken += 1
-      clearCountryHover()
       popup?.remove()
       cancelAnimationFrame(rafRef.current)
       cancelAnimationFrame(hoverRAFRef.current)
