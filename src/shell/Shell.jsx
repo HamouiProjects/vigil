@@ -108,6 +108,7 @@ export default function Shell() {
   const addWorkspace = useShellStore(s => s.addWorkspace)
   const removeWorkspace = useShellStore(s => s.removeWorkspace)
   const renameWorkspace = useShellStore(s => s.renameWorkspace)
+  const moveWorkspace = useShellStore(s => s.moveWorkspace)
   const addWidget = useShellStore(s => s.addWidget)
 
   const [upgradeNudge, setUpgradeNudge] = useState(null)
@@ -122,6 +123,8 @@ export default function Shell() {
   const [atBottom, setAtBottom] = useState(false)
   const [editingWs, setEditingWs] = useState(null)
   const [wsDraft, setWsDraft] = useState('')
+  const dragWsId = useRef(null)
+  const [dragOverWs, setDragOverWs] = useState(null)
   const widgetPickerRef = useRef(null)
 
   const plan = useShellStore(s => s.entitlements.plan)
@@ -298,6 +301,13 @@ export default function Shell() {
                   className={`ws-tab${isActive ? ' active' : ''}${isPaused ? ' ws-paused' : ''}`}
                   onClick={() => setActiveWs(ws.id)}
                   title={ws.name}
+                  draggable={editingWs !== ws.id}
+                  onDragStart={(e) => { dragWsId.current = ws.id; e.dataTransfer.effectAllowed = 'move' }}
+                  onDragOver={(e) => { e.preventDefault(); if (dragOverWs !== ws.id) setDragOverWs(ws.id) }}
+                  onDragLeave={() => setDragOverWs(prev => (prev === ws.id ? null : prev))}
+                  onDrop={(e) => { e.preventDefault(); if (dragWsId.current && dragWsId.current !== ws.id) moveWorkspace(dragWsId.current, ws.id); dragWsId.current = null; setDragOverWs(null) }}
+                  onDragEnd={() => { dragWsId.current = null; setDragOverWs(null) }}
+                  style={dragOverWs === ws.id ? { boxShadow: 'inset 2px 0 0 var(--color-brand)' } : undefined}
                 >
                   {editingWs === ws.id ? (
                     <input

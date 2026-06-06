@@ -107,6 +107,17 @@ export const useShellStore = create((set, get) => ({
     })
   },
 
+  moveWorkspace: (fromId, toId) => set((s) => {
+    if (fromId === toId) return {}
+    const arr = [...s.workspaces]
+    const from = arr.findIndex(w => w.id === fromId)
+    const to = arr.findIndex(w => w.id === toId)
+    if (from === -1 || to === -1) return {}
+    const [moved] = arr.splice(from, 1)
+    arr.splice(to, 0, moved)
+    return { workspaces: arr }
+  }),
+
   renameWorkspace: (wsId, name) => {
     const next = (name ?? '').trim()
     if (!next) return
