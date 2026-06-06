@@ -41,6 +41,10 @@ const GLOBE_SPACE_BG = {
   dark: '#05070B',
   light: '#D9D3C6',
 }
+const GLOBE_SKY = {
+  dark:  { 'sky-color': '#0B1220', 'sky-horizon-blend': 0.6, 'horizon-color': '#1B2A44', 'atmosphere-blend': 0.5 },
+  light: { 'sky-color': '#CFC9BD', 'sky-horizon-blend': 0.6, 'horizon-color': '#E6E1D6', 'atmosphere-blend': 0.5 },
+}
 
 function readGlobeTheme() {
   const raw = document.documentElement.getAttribute('data-theme')
@@ -75,21 +79,7 @@ function applyGlobeTheme(theme, map, { wrapEl, mapContainerEl } = {}) {
     }
 
     if (typeof map.setSky === 'function') {
-      if (mode === 'light') {
-        map.setSky({
-          'sky-type': 'atmosphere',
-          'sky-atmosphere-sun': [0.0, 0.0],
-          'sky-atmosphere-sun-intensity': 6,
-          'sky-atmosphere-color': 'rgb(210, 205, 195)',
-        })
-      } else {
-        map.setSky({
-          'sky-type': 'atmosphere',
-          'sky-atmosphere-sun': [0.0, 0.0],
-          'sky-atmosphere-sun-intensity': 4,
-          'sky-atmosphere-color': 'rgb(18, 24, 38)',
-        })
-      }
+      map.setSky(GLOBE_SKY[mode])
     }
 
     const style = map.getStyle()
