@@ -305,6 +305,17 @@ export default function Shell() {
 
         <div className="navbar-center">
           <div className="ws-tabs">
+            {workspaces.length > 1 && (
+              <button
+                type="button"
+                className="ws-add-btn"
+                onClick={() => setWsBarCollapsedPersisted(!wsBarCollapsed)}
+                title={wsBarCollapsed ? `Show all workspaces (${workspaces.length - 1} hidden)` : 'Show only the active workspace'}
+                aria-label={wsBarCollapsed ? 'Show all workspaces' : 'Show only the active workspace'}
+              >
+                {wsBarCollapsed ? `${workspaces.length - 1} ›` : '‹'}
+              </button>
+            )}
             {visibleWorkspaces.map(ws => {
               const isActive = ws.id === activeWs
               const isPaused = isWorkspacePaused(pauseState, ws.id)

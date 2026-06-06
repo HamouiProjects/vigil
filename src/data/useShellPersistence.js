@@ -30,14 +30,21 @@ export function useShellPersistence() {
           await saveWorkspaces(uid, wss)
         }
 
+        let savedActive = null
+        try { savedActive = localStorage.getItem('vigil_active_ws') } catch {}
+        const initialActive = wss.some(w => w.id === savedActive) ? savedActive : wss[0]?.id
+
         useShellStore.getState().hydrate({
           uid,
           workspaces: wss,
-          activeWs: wss[0]?.id,
+          activeWs: initialActive,
           sources: srcs,
         })
 
         unsub = useShellStore.subscribe((state, prev) => {
+          if (state.activeWs !== prev.activeWs && state.activeWs) {
+            try { localStorage.setItem('vigil_active_ws', state.activeWs) } catch {}
+          }
           if (state.workspaces === prev.workspaces || !state.uid) return
           clearTimeout(t)
           t = setTimeout(
