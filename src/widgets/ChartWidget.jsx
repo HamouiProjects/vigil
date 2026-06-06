@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 
 const DEFAULT_SYMBOL = 'BINANCE:BTCUSDT'
 
@@ -18,21 +18,12 @@ function buildUrl(symbol, theme) {
   return `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_vigil&symbol=${encodeURIComponent(symbol)}&interval=D&theme=${theme}&style=1&locale=en&toolbar_bg=${bg}&bg_color=${bg}&enable_publishing=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0`
 }
 
-export default function ChartWidget({ id, paused, config, onSaveConfig, setTitle, setActions }) {
+export default function ChartWidget({ paused, config, setTitle, setActions }) {
+  // Boot symbol only (a previously saved config.symbol still opens here). The symbol is changed live
+  // inside TradingView's own toolbar — its in-iframe changes can't be read back cross-origin.
   const symbol = config.symbol ?? DEFAULT_SYMBOL
-  const [inputSymbol, setInputSymbol] = useState(symbol)
-  const displayTicker = symbol.includes(':') ? symbol.split(':')[1] : symbol
 
-  const configRef = useRef(config)
-  configRef.current = config
-  const onSaveConfigRef = useRef(onSaveConfig)
-  onSaveConfigRef.current = onSaveConfig
-
-  useEffect(() => {
-    setInputSymbol(symbol)
-  }, [symbol, id])
-
-  // Theme-follow: track data-theme and re-mount the embed on change (same approach as the Heatmap/Atlas).
+  // Theme-follow: re-mount the embed when data-theme changes (the Heatmap/Atlas pattern).
   const [theme, setTheme] = useState(currentTheme())
   useEffect(() => {
     const obs = new MutationObserver(() => setTheme(currentTheme()))
@@ -43,51 +34,23 @@ export default function ChartWidget({ id, paused, config, onSaveConfig, setTitle
   // Refresh: bump a nonce to force a clean re-mount of the iframe.
   const [nonce, setNonce] = useState(0)
 
-  // Reactive host-bar title (the loaded symbol), mirroring the Heatmap's "Heatmap · <market> · <tf>".
-  useEffect(() => {
-    setTitle?.(`Chart · ${displayTicker}`)
-  }, [setTitle, displayTicker])
+  useEffect(() => { setTitle?.('Chart') }, [setTitle])
 
-  // Refresh ↻ in the host header (a setActions ghost icon button — the Heatmap pattern).
   useEffect(() => {
     setActions?.(
       <button className="widget-btn" type="button" onClick={() => setNonce(n => n + 1)} title="Refresh">↻</button>
     )
   }, [setActions])
 
-  function go(raw) {
-    const sym = raw.trim().toUpperCase()
-    if (!sym) return
-    setInputSymbol(sym)
-    onSaveConfigRef.current({ ...configRef.current, symbol: sym })
-  }
-
   const tvUrl = buildUrl(symbol, theme)
 
   return (
-    <>
-      <form
-        className="tvchart-bar"
-        onPointerDownCapture={e => e.stopPropagation()}
-        onSubmit={e => { e.preventDefault(); go(inputSymbol) }}
-      >
-        <input
-          className="rss-input tvchart-input"
-          value={inputSymbol}
-          onChange={e => setInputSymbol(e.target.value)}
-          placeholder="Symbol (e.g. BTCUSDT, AAPL, EURUSD)"
-          spellCheck={false}
-        />
-        <button className="rss-go-btn" type="submit">GO</button>
-      </form>
-
-      <iframe
-        key={`${symbol}|${theme}|${nonce}`}
-        src={paused ? '' : tvUrl}
-        style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
-        title="TradingView Chart"
-        allow="clipboard-write"
-      />
-    </>
+    <iframe
+      key={`${symbol}|${theme}|${nonce}`}
+      src={paused ? '' : tvUrl}
+      style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
+      title="TradingView Chart"
+      allow="clipboard-write"
+    />
   )
 }
