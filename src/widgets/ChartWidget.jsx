@@ -14,7 +14,7 @@ function bgHex(theme) {
 
 function buildUrl(symbol, theme) {
   const bg = bgHex(theme)
-  return `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_vigil&symbol=${encodeURIComponent(symbol)}&interval=D&theme=${theme}&style=1&locale=en&toolbar_bg=${bg}&bg_color=${bg}&enable_publishing=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0`
+  return `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_vigil&symbol=${encodeURIComponent(symbol)}&interval=D&theme=${theme}&style=1&locale=en&toolbar_bg=${bg}&bg_color=${bg}&enable_publishing=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0&hide_volume=1`
 }
 
 // Title shows just the ticker (strip TradingView's exchange prefix, e.g. "BATS_DLY:NVDA" -> "NVDA").

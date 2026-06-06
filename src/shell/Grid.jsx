@@ -55,6 +55,7 @@ export default function Grid() {
       resizeHandles={['se', 'sw', 'ne', 'nw', 's', 'e', 'n', 'w']}
       compactType="vertical"
       preventCollision={false}
+      useCSSTransforms={false}
       isResizable
       isDraggable
     >
