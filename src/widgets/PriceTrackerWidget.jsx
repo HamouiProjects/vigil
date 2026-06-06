@@ -32,7 +32,7 @@ function buildUrl(symbols, theme) {
         symbols: symbols.map(s => ({ name: s.tvSymbol, displayName: s.display })),
       },
     ],
-    showSymbolLogo: true,
+    showSymbolLogo: false,
     isTransparent: true,
     colorTheme: theme,
     locale: 'en',
@@ -163,8 +163,61 @@ export default function PriceTrackerWidget({ id, paused, config, onSaveConfig, s
 
   return (
     <div className="rss-body" style={{ flex: 1, minHeight: 0 }}>
+      <div className="rss-right" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        {symbols.length === 0 ? (
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 16,
+              fontFamily: mono,
+              fontSize: 11,
+              color: 'var(--color-text-muted)',
+              textAlign: 'center',
+            }}
+          >
+            No instruments yet — search on the right to add one.
+          </div>
+        ) : (
+          <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex' }}>
+            <iframe
+              key={`${theme}|${nonce}|${symbolsKey}`}
+              src={paused ? '' : tvUrl}
+              style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
+              title="Market Quotes"
+              allow="clipboard-write"
+            />
+            {!paused && loading && (
+              <div
+                style={{
+                  position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'var(--color-surface-1)', pointerEvents: 'none', zIndex: 2,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: mono, fontSize: 11, fontWeight: 600, letterSpacing: '0.14em',
+                    textTransform: 'uppercase', color: 'var(--color-text-muted)',
+                    animation: 'vigilPricesPulse 1.1s ease-in-out infinite',
+                  }}
+                >
+                  Updating…
+                </span>
+              </div>
+            )}
+            <style>{`@keyframes vigilPricesPulse { 0%, 100% { opacity: .35 } 50% { opacity: 1 } }`}</style>
+          </div>
+        )}
+      </div>
+
       {sidebarOpen ? (
-        <div className="rss-sidebar" onPointerDownCapture={e => e.stopPropagation()}>
+        <div
+          className="rss-sidebar"
+          onPointerDownCapture={e => e.stopPropagation()}
+          style={{ borderRight: 'none', borderLeft: '1px solid var(--color-border)' }}
+        >
           <div className="ns-sidebar-header">
             <span className="ns-sidebar-title">INSTRUMENTS</span>
             <button
@@ -173,7 +226,7 @@ export default function PriceTrackerWidget({ id, paused, config, onSaveConfig, s
               onClick={() => patch({ sidebarOpen: false })}
               title="Collapse"
             >
-              ‹
+              ›
             </button>
           </div>
 
@@ -279,59 +332,11 @@ export default function PriceTrackerWidget({ id, paused, config, onSaveConfig, s
           className="rss-slim-strip"
           onClick={() => patch({ sidebarOpen: true })}
           title="Expand instruments"
+          style={{ borderRight: 'none', borderLeft: '1px solid var(--color-border)' }}
         >
-          <span className="rss-slim-chevron">›</span>
+          <span className="rss-slim-chevron">‹</span>
         </div>
       )}
-
-      <div className="rss-right" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {symbols.length === 0 ? (
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 16,
-              fontFamily: mono,
-              fontSize: 11,
-              color: 'var(--color-text-muted)',
-              textAlign: 'center',
-            }}
-          >
-            No instruments yet — search on the left to add one.
-          </div>
-        ) : (
-          <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex' }}>
-            <iframe
-              key={`${theme}|${nonce}|${symbolsKey}`}
-              src={paused ? '' : tvUrl}
-              style={{ flex: 1, width: '100%', minHeight: 0, border: 'none', display: 'block' }}
-              title="Market Quotes"
-              allow="clipboard-write"
-            />
-            {!paused && loading && (
-              <div
-                style={{
-                  position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'var(--color-surface-1)', pointerEvents: 'none', zIndex: 2,
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: mono, fontSize: 11, fontWeight: 600, letterSpacing: '0.14em',
-                    textTransform: 'uppercase', color: 'var(--color-text-muted)',
-                    animation: 'vigilPricesPulse 1.1s ease-in-out infinite',
-                  }}
-                >
-                  Updating…
-                </span>
-              </div>
-            )}
-            <style>{`@keyframes vigilPricesPulse { 0%, 100% { opacity: .35 } 50% { opacity: 1 } }`}</style>
-          </div>
-        )}
-      </div>
     </div>
   )
 }
