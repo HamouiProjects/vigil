@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { widgetRegistry, widgetRegistryMeta, SOURCE_BACKED_TYPES } from './widgetRegistry.js'
 import WidgetErrorBoundary from './WidgetErrorBoundary.jsx'
 
 // Fullscreen is an in-place style swap on the wrapper — NOT a DOM reparent. Moving an <iframe>
-// in the DOM forces the browser to reload it (wiping in-session chart drawings/indicators), so the
-// node must never move. With useCSSTransforms={false} on the grid (Grid.jsx) no ancestor creates a
-// containing block, so this position:fixed resolves against the viewport and isn't clipped.
+// in the DOM forces the browser to reload it (wiping in-session chart drawings), so the node must
+// never move. With useCSSTransforms={false} on the grid (Grid.jsx) no ancestor creates a containing
+// block, so this position:fixed resolves against the viewport and isn't clipped.
 const FS_STYLE = {
   position: 'fixed',
   top: '40px',
@@ -16,6 +16,7 @@ const FS_STYLE = {
   display: 'flex',
   flexDirection: 'column',
   background: 'var(--color-bg, #0A0C10)',
+  outline: 'none',
 }
 
 export default function WidgetHost({
@@ -36,6 +37,23 @@ export default function WidgetHost({
   const [fullscreen, setFullscreen] = useState(false)
   const [widgetTitle, setWidgetTitle] = useState(null)
   const [widgetActions, setWidgetActions] = useState(null)
+  const wrapRef = useRef(null)
+
+  // When entering fullscreen, pull keyboard focus out of the (cross-origin) widget iframe and onto
+  // the app, and let Escape exit. A focused TradingView iframe can otherwise swallow the parent's
+  // key events and leave the on-screen exit control unreliable — Escape + app focus guarantees an out.
+  useEffect(() => {
+    if (!fullscreen) return
+    wrapRef.current?.focus()
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        setFullscreen(false)
+      }
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [fullscreen])
 
   const Component = widgetRegistry[widget.type]
   if (!Component) {
@@ -58,7 +76,7 @@ export default function WidgetHost({
     : { width: '100%', height: '100%', minHeight: collapsed ? 0 : 280, display: 'flex', flexDirection: 'column' }
 
   return (
-    <div className="widget-fs-wrap" style={wrapStyle}>
+    <div className="widget-fs-wrap" ref={wrapRef} tabIndex={-1} style={wrapStyle}>
       <div
         className="widget"
         {...(collapsed ? { 'data-collapsed': '' } : {})}
@@ -67,6 +85,9 @@ export default function WidgetHost({
         <div className="widget-header" style={{ cursor: 'grab', justifyContent: 'space-between' }}>
           <div className="widget-title-group">
             <span className="widget-title">{title}</span>
+            {fullscreen && (
+              <span style={{ marginLeft: 8, fontSize: 8, letterSpacing: '0.1em', color: 'var(--text-muted)', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>ESC TO EXIT</span>
+            )}
             {effectivePaused && (
               <span style={{ marginLeft: 6, fontSize: 8, letterSpacing: '0.1em', color: 'var(--color-error)', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>PAUSED</span>
             )}
