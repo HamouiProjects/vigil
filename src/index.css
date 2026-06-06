@@ -20,10 +20,11 @@
   --color-text-muted:#7A8494;
   --color-brand:#46C2B6;
   --color-brand-hover:#5BCFC4;
+  --color-wordmark:#5BCFC4;
   --color-brand-active:#38AEA3;
   --color-on-brand:#06251F;
   --color-brand-tint:rgba(70,194,182,0.14);
-  --color-success:#36C68A;
+  --color-success:#3FD27E;
   --color-warning:#E0A93B;
   --color-error:#E5564D;
   --color-info:#4FA8D6;
@@ -57,6 +58,7 @@
   --color-text-muted:#655D50;
   --color-brand:#0A6B61;
   --color-brand-hover:#096257;
+  --color-wordmark:#08544C;
   --color-brand-active:#07564D;
   --color-on-brand:#FFFFFF;
   --color-brand-tint:rgba(10,107,97,0.10);

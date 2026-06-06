@@ -48,7 +48,7 @@ function ShellGlobalLiveToggle() {
           borderRadius: '50%',
           flexShrink: 0,
           background: globalLive ? 'var(--green)' : 'var(--red)',
-          boxShadow: globalLive ? '0 0 6px var(--green)' : 'none',
+          boxShadow: globalLive ? '0 0 8px var(--green)' : 'none',
         }}
       />
       {globalLive ? 'LIVE' : 'PAUSED'}
@@ -284,7 +284,7 @@ export default function Shell() {
           </div>
         : (<nav className="navbar">
         <div className="navbar-left">
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--accent)' }}>VIGIL</span>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-wordmark)' }}>VIGIL</span>
         </div>
 
         <div className="navbar-center">
