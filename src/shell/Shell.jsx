@@ -119,6 +119,7 @@ export default function Shell() {
   const [showAuth, setShowAuth] = useState(false)
   const [authView, setAuthView] = useState('login')
   const [navCollapsed, setNavCollapsed] = useState(() => { try { return localStorage.getItem('vigil_nav_collapsed') === '1' } catch { return false } })
+  const [wsBarCollapsed, setWsBarCollapsed] = useState(() => { try { return localStorage.getItem('vigil_ws_bar_collapsed') === '1' } catch { return false } })
   const scrollRef = useRef(null)
   const [atBottom, setAtBottom] = useState(false)
   const [editingWs, setEditingWs] = useState(null)
@@ -161,6 +162,11 @@ export default function Shell() {
       if (typeof rc === 'boolean') {
         setNavCollapsed(rc)
         try { localStorage.setItem('vigil_nav_collapsed', rc ? '1' : '0') } catch {}
+      }
+      const rcWs = data?.user?.user_metadata?.ws_bar_collapsed
+      if (typeof rcWs === 'boolean') {
+        setWsBarCollapsed(rcWs)
+        try { localStorage.setItem('vigil_ws_bar_collapsed', rcWs ? '1' : '0') } catch {}
       }
     })
   }, [uid])
@@ -209,6 +215,7 @@ export default function Shell() {
   }, [loaded, activeWs, navCollapsed])
 
   const pauseState = { globalLive, activeWs, pausedWorkspaces, inactiveTabPause }
+  const visibleWorkspaces = wsBarCollapsed ? workspaces.filter(w => w.id === activeWs) : workspaces
 
   function nudgeUpgrade(message) {
     setUpgradeNudge(message)
@@ -254,6 +261,12 @@ export default function Shell() {
     supabase.auth.updateUser({ data: { nav_collapsed: v } }).catch(() => {})
   }
 
+  const setWsBarCollapsedPersisted = (v) => {
+    setWsBarCollapsed(v)
+    try { localStorage.setItem('vigil_ws_bar_collapsed', v ? '1' : '0') } catch {}
+    supabase.auth.updateUser({ data: { ws_bar_collapsed: v } }).catch(() => {})
+  }
+
   if (!loaded) {
     return (
       <div
@@ -292,7 +305,7 @@ export default function Shell() {
 
         <div className="navbar-center">
           <div className="ws-tabs">
-            {workspaces.map(ws => {
+            {visibleWorkspaces.map(ws => {
               const isActive = ws.id === activeWs
               const isPaused = isWorkspacePaused(pauseState, ws.id)
               return (
