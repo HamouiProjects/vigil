@@ -1,6 +1,14 @@
 ﻿import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 
+function validatePassword(pw) {
+  if (pw.length < 8)     return 'Password must be at least 8 characters'
+  if (!/[a-z]/.test(pw)) return 'Password must include a lowercase letter'
+  if (!/[A-Z]/.test(pw)) return 'Password must include an uppercase letter'
+  if (!/[0-9]/.test(pw)) return 'Password must include a number'
+  return null
+}
+
 export default function AuthScreen({ authView, setAuthView, onAuthed, onClose }) {
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
@@ -24,7 +32,8 @@ export default function AuthScreen({ authView, setAuthView, onAuthed, onClose })
   async function handleSignup(e) {
     e.preventDefault()
     if (password !== confirm) { setError('Passwords do not match'); return }
-    if (password.length < 6)  { setError('Password must be at least 6 characters'); return }
+    const pwError = validatePassword(password)
+    if (pwError) { setError(pwError); return }
     if (!username.trim()) { setError('Please choose a username'); return }
     setError(null); setLoading(true)
     const { error } = await supabase.auth.signUp({ email, password, options: { data: { username: username.trim() } } })
@@ -85,7 +94,7 @@ export default function AuthScreen({ authView, setAuthView, onAuthed, onClose })
           <form className="auth-form" onSubmit={handleSignup}>
             <input className="auth-input" type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="Username" required autoComplete="username" maxLength={32} />
             <input className="auth-input" type="email"    value={email}    onChange={e => setEmail(e.target.value)}    placeholder="Email"                  required autoComplete="email" />
-            <input className="auth-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password (min 6 chars)"  required autoComplete="new-password" />
+            <input className="auth-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password (8+ chars, upper, lower, number)"  required autoComplete="new-password" />
             <input className="auth-input" type="password" value={confirm}  onChange={e => setConfirm(e.target.value)}  placeholder="Confirm password"         required autoComplete="new-password" />
             {error   && <div className="auth-error">{error}</div>}
             {message && <div className="auth-success">{message}</div>}
