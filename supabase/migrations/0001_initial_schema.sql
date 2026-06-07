@@ -92,10 +92,9 @@ create policy "own sources" on public.sources
   as permissive for all to public
   using ((auth.uid() = user_id)) with check ((auth.uid() = user_id));
 
-create policy "own subscription" on public.subscriptions
-  as permissive for all to public
-  using ((auth.uid() = user_id)) with check ((auth.uid() = user_id));
-
+-- Client access to subscriptions is SELECT-only (own row). All writes are
+-- server-authoritative via the Stripe webhook (service role bypasses RLS),
+-- so no client write policy exists — this prevents self-granting a paid plan.
 create policy subscriptions_select_own on public.subscriptions
   as permissive for select to authenticated
   using ((auth.uid() = user_id));
