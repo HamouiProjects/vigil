@@ -62,7 +62,7 @@ alter table public.subscriptions add constraint subscriptions_pkey        primar
 alter table public.subscriptions add constraint subscriptions_user_id_fkey foreign key (user_id) references auth.users(id) on delete cascade;
 
 alter table public.workspaces    add constraint workspaces_pkey           primary key (id);
-alter table public.workspaces    add constraint workspaces_user_id_fkey   foreign key (user_id) references auth.users(id);
+alter table public.workspaces    add constraint workspaces_user_id_fkey   foreign key (user_id) references auth.users(id) on delete cascade;
 alter table public.workspaces    add constraint workspaces_user_id_local_id_key unique (user_id, local_id);
 alter table public.workspaces    add constraint workspaces_share_token_key unique (share_token);
 
