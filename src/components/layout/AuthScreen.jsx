@@ -36,13 +36,17 @@ export default function AuthScreen({ authView, setAuthView, onAuthed, onClose })
     if (pwError) { setError(pwError); return }
     if (!username.trim()) { setError('Please choose a username'); return }
     setError(null); setLoading(true)
-    const { error } = await supabase.auth.signUp({ email, password, options: { data: { username: username.trim() } } })
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { username: username.trim() } } })
     if (error) { setLoading(false); setError(error.message); return }
-    setMessage('Account created! Signing you in...')
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
-    if (signInError) setError(signInError.message)
-    else onAuthed?.()
+    // When "Confirm email" is ON, signUp returns no session — the user must
+    // confirm via the emailed link before they can sign in.
+    if (!data.session) {
+      setMessage('Account created. Check your inbox to confirm your email, then log in.')
+      return
+    }
+    // "Confirm email" OFF: signUp returns a live session — proceed straight in.
+    onAuthed?.()
   }
 
   async function handleForgot(e) {
