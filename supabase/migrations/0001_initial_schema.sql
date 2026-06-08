@@ -129,7 +129,8 @@ as $function$
          'label', s.label, 'meta', s.meta
        ))
        from public.sources s
-       where s.id::text in (select sid from ref_ids)),
+       where s.id::text in (select sid from ref_ids)
+         and s.user_id = (select user_id from room)),
       '[]'::jsonb
     ) as sources
   from room;
