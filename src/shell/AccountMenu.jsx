@@ -33,7 +33,7 @@ export default function AccountMenu({ account, plan, themePref, onSetTheme, onUp
         <div className="account-menu">
           <div className="account-menu-header">
             <span className="account-menu-name">{username || (isReal ? email : 'Guest')}</span>
-            <span className="account-menu-plan">{plan === 'pro' ? 'PRO' : 'FREE'}</span>
+            <span className="account-menu-plan">{plan && plan !== 'free' ? plan.toUpperCase() : 'FREE'}</span>
           </div>
 
           {isReal && (editing
