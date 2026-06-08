@@ -492,6 +492,11 @@ function escapeAttr(value) {
   return escapeHtml(value).replace(/"/g, '&quot;')
 }
 
+function safeHttpUrl(value) {
+  try { const u = new URL(String(value)); return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : null }
+  catch { return null }
+}
+
 const DATA_MARKER_LAYERS = [
   'quakes-layer',
   'storms-layer',
@@ -574,13 +579,15 @@ function popupRowsHtml(rows) {
 }
 
 function buildPhotoBlock(photo) {
-  if (!photo?.src) return ''
+  const safeSrc = safeHttpUrl(photo?.src)
+  if (!safeSrc) return ''
   const photographer = photo.photographer || 'Unknown'
-  const creditInner = photo.link
-    ? `<a href="${escapeHtml(photo.link)}" target="_blank" rel="noopener" style="color:var(--color-text-muted);text-decoration:none;">© ${escapeHtml(photographer)} · Planespotters</a>`
+  const safeLink = safeHttpUrl(photo.link)
+  const creditInner = safeLink
+    ? `<a href="${escapeAttr(safeLink)}" target="_blank" rel="noopener" style="color:var(--color-text-muted);text-decoration:none;">© ${escapeHtml(photographer)} · Planespotters</a>`
     : `© ${escapeHtml(photographer)} · Planespotters`
   return `<div>
-    <img src="${escapeHtml(photo.src)}" alt="" style="width:100%;max-height:180px;object-fit:cover;display:block;border-radius:3px 3px 0 0;" />
+    <img src="${escapeAttr(safeSrc)}" alt="" style="width:100%;max-height:180px;object-fit:cover;display:block;border-radius:3px 3px 0 0;" />
     <div style="font-size:9px;padding:6px 12px;color:var(--color-text-muted);border-bottom:1px solid var(--color-border);background:var(--color-surface-2);">${creditInner}</div>
   </div>`
 }
