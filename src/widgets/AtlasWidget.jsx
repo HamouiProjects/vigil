@@ -350,6 +350,8 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
               src={iframeSrc(key)}
               style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
               title={`Atlas ${key}`}
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-popups-to-escape-sandbox allow-presentation"
+              referrerPolicy="no-referrer"
               allowFullScreen
             />
           </div>

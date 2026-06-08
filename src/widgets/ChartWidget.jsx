@@ -20,6 +20,11 @@ function buildUrl(symbol, theme) {
 // Title shows just the ticker (strip TradingView's exchange prefix, e.g. "BATS_DLY:NVDA" -> "NVDA").
 function shortSym(s) { return String(s || '').split(':').pop() || String(s || '') }
 
+function isTradingViewOrigin(o) {
+  try { const h = new URL(o).hostname; return /(^|\.)tradingview\.com$/.test(h) || /(^|\.)tradingview-widget\.com$/.test(h) }
+  catch { return false }
+}
+
 export default function ChartWidget({ paused, config, onSaveConfig, setTitle, setActions }) {
   const bootSymbol = config.symbol ?? DEFAULT_SYMBOL
 
@@ -48,7 +53,7 @@ export default function ChartWidget({ paused, config, onSaveConfig, setTitle, se
   // config.symbol when it changes so the chart reopens on the same symbol after a reload.
   useEffect(() => {
     function onMsg(e) {
-      if (!String(e.origin).includes('tradingview') || typeof e.data !== 'string') return
+      if (!isTradingViewOrigin(e.origin) || typeof e.data !== 'string') return
       let m; try { m = JSON.parse(e.data) } catch { return }
       const sym = m && m.name === 'quoteUpdate' && m.data && m.data.original_name
       if (typeof sym === 'string' && sym && sym !== symRef.current) {
