@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
+import { validatePassword } from '../lib/validatePassword'
 import { useShellStore } from '../state/shellStore.js'
 
 export default function UpgradeModal({ onClose }) {
@@ -25,8 +26,9 @@ export default function UpgradeModal({ onClose }) {
 
     if (isAnon) {
       const trimmed = email.trim()
-      if (!trimmed || password.length < 6) {
-        setError(!trimmed ? 'Email is required' : 'Password must be at least 6 characters')
+      const pwError = validatePassword(password)
+      if (!trimmed || pwError) {
+        setError(!trimmed ? 'Email is required' : pwError)
         return
       }
       setLoading(true)
@@ -129,7 +131,7 @@ export default function UpgradeModal({ onClose }) {
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="Create a password"
+                placeholder="Create a password (8+ chars, upper, lower, number)"
                 autoComplete="new-password"
               />
             </>
