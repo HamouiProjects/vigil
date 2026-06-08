@@ -112,7 +112,11 @@ export async function cloneRoom(uid, room) {
     widgetIdMap[w.id] = newId
     let config = w.config ?? {}
     if (Array.isArray(config.feeds)) {
-      config = { ...config, feeds: config.feeds.map(f => ({ ...f, sourceId: idMap[f.sourceId] ?? f.sourceId })) }
+      config = { ...config, feeds: config.feeds.map(f => {
+        if (!f.sourceId) return f
+        const mapped = idMap[f.sourceId]
+        return mapped ? { ...f, sourceId: mapped } : null
+      }).filter(Boolean) }
     }
     return { ...w, id: newId, config }
   })
