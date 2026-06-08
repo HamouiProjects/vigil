@@ -1,4 +1,4 @@
-const PRIVATE_HOST = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+)$/
+import { safeFetch } from './_ssrf.js'
 
 function decodeEntities(s) {
   return (s || '')
@@ -57,21 +57,18 @@ export default async function handler(req, res) {
   try { parsed = new URL(url) } catch { return res.status(400).json({ error: 'Invalid URL' }) }
   if (!['http:', 'https:'].includes(parsed.protocol))
     return res.status(400).json({ error: 'Only HTTP/HTTPS URLs are supported' })
-  if (PRIVATE_HOST.test(parsed.hostname))
-    return res.status(400).json({ error: 'Private/local URLs are not allowed' })
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 8000)
 
   try {
-    const response = await fetch(url, {
+    const response = await safeFetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
         'Cache-Control': 'no-cache',
       },
-      redirect: 'follow',
       signal: controller.signal,
     })
     clearTimeout(timeout)
@@ -80,7 +77,7 @@ export default async function handler(req, res) {
       return res.status(response.status).json({ error: `HTTP ${response.status}: ${response.statusText}` })
 
     const contentType = response.headers.get('content-type') || ''
-    if (!contentType.includes('text/html') && !contentType.includes('text/plain'))
+    if (!contentType.includes('text/html'))
       return res.status(415).json({ error: 'URL does not point to an HTML page' })
 
     const html = await response.text()

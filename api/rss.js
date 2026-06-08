@@ -1,4 +1,5 @@
 import supabase from './_supabase.js'
+import { safeFetch } from './_ssrf.js'
 import { XMLParser } from 'fast-xml-parser'
 
 const FRESH_MS = 120_000
@@ -131,7 +132,7 @@ function parseFeedXml(xml) {
 }
 
 async function fetchViaDirect(feedUrl) {
-  const res = await fetch(feedUrl, {
+  const res = await safeFetch(feedUrl, {
     headers: FETCH_HEADERS,
     signal: AbortSignal.timeout(8000),
   })
