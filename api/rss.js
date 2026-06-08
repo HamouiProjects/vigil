@@ -1,5 +1,6 @@
 import supabase from './_supabase.js'
 import { safeFetch } from './_ssrf.js'
+import { applyCors } from './_cors.js'
 import { XMLParser } from 'fast-xml-parser'
 
 const FRESH_MS = 120_000
@@ -261,8 +262,7 @@ async function readFeedCache(url) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+  applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
 
   const url = (req.query.url || '').trim()
