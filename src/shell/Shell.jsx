@@ -188,7 +188,7 @@ export default function Shell() {
         try {
           const sub = await loadSubscription(uid)
           if (sub?.plan === 'pro') {
-            useShellStore.getState().setEntitlements(resolveEntitlements('pro', sub.addOns ?? []))
+            useShellStore.getState().setEntitlements(resolveEntitlements('pro', sub.addOns ?? [], sub?.status))
             setUpgradeNudge('Welcome to Pro — unlimited workspaces & widgets unlocked')
             return
           }

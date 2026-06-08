@@ -19,7 +19,7 @@ export function useShellPersistence() {
         if (!(import.meta.env.DEV && devOverride.enabled)) {
           const sub = await loadSubscription(uid)
           useShellStore.getState().setEntitlements(
-            resolveEntitlements(sub?.plan ?? 'free', sub?.addOns ?? []),
+            resolveEntitlements(sub?.plan ?? 'free', sub?.addOns ?? [], sub?.status),
           )
         }
 

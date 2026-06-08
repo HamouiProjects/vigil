@@ -32,7 +32,9 @@ export async function POST(request) {
       return Response.json({ error: 'Price not configured' }, { status: 400 })
     }
 
-    const origin = request.headers.get('origin') || 'https://thevigilroom.com'
+    const ALLOWED_ORIGINS = new Set(['https://thevigilroom.com','https://www.thevigilroom.com','https://vigil-khaki.vercel.app','http://localhost:5173'])
+    const reqOrigin = request.headers.get('origin')
+    const origin = ALLOWED_ORIGINS.has(reqOrigin) ? reqOrigin : 'https://thevigilroom.com'
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',

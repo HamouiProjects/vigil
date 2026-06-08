@@ -27,22 +27,19 @@ const ADDON_CAPABILITIES = {
  * @param {string} plan
  * @param {string[]} addOns
  */
-export function resolveEntitlements(plan, addOns = []) {
-  const base = PLAN_BASE[plan] ?? PLAN_BASE.free
+export function resolveEntitlements(plan, addOns = [], status = null) {
+  // A paid plan and its add-ons apply only while the subscription is active/trialing.
+  // Any other status (past_due, unpaid, incomplete, canceled, ...) falls back to Free.
+  const active = status == null || status === 'active' || status === 'trialing'
+  const effectivePlan = active ? plan : 'free'
+  const base = PLAN_BASE[effectivePlan] ?? PLAN_BASE.free
   const capabilities = new Set(base.capabilities)
-  const normalizedAddOns = addOns.filter(a => ADDON_CAPABILITIES[a])
-
-  for (const addon of normalizedAddOns) {
-    capabilities.add(ADDON_CAPABILITIES[addon])
-  }
-
+  const normalizedAddOns = active ? addOns.filter(a => ADDON_CAPABILITIES[a]) : []
+  for (const addon of normalizedAddOns) capabilities.add(ADDON_CAPABILITIES[addon])
   let priceMode = base.priceMode
-  if (normalizedAddOns.includes('licensed_data')) {
-    priceMode = 'realtime'
-  }
-
+  if (normalizedAddOns.includes('licensed_data')) priceMode = 'realtime'
   return {
-    plan: PLAN_BASE[plan] ? plan : 'free',
+    plan: PLAN_BASE[effectivePlan] ? effectivePlan : 'free',
     addOns: normalizedAddOns,
     limits: { ...base.limits },
     capabilities,
