@@ -11,7 +11,6 @@
   HEATMAP:   'heatmap',
   BROWSER:   'browser',
   SOCIAL:    'social',
-  PORTFOLIO: 'portfolio',
 }
 
 export const WIDGET_CATALOG = [
@@ -27,7 +26,6 @@ export const WIDGET_CATALOG = [
   { type: 'heatmap',   label: 'Heatmap',       icon: '🟩'  },
   { type: 'browser',   label: 'Reader',        icon: '📄'  },
   { type: 'social',    label: 'SOCIAL FEED',   icon: '📡'  },
-  { type: 'portfolio', label: 'Portfolio',     icon: '💼'  },
 ]
 
 export const WIDGET_DEFAULTS = {
@@ -43,5 +41,4 @@ export const WIDGET_DEFAULTS = {
   heatmap:   { w: 6,  h: 8  },
   browser:   { w: 6,  h: 14 },
   social:    { w: 5,  h: 11 },
-  portfolio: { w: 24, h: 20, minH: 16 },
 }

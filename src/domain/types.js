@@ -30,7 +30,7 @@
 
 export const WIDGET_TYPES = [
   'map', 'feed', 'rss', 'stream', 'weather', 'chart', 'browser',
-  'heatmap', 'prices', 'social', 'portfolio',
+  'heatmap', 'prices', 'social',
 ]
 
 export const SOURCE_TYPES = [
