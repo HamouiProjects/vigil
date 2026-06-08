@@ -28,3 +28,4 @@ dist-ssr
 # machine-local / throwaway
 .claude/
 audit_*.js
+AUDIT_REPORT.md
