@@ -91,7 +91,11 @@ export default function ReaderWidget({ config, onSaveConfig, setActions }) {
             )}
             <div className="article-hr" />
             {article.leadImage && <img className="article-lead-img" src={article.leadImage} alt="" loading="lazy" />}
-            <div className="article-body" dangerouslySetInnerHTML={{ __html: article.content }} />
+            {Array.isArray(article.paragraphs) && article.paragraphs.length > 0 && (
+              <div className="article-body">
+                {article.paragraphs.map((p, i) => <p key={i}>{p}</p>)}
+              </div>
+            )}
           </div>
         )}
       </div>

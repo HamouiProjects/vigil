@@ -21,11 +21,11 @@ function metaContent(html, names) {
 }
 
 function stripToText(htmlFragment) {
-  return decodeEntities(
-    htmlFragment
-      .replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, '')
-      .replace(/<[^>]+>/g, '')
-  ).replace(/\s+/g, ' ').trim()
+  let s = htmlFragment || ''
+  s = s.replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, '')
+  let prev
+  do { prev = s; s = decodeEntities(s).replace(/<[^>]+>/g, '') } while (s !== prev)
+  return s.replace(/\s+/g, ' ').trim()
 }
 
 function extractParagraphs(html) {
@@ -93,7 +93,6 @@ export default async function handler(req, res) {
     if (!paragraphs.length)
       return res.status(422).json({ error: 'Could not extract article content from this page' })
 
-    const content = paragraphs.map(p => `<p>${p}</p>`).join('')
     const excerpt = paragraphs[0].slice(0, 280)
 
     return res.status(200).json({
@@ -101,7 +100,7 @@ export default async function handler(req, res) {
       byline:        metaContent(html, ['author', 'article:author']),
       siteName:      metaContent(html, ['og:site_name']) || parsed.hostname.replace('www.', ''),
       publishedTime: metaContent(html, ['article:published_time', 'og:published_time']),
-      content,
+      paragraphs,
       excerpt,
       leadImage:     metaContent(html, ['og:image', 'twitter:image']),
     })
