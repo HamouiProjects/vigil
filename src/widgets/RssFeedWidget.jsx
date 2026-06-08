@@ -433,7 +433,7 @@ export default function RssFeedWidget({
                 <div
                   className="rss-add-source-form"
                   onPointerDownCapture={e => e.stopPropagation()}
-                  style={{ padding: '6px 8px', borderTop: '1px solid #1a2535' }}
+                  style={{ padding: '6px 8px', borderTop: '1px solid var(--color-border)' }}
                 >
                   <div className="rss-add-name-wrap">
                     <input
@@ -476,7 +476,7 @@ export default function RssFeedWidget({
                     spellCheck={false}
                   />
                   {addError && (
-                    <span style={{ fontSize: '8px', color: '#ff4d4f' }}>{addError}</span>
+                    <span style={{ fontSize: '8px', color: 'var(--color-error)' }}>{addError}</span>
                   )}
                   <div className="rss-add-source-actions">
                     <button type="button" className="rss-add-source-add" onClick={() => handleAddFeed()}>

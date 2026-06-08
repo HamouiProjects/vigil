@@ -1,16 +1,17 @@
-# React + Vite
+# Vigil
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Customizable real-time intelligence dashboard — one pausable "operations room" of maps, news, RSS, social, markets, charts, and weather widgets, built to kill tab-fatigue. Live at https://thevigilroom.com
 
-Currently, two official plugins are available:
+## Stack
+React + Vite · Zustand · Supabase (auth + Postgres + RLS) · Stripe · MapLibre GL · TradingView embeds · Vercel (Hobby).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Local development
+1. `npm install`
+2. Copy `.env.example` → `.env.local` and fill in the values.
+3. `npm run dev`  (Vite dev server on http://localhost:5173)
 
-## React Compiler
+Note: the `/api` serverless functions do not run under `vite dev`. Test them against a Vercel preview deploy.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Build & deploy
+- `npm run build` — production build.
+- Deploy is automatic: push to `main` → Vercel builds and deploys.

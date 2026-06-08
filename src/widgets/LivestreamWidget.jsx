@@ -97,7 +97,7 @@ export default function LivestreamWidget({ paused, config, onSaveConfig, setActi
             <input className="rss-add-source-input" value={newUrl} onChange={e => { setNewUrl(e.target.value); setAddError('') }} placeholder="YouTube URL or embed link…" spellCheck={false} style={{ flex: 1 }} />
             <button className="rss-add-source-add" type="submit">ADD</button>
           </div>
-          {addError && <span style={{ fontSize: '9px', color: '#ff4d4f' }}>{addError}</span>}
+          {addError && <span style={{ fontSize: '9px', color: 'var(--color-error)' }}>{addError}</span>}
         </form>
       )}
 
