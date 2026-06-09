@@ -1,4 +1,4 @@
-/* Shared wordmark — also used by App splash */
+/* Shared wordmark — also used by App splash (App.jsx). Keep these; do not rename. */
 .vigil-wordmark {
   font-family: var(--font-mono);
   font-weight: 700;
@@ -21,343 +21,541 @@
   font-size: 1.4rem;
 }
 
-/* ── Landing page shell ── */
-.landing {
+/* ──────────────────────────────────────────────────────────────────────────
+   Landing page. Everything below is namespaced under .lp so nothing leaks
+   into the Shell. Prototype CSS vars are mapped to the app's semantic tokens.
+   ────────────────────────────────────────────────────────────────────────── */
+.lp {
   position: fixed;
   inset: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   background: var(--color-bg);
   color: var(--color-text-primary);
-}
-
-.landing-main {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 48px 24px 64px;
-}
-
-/* ── Hero ── */
-.landing-hero {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  margin-bottom: 56px;
-}
-
-.landing-eyebrow {
-  font-size: 0.75rem;
-  margin: 0;
-}
-
-.landing-headline {
-  font-family: var(--font-mono);
-  font-size: clamp(1.35rem, 4vw, 1.85rem);
-  font-weight: 600;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
-  color: var(--color-text-primary);
-  max-width: 36em;
-}
-
-.landing-subhead {
   font-family: var(--font-sans);
-  font-size: 1rem;
-  line-height: 1.65;
-  color: var(--color-text-secondary);
-  max-width: 40em;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
-.landing-honesty {
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  line-height: 1.55;
-  color: var(--color-text-muted);
-  max-width: 36em;
-}
-
-/* ── CTA ── */
-.landing-cta-block {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-width: 480px;
-}
-
-.landing-cta-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.landing-email-input {
-  flex: 1;
-  min-width: 200px;
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-primary);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.landing-email-input:focus {
-  border-color: var(--color-brand);
-}
-
-.landing-email-input:disabled {
-  opacity: 0.6;
-}
-
-.landing-cta-btn {
-  flex-shrink: 0;
-  height: auto;
-  padding: 10px 16px;
-}
-
-.landing-cta-microcopy {
-  font-family: var(--font-sans);
-  font-size: 0.78rem;
-  line-height: 1.5;
-  color: var(--color-text-muted);
-}
-
-.landing-cta-success {
-  font-family: var(--font-sans);
-  font-size: 0.9rem;
-  color: var(--color-success);
-  padding: 10px 0;
-}
-
-.landing-cta-error {
-  font-family: var(--font-sans);
-  font-size: 0.78rem;
-  color: var(--color-error);
-}
-
-.landing-demo-link {
-  align-self: flex-start;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  height: auto;
-  padding: 8px 14px;
-}
-
-/* ── Audience row ── */
-.landing-audience {
-  margin-bottom: 56px;
-}
-
-.landing-audience-list {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 4px;
-  padding: 0;
-  margin: 0;
-}
-
-.landing-audience-item {
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  color: var(--color-text-secondary);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.landing-audience-sep {
-  color: var(--color-text-muted);
-  margin-right: 4px;
-}
-
-/* ── Pricing ── */
-.landing-pricing-heading {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-  margin-bottom: 20px;
-}
-
-.landing-pricing-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.landing-plan {
-  position: relative;
-  background: var(--color-surface-1);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  padding: 20px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.landing-plan--recommended {
-  border-color: var(--color-brand);
-  background: color-mix(in srgb, var(--color-brand-tint) 40%, var(--color-surface-1));
-}
-
-.landing-plan-badge {
-  position: absolute;
-  top: -10px;
-  left: 14px;
-  font-family: var(--font-mono);
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-on-brand);
-  background: var(--color-brand);
-  padding: 2px 8px;
-  border-radius: var(--radius);
-}
-
-.landing-plan-name {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-text-primary);
-}
-
-.landing-plan-price {
-  font-family: var(--font-mono);
-  font-size: 1.25rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-primary);
-  line-height: 1.2;
-}
-
-.landing-plan-period {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  color: var(--color-text-muted);
-  margin-top: -6px;
-}
-
-.landing-plan-features {
-  list-style: none;
-  padding: 0;
-  margin: 4px 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.landing-plan-features li {
-  font-family: var(--font-sans);
-  font-size: 0.8rem;
-  line-height: 1.45;
-  color: var(--color-text-secondary);
-  padding-left: 12px;
-  position: relative;
-}
-
-.landing-plan-features li::before {
-  content: '·';
-  position: absolute;
-  left: 0;
-  color: var(--color-text-muted);
-}
-
-.landing-pricing-note {
-  font-family: var(--font-sans);
-  font-size: 0.75rem;
-  line-height: 1.5;
-  color: var(--color-text-muted);
-}
-
-/* ── Footer ── */
-.landing-footer {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 24px 24px 40px;
-  border-top: 1px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: flex-start;
-}
-
-.landing-footer-honesty {
-  font-family: var(--font-sans);
-  font-size: 0.75rem;
-  line-height: 1.5;
-  color: var(--color-text-muted);
-}
-
-.landing-footer-link {
-  font-family: var(--font-sans);
-  font-size: 0.78rem;
-  color: var(--color-text-secondary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  transition: color 0.15s;
-}
-
-.landing-footer-link:hover {
+.lp-gi {
   color: var(--color-brand);
 }
 
-/* ── Responsive: pricing cards stack under ~640px ── */
-@media (max-width: 640px) {
-  .landing-main {
-    padding: 32px 18px 48px;
-  }
+/* ── Intro (full-screen globe) ── */
+.lp-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: radial-gradient(
+    120% 120% at 50% 44%,
+    color-mix(in srgb, var(--color-surface-1) 50%, var(--color-bg)) 0%,
+    var(--color-bg) 72%
+  );
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
 
-  .landing-cta-row {
-    flex-direction: column;
-  }
+.lp-intro.is-gone {
+  opacity: 0;
+  transform: scale(1.1);
+  pointer-events: none;
+}
 
-  .landing-cta-btn {
-    width: 100%;
-    justify-content: center;
-  }
+.lp-globe {
+  display: block;
+}
 
-  .landing-email-input {
-    min-width: 0;
-    width: 100%;
-  }
+.lp-intro-wm {
+  position: absolute;
+  top: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  color: var(--color-wordmark);
+  font-size: clamp(2rem, 5.5vw, 3.4rem);
+  pointer-events: none;
+}
 
-  .landing-audience-list {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
+.lp-intro-foot {
+  position: absolute;
+  bottom: 48px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  pointer-events: none;
+}
 
-  .landing-audience-sep {
-    display: none;
-  }
+.lp-intro-prompt {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
 
-  .landing-pricing-grid {
+.lp-intro-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 14px;
+}
+
+.lp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+  box-shadow: 0 0 8px var(--color-success);
+}
+
+/* ── Site ── */
+.lp-site {
+  opacity: 0;
+  transition: opacity 0.6s ease 0.2s;
+}
+
+.lp-site.is-in {
+  opacity: 1;
+}
+
+.lp-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 22px;
+  background: color-mix(in srgb, var(--color-bg) 86%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.lp-wm {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.16em;
+  color: var(--color-wordmark);
+}
+
+.lp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.lp-wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 22px;
+}
+
+/* ── Hero ── */
+.lp-hero {
+  padding: 70px 0 44px;
+}
+
+.lp-wordmark-big {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--color-wordmark);
+  font-size: clamp(2.4rem, 7vw, 4.4rem);
+  letter-spacing: 0.14em;
+  line-height: 1;
+}
+
+.lp-headline {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: clamp(1.7rem, 3.2vw, 2.4rem);
+  line-height: 1.24;
+  letter-spacing: -0.01em;
+  margin-top: 32px;
+  max-width: 20ch;
+}
+
+.lp-lede {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 60ch;
+}
+
+.lp-lede p {
+  color: var(--color-text-secondary);
+  font-size: 16px;
+}
+
+.lp-lede strong {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+/* ── CTA ── */
+.lp-cta {
+  margin-top: 34px;
+  max-width: 480px;
+}
+
+.lp-cta-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lp-email {
+  flex: 1;
+  min-width: 210px;
+  height: 47px;
+  padding: 0 15px;
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+}
+
+.lp-email::placeholder {
+  color: var(--color-text-muted);
+}
+
+.lp-email:focus {
+  outline: none;
+  border-color: var(--color-brand);
+}
+
+.lp-email:disabled {
+  opacity: 0.6;
+}
+
+.lp-btn {
+  height: 47px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  transition: background 0.16s ease;
+}
+
+.lp-btn:hover {
+  background: var(--color-brand-hover);
+}
+
+.lp-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lp-micro {
+  margin-top: 11px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  max-width: 52ch;
+}
+
+.lp-cta-error {
+  margin-top: 11px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-error);
+}
+
+.lp-ok {
+  font-family: var(--font-mono);
+  color: var(--color-success);
+  font-size: 15px;
+  height: 47px;
+  display: flex;
+  align-items: center;
+}
+
+.lp-demo {
+  margin-top: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--color-brand);
+  text-decoration: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 2px;
+}
+
+.lp-demo:hover {
+  border-color: var(--color-brand);
+}
+
+/* ── Sections ── */
+.lp-section {
+  padding: 46px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.lp-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 22px;
+}
+
+/* ── What you get ── */
+.lp-features {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.lp-feat {
+  background: var(--color-surface-1);
+  padding: 24px 24px;
+}
+
+.lp-feat h3 {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--color-text-primary);
+  letter-spacing: 0.02em;
+}
+
+.lp-feat p {
+  margin-top: 10px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.62;
+}
+
+.lp-honesty {
+  margin-top: 26px;
+  max-width: 64ch;
+  padding-left: 16px;
+  border-left: 2px solid var(--color-brand);
+  color: var(--color-text-secondary);
+  font-size: 14.5px;
+}
+
+.lp-honesty b {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+/* ── Who it is for ── */
+.lp-audience {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 30px;
+}
+
+.lp-audience span {
+  font-size: 15px;
+  color: var(--color-text-secondary);
+}
+
+.lp-audience b {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+/* ── Pricing ── */
+.lp-plans {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.lp-plan {
+  position: relative;
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  padding: 22px 20px;
+}
+
+.lp-plan.is-rec {
+  border-color: var(--color-brand);
+}
+
+.lp-badge {
+  position: absolute;
+  top: -9px;
+  left: 18px;
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 3px;
+}
+
+.lp-pname {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.lp-pprice {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 25px;
+  color: var(--color-text-primary);
+  margin-top: 10px;
+}
+
+.lp-pper {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
+
+.lp-pf {
+  list-style: none;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lp-pf li {
+  font-size: 13.5px;
+  color: var(--color-text-secondary);
+  padding-left: 17px;
+  position: relative;
+}
+
+.lp-pf li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-border-strong);
+}
+
+.lp-plan.is-rec .lp-pf li::before {
+  background: var(--color-brand);
+}
+
+/* ── Footer ── */
+.lp-footer {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 30px 22px 56px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.lp-fnote {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.lp-flink {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-brand);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* ── Focus visibility (scoped to .lp) ── */
+.lp a:focus-visible,
+.lp button:focus-visible,
+.lp input:focus-visible,
+.lp [role='button']:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 760px) {
+  .lp-plans {
     grid-template-columns: 1fr;
+  }
+  .lp-features {
+    grid-template-columns: 1fr;
+  }
+  .lp-hero {
+    padding: 46px 0 28px;
   }
 }
 
-/* ── Reduced motion ── */
-@media (prefers-reduced-motion: reduce) {
-  .landing-email-input,
-  .landing-footer-link,
-  .nav-add-btn {
-    transition: none;
+/* ── Motion ── */
+@keyframes lp-breathe {
+  0%,
+  100% {
+    opacity: 1;
   }
+  50% {
+    opacity: 0.45;
+  }
+}
 
-  .btn-primary:active,
-  .btn-secondary:active {
+@media (prefers-reduced-motion: no-preference) {
+  .lp-intro-prompt {
+    animation: lp-breathe 2.6s ease-in-out infinite;
+  }
+  .lp-intro-chip .lp-dot {
+    animation: lp-breathe 2.6s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-intro {
+    transition: opacity 0.2s ease;
+  }
+  .lp-intro.is-gone {
     transform: none;
+  }
+  .lp-site {
+    transition: opacity 0.2s ease;
   }
 }
