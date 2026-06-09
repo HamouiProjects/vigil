@@ -1,0 +1,363 @@
+/* Shared wordmark — also used by App splash */
+.vigil-wordmark {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--color-wordmark);
+  text-transform: uppercase;
+}
+
+.app-splash {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+  z-index: 9999;
+}
+
+.app-splash .vigil-wordmark {
+  font-size: 1.4rem;
+}
+
+/* ── Landing page shell ── */
+.landing {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+}
+
+.landing-main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 48px 24px 64px;
+}
+
+/* ── Hero ── */
+.landing-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 56px;
+}
+
+.landing-eyebrow {
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+.landing-headline {
+  font-family: var(--font-mono);
+  font-size: clamp(1.35rem, 4vw, 1.85rem);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+  max-width: 36em;
+}
+
+.landing-subhead {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--color-text-secondary);
+  max-width: 40em;
+}
+
+.landing-honesty {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+  max-width: 36em;
+}
+
+/* ── CTA ── */
+.landing-cta-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 480px;
+}
+
+.landing-cta-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.landing-email-input {
+  flex: 1;
+  min-width: 200px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.landing-email-input:focus {
+  border-color: var(--color-brand);
+}
+
+.landing-email-input:disabled {
+  opacity: 0.6;
+}
+
+.landing-cta-btn {
+  flex-shrink: 0;
+  height: auto;
+  padding: 10px 16px;
+}
+
+.landing-cta-microcopy {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.landing-cta-success {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--color-success);
+  padding: 10px 0;
+}
+
+.landing-cta-error {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  color: var(--color-error);
+}
+
+.landing-demo-link {
+  align-self: flex-start;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  height: auto;
+  padding: 8px 14px;
+}
+
+/* ── Audience row ── */
+.landing-audience {
+  margin-bottom: 56px;
+}
+
+.landing-audience-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
+  padding: 0;
+  margin: 0;
+}
+
+.landing-audience-item {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.landing-audience-sep {
+  color: var(--color-text-muted);
+  margin-right: 4px;
+}
+
+/* ── Pricing ── */
+.landing-pricing-heading {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 20px;
+}
+
+.landing-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.landing-plan {
+  position: relative;
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.landing-plan--recommended {
+  border-color: var(--color-brand);
+  background: color-mix(in srgb, var(--color-brand-tint) 40%, var(--color-surface-1));
+}
+
+.landing-plan-badge {
+  position: absolute;
+  top: -10px;
+  left: 14px;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+  padding: 2px 8px;
+  border-radius: var(--radius);
+}
+
+.landing-plan-name {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-primary);
+}
+
+.landing-plan-price {
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.landing-plan-period {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  margin-top: -6px;
+}
+
+.landing-plan-features {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.landing-plan-features li {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+  padding-left: 12px;
+  position: relative;
+}
+
+.landing-plan-features li::before {
+  content: '·';
+  position: absolute;
+  left: 0;
+  color: var(--color-text-muted);
+}
+
+.landing-pricing-note {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* ── Footer ── */
+.landing-footer {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.landing-footer-honesty {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.landing-footer-link {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+}
+
+.landing-footer-link:hover {
+  color: var(--color-brand);
+}
+
+/* ── Responsive: pricing cards stack under ~640px ── */
+@media (max-width: 640px) {
+  .landing-main {
+    padding: 32px 18px 48px;
+  }
+
+  .landing-cta-row {
+    flex-direction: column;
+  }
+
+  .landing-cta-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .landing-email-input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .landing-audience-list {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .landing-audience-sep {
+    display: none;
+  }
+
+  .landing-pricing-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .landing-email-input,
+  .landing-footer-link,
+  .nav-add-btn {
+    transition: none;
+  }
+
+  .btn-primary:active,
+  .btn-secondary:active {
+    transform: none;
+  }
+}
