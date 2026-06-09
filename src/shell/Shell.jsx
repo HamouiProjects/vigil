@@ -189,7 +189,7 @@ export default function Shell() {
           const sub = await loadSubscription(uid)
           if (sub?.plan === 'pro') {
             useShellStore.getState().setEntitlements(resolveEntitlements('pro', sub.addOns ?? [], sub?.status))
-            setUpgradeNudge('Welcome to Pro — unlimited workspaces & widgets unlocked')
+            setUpgradeNudge('Welcome to Individual — real-time data unlocked.')
             return
           }
         } catch {}
@@ -230,14 +230,14 @@ export default function Shell() {
 
   function handleAddWorkspace() {
     const ok = addWorkspace()
-    if (!ok) nudgeUpgrade('Upgrade to Pro for unlimited workspaces')
+    if (!ok) nudgeUpgrade('Free includes 1 room. Upgrade for more.')
   }
 
   function handleAddWidget(type) {
     const wsId = useShellStore.getState().activeWs
     const ok = addWidget(wsId, type)
     setShowWidgetPicker(false)
-    if (!ok) nudgeUpgrade('Upgrade to Pro for unlimited widgets per workspace')
+    if (!ok) nudgeUpgrade('Free includes 12 widgets per room. Upgrade for unlimited.')
   }
 
   async function handleShare() {

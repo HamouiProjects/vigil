@@ -1,16 +1,16 @@
 const PLAN_BASE = {
   free: {
-    limits: { workspaces: 2, widgetsPerWorkspace: 3 },
+    limits: { workspaces: 1, widgetsPerWorkspace: 12 },
     capabilities: [],
     priceMode: 'delayed',
   },
   pro: {
-    limits: { workspaces: Infinity, widgetsPerWorkspace: Infinity },
+    limits: { workspaces: 3, widgetsPerWorkspace: Infinity },
     capabilities: ['realtime_news', 'realtime_prices', 'full_widget_library'],
     priceMode: 'realtime',
   },
   team: {
-    limits: { workspaces: Infinity, widgetsPerWorkspace: Infinity },
+    limits: { workspaces: 10, widgetsPerWorkspace: Infinity },
     capabilities: ['realtime_news', 'realtime_prices', 'full_widget_library', 'white_label'],
     priceMode: 'realtime',
   },
