@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { track } from '@vercel/analytics'
 import { supabase } from '../lib/supabase.js'
 import { validatePassword } from '../lib/validatePassword'
 import { useShellStore } from '../state/shellStore.js'
@@ -53,6 +54,7 @@ export default function UpgradeModal({ onClose }) {
       setError('Something went wrong — please try again.')
       return
     }
+    track('signup', { source: 'upgrade' })
     setSuccess('You\'re on the early access list. We\'ll email you when Individual opens.')
   }
 

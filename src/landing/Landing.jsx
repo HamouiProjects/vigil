@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { track } from '@vercel/analytics'
 import { supabase } from '../lib/supabase.js'
 import { LAND } from './landData.js'
 import './landing.css'
@@ -258,6 +259,7 @@ export default function Landing() {
       return
     }
 
+    track('signup', { source: 'landing' })
     setStatus('success')
     setEmail('')
   }
@@ -362,7 +364,7 @@ export default function Landing() {
               </p>
             </div>
 
-            <a className="lp-demo" href={DEMO_URL}>
+            <a className="lp-demo" href={DEMO_URL} onClick={() => track('demo_click')}>
               Step into a live room →
             </a>
           </section>
@@ -417,7 +419,7 @@ export default function Landing() {
 
         <footer className="lp-footer">
           <span className="lp-fnote">Vigil tracks, it does not verify.</span>
-          <a className="lp-flink" href={DEMO_URL}>
+          <a className="lp-flink" href={DEMO_URL} onClick={() => track('demo_click')}>
             Step into a live room →
           </a>
         </footer>
