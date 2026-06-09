@@ -28,7 +28,28 @@ export default function AuthScreen({ authView, setAuthView, onAuthed, onClose })
     const pwError = validatePassword(password)
     if (pwError) { setError(pwError); return }
     if (!username.trim()) { setError('Please choose a username'); return }
-    setError(null); setLoading(true)
+    setError(null); setMessage(null); setLoading(true)
+
+    const { data: u } = await supabase.auth.getUser()
+    const isAnon = u?.user?.is_anonymous === true
+
+    if (isAnon) {
+      const { error } = await supabase.auth.updateUser({
+        email,
+        password,
+        data: { username: username.trim() },
+      })
+      setLoading(false)
+      if (error) {
+        const msg = error.message || ''
+        const taken = /already registered|already in use|already been registered/i.test(msg)
+        setError(taken ? `${msg} Log in with that email instead.` : msg)
+        return
+      }
+      setMessage('Your account is ready and your room is saved. Check your inbox to confirm your email.')
+      return
+    }
+
     const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { username: username.trim() } } })
     if (error) { setLoading(false); setError(error.message); return }
     setLoading(false)
