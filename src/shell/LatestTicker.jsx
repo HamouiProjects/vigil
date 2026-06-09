@@ -71,6 +71,7 @@ export default function LatestTicker({ collapsed, onSetCollapsed }) {
   const [index, setIndex] = useState(0)
   const [visible, setVisible] = useState(true)
   const [reduceMotion, setReduceMotion] = useState(false)
+  const [hovered, setHovered] = useState(false)
   const itemsRef = useRef(items)
   const fadeTimerRef = useRef(null)
 
@@ -127,17 +128,28 @@ export default function LatestTicker({ collapsed, onSetCollapsed }) {
     }, FADE_MS)
   }, [reduceMotion])
 
+  const step = useCallback((dir) => {
+    const list = itemsRef.current
+    if (list.length <= 1) return
+    setVisible(false)
+    if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current)
+    fadeTimerRef.current = setTimeout(() => {
+      setIndex((i) => (i + dir + list.length) % list.length)
+      setVisible(true)
+    }, FADE_MS)
+  }, [])
+
   useEffect(() => {
-    if (!live || reduceMotion || collapsed || items.length <= 1) return undefined
+    if (!live || reduceMotion || collapsed || hovered || items.length <= 1) return undefined
     const id = setInterval(advance, ADVANCE_MS)
     return () => clearInterval(id)
-  }, [live, reduceMotion, collapsed, items.length, advance])
+  }, [live, reduceMotion, collapsed, hovered, items.length, advance])
 
   useEffect(() => () => {
     if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current)
   }, [])
 
-  const current = items.length > 0 ? items[reduceMotion ? 0 : index] : null
+  const current = items.length > 0 ? items[Math.min(index, items.length - 1)] : null
 
   if (collapsed) {
     return (
@@ -158,7 +170,11 @@ export default function LatestTicker({ collapsed, onSetCollapsed }) {
   }
 
   return (
-    <div className="latest-ticker">
+    <div
+      className="latest-ticker"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <div className="latest-ticker-left">
         <button
           type="button"
@@ -189,6 +205,20 @@ export default function LatestTicker({ collapsed, onSetCollapsed }) {
           </div>
         )}
       </div>
+      {items.length > 1 && (
+        <div className="latest-ticker-nav">
+          <button type="button" onClick={() => step(-1)} title="Previous headline" aria-label="Previous headline">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button type="button" onClick={() => step(1)} title="Next headline" aria-label="Next headline">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   )
 }
