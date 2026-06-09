@@ -1819,28 +1819,6 @@ button.status-dot:hover { opacity: 0.8; }
   text-transform: uppercase;
 }
 
-.latest-ticker-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.latest-ticker-tagline {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-
-.latest-ticker-version {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--color-text-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 .latest-ticker--collapsed {
   height: 6px;
   padding: 0;
@@ -1880,4 +1858,19 @@ button.status-dot:hover { opacity: 0.8; }
     transition: none;
   }
 }
+
+.bottom-bar {
+  flex: 0 0 auto;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: var(--color-surface-1);
+  border-top: 1px solid var(--color-border);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.bottom-bar-meta { font-variant-numeric: tabular-nums; }
 

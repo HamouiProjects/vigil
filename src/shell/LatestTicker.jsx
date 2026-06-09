@@ -1,4 +1,3 @@
-/* global __APP_VERSION__ */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useShellStore } from '../state/shellStore.js'
 
@@ -140,13 +139,6 @@ export default function LatestTicker({ collapsed, onSetCollapsed }) {
 
   const current = items.length > 0 ? items[reduceMotion ? 0 : index] : null
 
-  const tagline = (
-    <div className="latest-ticker-right">
-      <span className="latest-ticker-tagline">Vigil tracks, it does not verify.</span>
-      <span className="latest-ticker-version">v{__APP_VERSION__}</span>
-    </div>
-  )
-
   if (collapsed) {
     return (
       <div className="latest-ticker latest-ticker--collapsed">
@@ -184,6 +176,7 @@ export default function LatestTicker({ collapsed, onSetCollapsed }) {
             className={`latest-ticker-rotator${visible ? ' is-visible' : ''}${reduceMotion ? ' is-static' : ''}`}
           >
             <span className="latest-ticker-source">{current.label}</span>
+            <span className="latest-ticker-time">{relTime(current.pubDate)}</span>
             <a
               className="latest-ticker-headline"
               href={current.link}
@@ -192,12 +185,10 @@ export default function LatestTicker({ collapsed, onSetCollapsed }) {
             >
               {current.title}
             </a>
-            <span className="latest-ticker-time">{relTime(current.pubDate)}</span>
             {!live && <span className="latest-ticker-paused">PAUSED</span>}
           </div>
         )}
       </div>
-      {tagline}
     </div>
   )
 }

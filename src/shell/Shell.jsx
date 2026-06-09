@@ -1,3 +1,4 @@
+/* global __APP_VERSION__ */
 import { useEffect, useState, useRef } from 'react'
 import { useShellStore, isWorkspacePaused } from '../state/shellStore.js'
 import { useShellPersistence } from '../data/useShellPersistence.js'
@@ -479,6 +480,11 @@ export default function Shell() {
 
       <div ref={scrollRef} style={{ width: '100%', flex: 1, minHeight: 0, position: 'relative', overflow: 'auto' }}>
         <Grid />
+      </div>
+
+      <div className="bottom-bar">
+        <span className="bottom-bar-note">Vigil tracks, it does not verify.</span>
+        <span className="bottom-bar-meta">v{__APP_VERSION__} · © {new Date().getFullYear()}</span>
       </div>
 
       {import.meta.env.DEV && <EntitlementDebug />}
