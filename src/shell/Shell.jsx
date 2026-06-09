@@ -1,4 +1,3 @@
-/* global __APP_VERSION__ */
 import { useEffect, useState, useRef } from 'react'
 import { useShellStore, isWorkspacePaused } from '../state/shellStore.js'
 import { useShellPersistence } from '../data/useShellPersistence.js'
@@ -12,6 +11,7 @@ import UpgradeModal from './UpgradeModal.jsx'
 import AccountMenu from './AccountMenu.jsx'
 import { supabase } from '../lib/supabase.js'
 import AuthScreen from '../components/layout/AuthScreen.jsx'
+import LatestTicker from './LatestTicker.jsx'
 import { getThemePref, setThemePref, reconcileRemotePref } from '../utils/theme.js'
 
 function ShellGlobalLiveToggle() {
@@ -120,9 +120,9 @@ export default function Shell() {
   const [authView, setAuthView] = useState('login')
   const [navCollapsed, setNavCollapsed] = useState(() => { try { return localStorage.getItem('vigil_nav_collapsed') === '1' } catch { return false } })
   const [wsBarCollapsed, setWsBarCollapsed] = useState(() => { try { return localStorage.getItem('vigil_ws_bar_collapsed') === '1' } catch { return false } })
+  const [tickerCollapsed, setTickerCollapsed] = useState(() => { try { return localStorage.getItem('vigil_ticker_collapsed') === '1' } catch { return false } })
   const [isFullscreen, setIsFullscreen] = useState(false)
   const scrollRef = useRef(null)
-  const [atBottom, setAtBottom] = useState(false)
   const [editingWs, setEditingWs] = useState(null)
   const [wsDraft, setWsDraft] = useState('')
   const dragWsId = useRef(null)
@@ -175,6 +175,11 @@ export default function Shell() {
         setWsBarCollapsed(rcWs)
         try { localStorage.setItem('vigil_ws_bar_collapsed', rcWs ? '1' : '0') } catch {}
       }
+      const rcTicker = data?.user?.user_metadata?.ticker_collapsed
+      if (typeof rcTicker === 'boolean') {
+        setTickerCollapsed(rcTicker)
+        try { localStorage.setItem('vigil_ticker_collapsed', rcTicker ? '1' : '0') } catch {}
+      }
     })
   }, [uid])
 
@@ -202,24 +207,6 @@ export default function Shell() {
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [uid])
-
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const NEAR = 24
-    const recompute = () => {
-      const max = el.scrollHeight - el.clientHeight
-      const scrollable = max > NEAR
-      setAtBottom(scrollable && (max - el.scrollTop <= NEAR))
-    }
-    recompute()
-    el.addEventListener('scroll', recompute, { passive: true })
-    window.addEventListener('resize', recompute)
-    return () => {
-      el.removeEventListener('scroll', recompute)
-      window.removeEventListener('resize', recompute)
-    }
-  }, [loaded, activeWs, navCollapsed])
 
   const pauseState = { globalLive, activeWs, pausedWorkspaces, inactiveTabPause }
   const visibleWorkspaces = wsBarCollapsed ? workspaces.filter(w => w.id === activeWs) : workspaces
@@ -272,6 +259,12 @@ export default function Shell() {
     setWsBarCollapsed(v)
     try { localStorage.setItem('vigil_ws_bar_collapsed', v ? '1' : '0') } catch {}
     supabase.auth.updateUser({ data: { ws_bar_collapsed: v } }).catch(() => {})
+  }
+
+  const setTickerCollapsedPersisted = (v) => {
+    setTickerCollapsed(v)
+    try { localStorage.setItem('vigil_ticker_collapsed', v ? '1' : '0') } catch {}
+    supabase.auth.updateUser({ data: { ticker_collapsed: v } }).catch(() => {})
   }
 
   const toggleFullscreen = () => {
@@ -487,10 +480,7 @@ export default function Shell() {
         <div aria-hidden="true" style={{ height: 36 }} />
       </div>
 
-      <div className={`bottom-bar${atBottom ? ' is-visible' : ''}`} aria-hidden={!atBottom}>
-        <span className="bottom-bar-note">Vigil tracks, it does not verify.</span>
-        <span className="bottom-bar-meta">v{__APP_VERSION__} · © {new Date().getFullYear()}</span>
-      </div>
+      <LatestTicker collapsed={tickerCollapsed} onSetCollapsed={setTickerCollapsedPersisted} />
 
       {import.meta.env.DEV && <EntitlementDebug />}
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
