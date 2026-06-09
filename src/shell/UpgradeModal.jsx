@@ -3,11 +3,25 @@ import { supabase } from '../lib/supabase.js'
 import { validatePassword } from '../lib/validatePassword'
 import { useShellStore } from '../state/shellStore.js'
 
+const INDIVIDUAL_FEATURES = [
+  'Real-time data',
+  'Daily or weekly brief over your room\'s own sources',
+  'Keyword and region alerts',
+  'Newsletter to your inbox',
+  'Up to 3 rooms',
+]
+
+function isValidEmail(value) {
+  const trimmed = value.trim()
+  return trimmed.length > 0 && trimmed.includes('@')
+}
+
 export default function UpgradeModal({ onClose }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [period, setPeriod] = useState('annual')
   const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(null)
   const [loading, setLoading] = useState(false)
   const [isAnon, setIsAnon] = useState(null)
   const [existingEmail, setExistingEmail] = useState('')
@@ -16,10 +30,31 @@ export default function UpgradeModal({ onClose }) {
     supabase.auth.getUser()
       .then(({ data }) => {
         setIsAnon(data?.user?.is_anonymous === true)
-        setExistingEmail(data?.user?.email || '')
+        const userEmail = data?.user?.email || ''
+        setExistingEmail(userEmail)
+        if (userEmail) setEmail(userEmail)
       })
       .catch(() => setIsAnon(true))
   }, [])
+
+  async function handleEarlyAccess() {
+    if (loading || success) return
+    if (!isValidEmail(email)) {
+      setError('Please enter a valid email address.')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    const { error: insertErr } = await supabase
+      .from('email_signups')
+      .insert({ email: email.trim(), source: 'upgrade' })
+    setLoading(false)
+    if (insertErr) {
+      setError('Something went wrong — please try again.')
+      return
+    }
+    setSuccess('You\'re on the early access list. We\'ll email you when Individual opens.')
+  }
 
   async function handleContinue() {
     let checkoutEmail
@@ -91,66 +126,90 @@ export default function UpgradeModal({ onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <span className="modal-title">Upgrade to Pro</span>
+          <span className="modal-title">Individual — coming soon</span>
           <button type="button" className="widget-btn" onClick={onClose} title="Close">✕</button>
         </div>
 
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              type="button"
-              style={periodBtnStyle(period === 'annual')}
-              onClick={() => setPeriod('annual')}
-            >
-              €15/mo · billed annually
-            </button>
-            <button
-              type="button"
-              style={periodBtnStyle(period === 'monthly')}
-              onClick={() => setPeriod('monthly')}
-            >
-              €19/mo
-            </button>
-          </div>
+          <p style={{
+            fontFamily: 'var(--font-sans)',
+            fontSize: 13,
+            lineHeight: 1.55,
+            color: 'var(--color-text-secondary)',
+            margin: 0,
+          }}>
+            Real-time data, the daily or weekly brief, alerts, and the newsletter are rolling out now.
+          </p>
 
-          {isAnon === null && (
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>…</div>
-          )}
-          {isAnon === true && (
-            <>
-              <input
-                className="auth-input"
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="Email"
-                autoComplete="email"
-              />
-              <input
-                className="auth-input"
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Create a password (8+ chars, upper, lower, number)"
-                autoComplete="new-password"
-              />
-            </>
-          )}
-          {isAnon === false && (
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono, JetBrains Mono, monospace)' }}>
-              Signed in as {existingEmail}
-            </div>
+          <ul style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+          }}>
+            {INDIVIDUAL_FEATURES.map((item) => (
+              <li
+                key={item}
+                style={{
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: 12,
+                  lineHeight: 1.45,
+                  color: 'var(--color-text-primary)',
+                  paddingLeft: 14,
+                  position: 'relative',
+                }}
+              >
+                <span style={{
+                  position: 'absolute',
+                  left: 0,
+                  color: 'var(--color-brand)',
+                  fontFamily: 'var(--font-mono)',
+                }}
+                >
+                  ·
+                </span>
+                {item}
+              </li>
+            ))}
+          </ul>
+
+          <p style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--color-text-muted)',
+            margin: 0,
+          }}>
+            €8.99/mo or €89/yr when it launches.
+          </p>
+
+          {isAnon === null ? (
+            <div style={{ fontSize: 10, color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>…</div>
+          ) : (
+            <input
+              className="auth-input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleEarlyAccess()}
+              placeholder="you@newsroom.org"
+              autoComplete="email"
+              disabled={loading || !!success}
+              aria-label="Email address"
+            />
           )}
 
           {error && <div className="auth-error">{error}</div>}
+          {success && <div className="auth-success">{success}</div>}
 
           <button
             type="button"
             className="auth-btn"
-            disabled={loading || isAnon === null}
-            onClick={handleContinue}
+            disabled={loading || !!success || isAnon === null}
+            onClick={handleEarlyAccess}
           >
-            {loading ? '…' : 'Continue to payment'}
+            {loading ? 'Submitting…' : 'Get early access'}
           </button>
         </div>
       </div>
