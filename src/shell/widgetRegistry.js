@@ -8,6 +8,7 @@ import LivestreamWidget from '../widgets/LivestreamWidget.jsx'
 import NewsSearchWidget from '../widgets/NewsSearchWidget.jsx'
 import SocialFeedWidget from '../widgets/SocialFeedWidget.jsx'
 import ReaderWidget from '../widgets/ReaderWidget.jsx'
+import TrendsWidget from '../widgets/TrendsWidget.jsx'
 
 export const SOURCE_BACKED_TYPES = new Set(['rss'])
 
@@ -22,6 +23,7 @@ export const widgetRegistry = {
   feed: NewsSearchWidget,
   social: SocialFeedWidget,
   browser: ReaderWidget,
+  trends: TrendsWidget,
 }
 
 export const widgetRegistryMeta = {
@@ -35,6 +37,7 @@ export const widgetRegistryMeta = {
   feed: { label: 'News Search', icon: '🔍' },
   social: { label: 'Social', icon: '💬' },
   browser: { label: 'Reader', icon: '📄' },
+  trends: { label: 'Trends', icon: '🔥' },
 }
 
 export default widgetRegistry
