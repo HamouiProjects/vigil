@@ -1718,12 +1718,8 @@ button.status-dot:hover { opacity: 0.8; }
   border-color: color-mix(in srgb, var(--color-success) 32%, transparent);
 }
 
-/* ── Latest ticker (global bottom chrome) ── */
+/* ── Latest ticker (global top chrome, under nav) ── */
 .latest-ticker {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
   height: 30px;
   display: flex;
   align-items: center;
@@ -1731,12 +1727,13 @@ button.status-dot:hover { opacity: 0.8; }
   gap: 12px;
   padding: 0 16px;
   background: var(--color-surface-1);
-  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
   font-family: var(--font-sans);
   font-size: 11px;
   color: var(--color-text-muted);
   z-index: 90;
   min-width: 0;
+  flex-shrink: 0;
 }
 
 .latest-ticker-left {
@@ -1855,7 +1852,7 @@ button.status-dot:hover { opacity: 0.8; }
 .latest-ticker-reveal {
   position: absolute;
   right: 0;
-  bottom: 0;
+  top: 0;
   height: 14px;
   min-width: 28px;
   display: flex;
@@ -1863,8 +1860,8 @@ button.status-dot:hover { opacity: 0.8; }
   justify-content: center;
   background: var(--color-surface-1);
   border: 1px solid var(--color-border);
-  border-bottom: none;
-  border-radius: var(--radius) var(--radius) 0 0;
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
   color: var(--color-text-muted);
   cursor: pointer;
   padding: 0 6px;

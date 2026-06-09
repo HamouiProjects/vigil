@@ -62,7 +62,7 @@ function UpgradeNudge({ message, onDismiss, onUpgrade }) {
     <div
       style={{
         position: 'fixed',
-        top: 48,
+        top: 80,
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 100001,
@@ -475,12 +475,11 @@ export default function Shell() {
         </div>
       </nav>)}
 
-      <div ref={scrollRef} style={{ width: '100%', height: navCollapsed ? 'calc(100vh - 14px)' : 'calc(100vh - 40px)', position: 'relative', overflow: 'auto' }}>
-        <Grid />
-        <div aria-hidden="true" style={{ height: 36 }} />
-      </div>
-
       <LatestTicker collapsed={tickerCollapsed} onSetCollapsed={setTickerCollapsedPersisted} />
+
+      <div ref={scrollRef} style={{ width: '100%', flex: 1, minHeight: 0, position: 'relative', overflow: 'auto' }}>
+        <Grid />
+      </div>
 
       {import.meta.env.DEV && <EntitlementDebug />}
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
