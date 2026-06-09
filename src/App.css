@@ -1573,42 +1573,108 @@ button.status-dot:hover { opacity: 0.8; }
 /* ── Add Widget Modal ── */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 1100;
-  background: rgba(0,0,0,0.65); backdrop-filter: blur(2px);
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex; align-items: center; justify-content: center;
+  animation: modal-overlay-in 160ms ease;
+}
+@keyframes modal-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .modal {
   background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 0;
   box-shadow: 0 20px 60px rgba(0,0,0,0.7);
   width: 360px; max-width: calc(100vw - 40px);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.widget-picker-modal {
+  width: min(560px, calc(100vw - 40px));
 }
 .modal-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 16px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 .modal-title {
   font-size: 11px; font-weight: 700; letter-spacing: 0.15em;
   text-transform: uppercase; color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
 }
+.modal-body {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+  padding-bottom: 8px;
+}
+.widget-picker-cat {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 14px 16px 8px;
+}
+.widget-picker-cat:first-child {
+  margin-top: 8px;
+}
 .modal-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 8px; padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  padding: 0 16px 8px;
 }
 .modal-card {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 8px; padding: 16px 8px;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
+  gap: 6px; padding: 12px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 2px;
-  cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  cursor: pointer; transition: border-color 0.15s, background 0.15s, color 0.15s;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  appearance: none;
 }
 .modal-card:hover { border-color: var(--accent); background: var(--accent-dim); }
-.modal-card-icon  { font-size: 22px; }
+.modal-card-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-secondary);
+  transition: color 0.15s;
+}
 .modal-card-label {
   font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
   text-transform: uppercase; color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
-  text-align: center; line-height: 1.3;
+  text-align: left; line-height: 1.3;
+  transition: color 0.15s;
 }
+.modal-card-desc {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.15s;
+}
+.modal-card:hover .modal-card-icon,
 .modal-card:hover .modal-card-label { color: var(--text-primary); }
+.modal-card:hover .modal-card-desc { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) {
+  .modal-overlay { animation: none; }
+  .modal-card,
+  .modal-card-icon,
+  .modal-card-label,
+  .modal-card-desc { transition: none; }
+}
 
 /* ── Widget collapsed state ── */
 .widget[data-collapsed] > *:not(.widget-header) {

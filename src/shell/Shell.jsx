@@ -5,10 +5,10 @@ import { useShellPersistence } from '../data/useShellPersistence.js'
 import { publishWorkspace } from '../data/workspacesRepo.js'
 import { loadSubscription } from '../data/subscriptionRepo.js'
 import { resolveEntitlements } from '../entitlements/resolve.js'
-import { widgetRegistryMeta } from './widgetRegistry.js'
 import Grid from './Grid.jsx'
 import EntitlementDebug from './EntitlementDebug.jsx'
 import UpgradeModal from './UpgradeModal.jsx'
+import WidgetPicker from './WidgetPicker.jsx'
 import AccountMenu from './AccountMenu.jsx'
 import { supabase } from '../lib/supabase.js'
 import AuthScreen from '../components/layout/AuthScreen.jsx'
@@ -129,8 +129,6 @@ export default function Shell() {
   const [wsDraft, setWsDraft] = useState('')
   const dragWsId = useRef(null)
   const [dragOverWs, setDragOverWs] = useState(null)
-  const widgetPickerRef = useRef(null)
-
   const plan = useShellStore(s => s.entitlements.plan)
   const uid = useShellStore(s => s.uid)
 
@@ -150,16 +148,6 @@ export default function Shell() {
     const t = setTimeout(() => setUpgradeNudge(null), 4000)
     return () => clearTimeout(t)
   }, [upgradeNudge])
-
-  useEffect(() => {
-    if (!showWidgetPicker) return
-    function onDoc(e) {
-      if (widgetPickerRef.current?.contains(e.target)) return
-      setShowWidgetPicker(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [showWidgetPicker])
 
   useEffect(() => {
     if (!uid) return
@@ -431,53 +419,9 @@ export default function Shell() {
 
         <div className="navbar-right" style={{ position: 'relative', zIndex: 110 }}>
           <button type="button" className="nav-add-btn btn-secondary" onClick={handleShare}>Share</button>
-          <div ref={widgetPickerRef} style={{ position: 'relative' }}>
-            <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowWidgetPicker(v => !v)}>
-              + Add Widget
-            </button>
-            {showWidgetPicker && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 6px)',
-                  right: 0,
-                  zIndex: 200,
-                  minWidth: 160,
-                  background: 'var(--surface-elevated)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 3,
-                  padding: 6,
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-                }}
-              >
-                {Object.entries(widgetRegistryMeta).map(([type, meta]) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => handleAddWidget(type)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      width: '100%',
-                      padding: '6px 8px',
-                      border: 'none',
-                      background: 'none',
-                      color: 'var(--text-primary)',
-                      fontSize: 10,
-                      fontFamily: 'var(--font-mono, JetBrains Mono, monospace)',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      borderRadius: 2,
-                    }}
-                  >
-                    <span>{meta.icon}</span>
-                    <span>{meta.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowWidgetPicker(true)}>
+            + Add Widget
+          </button>
           <ShellGlobalLiveToggle />
           <AccountMenu
             account={account}
@@ -508,6 +452,9 @@ export default function Shell() {
       </div>
 
       {import.meta.env.DEV && <EntitlementDebug />}
+      {showWidgetPicker && (
+        <WidgetPicker onPick={handleAddWidget} onClose={() => setShowWidgetPicker(false)} />
+      )}
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
       {showAuth && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100002, background: 'var(--bg, #0A0C10)' }}>
