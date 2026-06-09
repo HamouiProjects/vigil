@@ -11,32 +11,22 @@ import {
   Grid3x3,
   DollarSign,
 } from 'lucide-react'
-import WeatherWidget from '../widgets/WeatherWidget.jsx'
-import RssFeedWidget from '../widgets/RssFeedWidget.jsx'
-import PriceTrackerWidget from '../widgets/PriceTrackerWidget.jsx'
-import ChartWidget from '../widgets/ChartWidget.jsx'
-import HeatmapWidget from '../widgets/HeatmapWidget.jsx'
-import AtlasWidget from '../widgets/AtlasWidget.jsx'
-import LivestreamWidget from '../widgets/LivestreamWidget.jsx'
-import NewsSearchWidget from '../widgets/NewsSearchWidget.jsx'
-import SocialFeedWidget from '../widgets/SocialFeedWidget.jsx'
-import ReaderWidget from '../widgets/ReaderWidget.jsx'
-import TrendsWidget from '../widgets/TrendsWidget.jsx'
+import { lazy } from 'react'
 
 export const SOURCE_BACKED_TYPES = new Set(['rss'])
 
 export const widgetRegistry = {
-  weather: WeatherWidget,
-  rss: RssFeedWidget,
-  prices: PriceTrackerWidget,
-  chart: ChartWidget,
-  heatmap: HeatmapWidget,
-  map: AtlasWidget,
-  stream: LivestreamWidget,
-  feed: NewsSearchWidget,
-  social: SocialFeedWidget,
-  browser: ReaderWidget,
-  trends: TrendsWidget,
+  weather: lazy(() => import('../widgets/WeatherWidget.jsx')),
+  rss: lazy(() => import('../widgets/RssFeedWidget.jsx')),
+  prices: lazy(() => import('../widgets/PriceTrackerWidget.jsx')),
+  chart: lazy(() => import('../widgets/ChartWidget.jsx')),
+  heatmap: lazy(() => import('../widgets/HeatmapWidget.jsx')),
+  map: lazy(() => import('../widgets/AtlasWidget.jsx')),
+  stream: lazy(() => import('../widgets/LivestreamWidget.jsx')),
+  feed: lazy(() => import('../widgets/NewsSearchWidget.jsx')),
+  social: lazy(() => import('../widgets/SocialFeedWidget.jsx')),
+  browser: lazy(() => import('../widgets/ReaderWidget.jsx')),
+  trends: lazy(() => import('../widgets/TrendsWidget.jsx')),
 }
 
 export const widgetRegistryMeta = {

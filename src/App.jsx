@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import './App.css'
-import './landing/landing.css'
 import { supabase } from './lib/supabase.js'
-import Shell from './shell/Shell.jsx'
-import PublicRoom from './shell/PublicRoom.jsx'
-import Landing from './landing/Landing.jsx'
+
+const Shell = lazy(() => import('./shell/Shell.jsx'))
+const PublicRoom = lazy(() => import('./shell/PublicRoom.jsx'))
+const Landing = lazy(() => import('./landing/Landing.jsx'))
 
 function AppSplash() {
   return (
@@ -34,11 +34,27 @@ export default function App() {
     }
   }, [slug])
 
-  if (slug) return <PublicRoom slug={slug} />
+  if (slug) {
+    return (
+      <Suspense fallback={<AppSplash />}>
+        <PublicRoom slug={slug} />
+      </Suspense>
+    )
+  }
 
   if (sessionState === 'pending') return <AppSplash />
 
-  if (sessionState === 'authenticated') return <Shell />
+  if (sessionState === 'authenticated') {
+    return (
+      <Suspense fallback={<AppSplash />}>
+        <Shell />
+      </Suspense>
+    )
+  }
 
-  return <Landing />
+  return (
+    <Suspense fallback={<AppSplash />}>
+      <Landing />
+    </Suspense>
+  )
 }

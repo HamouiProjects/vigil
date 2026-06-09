@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { widgetRegistry, widgetRegistryMeta, SOURCE_BACKED_TYPES } from './widgetRegistry.js'
 import WidgetErrorBoundary from './WidgetErrorBoundary.jsx'
 
@@ -117,15 +117,21 @@ export default function WidgetHost({
         </div>
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <WidgetErrorBoundary resetKeys={[widget.id, JSON.stringify(widget.config ?? {})]} title={title}>
-            <Component
-              id={widget.id}
-              paused={effectivePaused}
-              config={widget.config ?? {}}
-              onSaveConfig={onSaveConfig}
-              setTitle={setWidgetTitle}
-              setActions={setWidgetActions}
-              {...(SOURCE_BACKED_TYPES.has(widget.type) ? { sources, onAddSource, onRemoveSource } : {})}
-            />
+            <Suspense fallback={
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                Loading
+              </div>
+            }>
+              <Component
+                id={widget.id}
+                paused={effectivePaused}
+                config={widget.config ?? {}}
+                onSaveConfig={onSaveConfig}
+                setTitle={setWidgetTitle}
+                setActions={setWidgetActions}
+                {...(SOURCE_BACKED_TYPES.has(widget.type) ? { sources, onAddSource, onRemoveSource } : {})}
+              />
+            </Suspense>
           </WidgetErrorBoundary>
         </div>
       </div>
