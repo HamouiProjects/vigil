@@ -1910,6 +1910,110 @@ button.status-dot:hover { opacity: 0.8; }
   padding-top: 4px;
 }
 
+/* ── Alerts drawer ── */
+.alerts-bell-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  line-height: 1;
+}
+.alerts-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1090;
+  background: rgba(0, 0, 0, 0.5);
+  animation: alerts-backdrop-in 160ms ease;
+}
+@keyframes alerts-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.alerts-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1100;
+  width: min(360px, 92vw);
+  background: var(--surface-elevated);
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  animation: alerts-drawer-in 160ms ease;
+}
+@keyframes alerts-drawer-in {
+  from { transform: translateX(100%); opacity: 0.85; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.alerts-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.alerts-drawer-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+.alerts-drawer-tabs {
+  display: flex;
+  padding: 12px 16px;
+  gap: 0;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.alerts-drawer-tab {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--color-border);
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 0;
+}
+.alerts-drawer-tab:first-child {
+  border-radius: 4px 0 0 4px;
+}
+.alerts-drawer-tab:last-child {
+  border-radius: 0 4px 4px 0;
+  border-left: none;
+}
+.alerts-drawer-tab.is-active {
+  color: var(--text-primary);
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-strong);
+}
+.alerts-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 16px;
+}
+.alerts-drawer-empty {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .alerts-drawer-backdrop { animation: none; }
+  .alerts-drawer { animation: none; }
+}
+
 /* ── Widget collapsed state ── */
 .widget[data-collapsed] > *:not(.widget-header) {
   display: none !important;

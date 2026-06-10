@@ -10,6 +10,8 @@ import EntitlementDebug from './EntitlementDebug.jsx'
 import UpgradeModal from './UpgradeModal.jsx'
 import WidgetPicker from './WidgetPicker.jsx'
 import BriefPanel from './BriefPanel.jsx'
+import AlertsDrawer from './AlertsDrawer.jsx'
+import { Bell } from 'lucide-react'
 import AccountMenu from './AccountMenu.jsx'
 import { supabase } from '../lib/supabase.js'
 import AuthScreen from '../components/layout/AuthScreen.jsx'
@@ -117,6 +119,7 @@ export default function Shell() {
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
   const [showBrief, setShowBrief] = useState(false)
+  const [showAlerts, setShowAlerts] = useState(false)
   const [account, setAccount] = useState(null)
   const [themePref, setThemePrefState] = useState(getThemePref())
   const [showAuth, setShowAuth] = useState(false)
@@ -131,7 +134,8 @@ export default function Shell() {
   const [wsDraft, setWsDraft] = useState('')
   const dragWsId = useRef(null)
   const [dragOverWs, setDragOverWs] = useState(null)
-  const plan = useShellStore(s => s.entitlements.plan)
+  const entitlements = useShellStore(s => s.entitlements)
+  const plan = entitlements.plan
   const uid = useShellStore(s => s.uid)
 
   useEffect(() => {
@@ -421,6 +425,15 @@ export default function Shell() {
 
         <div className="navbar-right" style={{ position: 'relative', zIndex: 110 }}>
           <button type="button" className="nav-add-btn btn-secondary" onClick={handleShare}>Share</button>
+          <button
+            type="button"
+            className="nav-add-btn btn-secondary alerts-bell-btn"
+            onClick={() => setShowAlerts((open) => !open)}
+            title="Alerts"
+            aria-label="Alerts"
+          >
+            <Bell size={13} strokeWidth={1.75} aria-hidden />
+          </button>
           <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowBrief(true)}>
             Brief
           </button>
@@ -461,6 +474,11 @@ export default function Shell() {
         <WidgetPicker onPick={handleAddWidget} onClose={() => setShowWidgetPicker(false)} />
       )}
       {showBrief && <BriefPanel onClose={() => setShowBrief(false)} />}
+      <AlertsDrawer
+        open={showAlerts}
+        onClose={() => setShowAlerts(false)}
+        entitlements={entitlements}
+      />
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
       {showAuth && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100002, background: 'var(--bg, #0A0C10)' }}>
