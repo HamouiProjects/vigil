@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useShellStore } from '../state/shellStore.js'
 import { supabase } from '../lib/supabase.js'
 
 const SEVERITIES = ['low', 'normal', 'high']
@@ -24,7 +23,6 @@ function buildChannels(emailOn, webhookOn, canWebhook) {
 }
 
 export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade }) {
-  const activeWs = useShellStore((s) => s.activeWs)
   const [section, setSection] = useState('rules')
   const [rules, setRules] = useState([])
   const [rulesLoading, setRulesLoading] = useState(false)
@@ -108,7 +106,7 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade })
     try {
       const { error } = await supabase.from('alerts').insert({
         user_id: user.id,
-        workspace_id: activeWs ?? null,
+        workspace_id: null,
         keyword: kw,
         region: reg || null,
         channels: buildChannels(emailOn, webhookOn, canWebhook),
