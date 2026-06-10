@@ -426,7 +426,7 @@ export default function BriefPanel({ onClose }) {
           </div>
         </div>
 
-        <div className="modal-body brief-panel-body">
+        <div className={`modal-body brief-panel-body${menuOpen ? ' brief-body-dimmed' : ''}`}>
           {phase === 'idle' && (
             <p className="brief-idle-copy">
               Summarize headlines from this room&apos;s News Search and RSS widgets into a cited brief.
