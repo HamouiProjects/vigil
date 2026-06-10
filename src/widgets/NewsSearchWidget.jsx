@@ -33,8 +33,8 @@ async function fetchNewsSearch(q) {
   }))
 }
 
-function nsExtractSource(title) { const p = (title ?? '').split(' - '); return p.length > 1 ? p[p.length - 1].trim() : '' }
-function nsCleanTitle(title) { const p = (title ?? '').split(' - '); return p.length > 1 ? p.slice(0, -1).join(' - ').trim() : (title ?? '') }
+export function nsExtractSource(title) { const p = (title ?? '').split(' - '); return p.length > 1 ? p[p.length - 1].trim() : '' }
+export function nsCleanTitle(title) { const p = (title ?? '').split(' - '); return p.length > 1 ? p.slice(0, -1).join(' - ').trim() : (title ?? '') }
 
 export const KF_DEFAULT_TABS = [
   { id: 'world',     keyword: 'World'     },
