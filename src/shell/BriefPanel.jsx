@@ -52,6 +52,8 @@ export default function BriefPanel({ onClose }) {
   const [loadingStage, setLoadingStage] = useState(0)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [emailState, setEmailState] = useState('idle')
+  const [emailError, setEmailError] = useState('')
   const menuRef = useRef(null)
 
   useEffect(() => {
@@ -74,6 +76,15 @@ export default function BriefPanel({ onClose }) {
     document.addEventListener('mousedown', onMouseDown)
     return () => document.removeEventListener('mousedown', onMouseDown)
   }, [menuOpen])
+
+  useEffect(() => {
+    if (emailState !== 'sent' && emailState !== 'error') return undefined
+    const t = setTimeout(() => {
+      setEmailState('idle')
+      setEmailError('')
+    }, 4000)
+    return () => clearTimeout(t)
+  }, [emailState])
 
   useEffect(() => {
     if (phase !== 'loading') return undefined
@@ -200,6 +211,59 @@ export default function BriefPanel({ onClose }) {
     URL.revokeObjectURL(url)
   }
 
+  async function handleEmailBrief() {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session || session.user?.is_anonymous) {
+      setEmailState('error')
+      setEmailError('Sign in to email yourself a brief.')
+      return
+    }
+
+    setEmailState('sending')
+    setEmailError('')
+
+    try {
+      const res = await fetch('/api/jobs?action=email-brief', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          brief,
+          roomName: ws?.name || 'Risk Room',
+          preparedFor,
+          generatedAt,
+        }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (res.status === 200 && data.sent) {
+        setEmailState('sent')
+        return
+      }
+
+      if (data.error === 'EMAIL_REQUIRES_ACCOUNT') {
+        setEmailState('error')
+        setEmailError('Create a free account to email briefs.')
+        return
+      }
+
+      if (data.error === 'EMAIL_NOT_CONFIGURED') {
+        setEmailState('error')
+        setEmailError('Email is not set up yet.')
+        return
+      }
+
+      setEmailState('error')
+      setEmailError('Could not send the email. Please try again.')
+    } catch {
+      setEmailState('error')
+      setEmailError('Could not send the email. Please try again.')
+    }
+  }
+
   async function handleDownloadPdf() {
     if (!brief || pdfBusy) return
     setPdfBusy(true)
@@ -286,55 +350,75 @@ export default function BriefPanel({ onClose }) {
           <span className="modal-title">Brief</span>
           <div className="brief-header-actions">
             {phase === 'result' && brief && (
-              <div className="brief-download-menu" ref={menuRef}>
-                <button
-                  type="button"
-                  className="brief-header-btn"
-                  onClick={() => setMenuOpen((open) => !open)}
-                  aria-expanded={menuOpen}
-                  aria-haspopup="menu"
-                >
-                  Download
-                </button>
-                {menuOpen && (
-                  <div className="brief-download-dropdown" role="menu">
-                    <button
-                      type="button"
-                      className="brief-download-item"
-                      role="menuitem"
-                      disabled={pdfBusy}
-                      onClick={() => {
-                        setMenuOpen(false)
-                        if (!pdfBusy) handleDownloadPdf()
-                      }}
-                    >
-                      {pdfBusy ? 'Preparing PDF' : 'Download as PDF'}
-                    </button>
-                    <button
-                      type="button"
-                      className="brief-download-item"
-                      role="menuitem"
-                      onClick={() => {
-                        setMenuOpen(false)
-                        handleDownload()
-                      }}
-                    >
-                      Download as text
-                    </button>
-                    <button
-                      type="button"
-                      className="brief-download-item"
-                      role="menuitem"
-                      onClick={() => {
-                        setMenuOpen(false)
-                        handleCopy()
-                      }}
-                    >
-                      Copy text to clipboard
-                    </button>
-                  </div>
+              <>
+                <div className="brief-download-menu" ref={menuRef}>
+                  <button
+                    type="button"
+                    className="brief-header-btn"
+                    onClick={() => setMenuOpen((open) => !open)}
+                    aria-expanded={menuOpen}
+                    aria-haspopup="menu"
+                  >
+                    Download
+                  </button>
+                  {menuOpen && (
+                    <div className="brief-download-dropdown" role="menu">
+                      <button
+                        type="button"
+                        className="brief-download-item"
+                        role="menuitem"
+                        disabled={pdfBusy}
+                        onClick={() => {
+                          setMenuOpen(false)
+                          if (!pdfBusy) handleDownloadPdf()
+                        }}
+                      >
+                        {pdfBusy ? 'Preparing PDF' : 'Download as PDF'}
+                      </button>
+                      <button
+                        type="button"
+                        className="brief-download-item"
+                        role="menuitem"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          handleDownload()
+                        }}
+                      >
+                        Download as text
+                      </button>
+                      <button
+                        type="button"
+                        className="brief-download-item"
+                        role="menuitem"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          handleCopy()
+                        }}
+                      >
+                        Copy text to clipboard
+                      </button>
+                      <button
+                        type="button"
+                        className="brief-download-item"
+                        role="menuitem"
+                        disabled={emailState === 'sending'}
+                        onClick={() => {
+                          setMenuOpen(false)
+                          handleEmailBrief()
+                        }}
+                      >
+                        {emailState === 'sending' ? 'Sending...' : 'Email this to me'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {emailState === 'sent' && (
+                  <span className="brief-stage" style={{ margin: 0 }}>Sent to your email.</span>
                 )}
-              </div>
+                {emailState === 'error' && emailError && (
+                  <span className="brief-stage" style={{ margin: 0 }}>{emailError}</span>
+                )}
+              </>
             )}
             <button type="button" className="widget-btn" onClick={onClose} title="Close">
               ✕
