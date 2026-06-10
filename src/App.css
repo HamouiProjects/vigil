@@ -1912,11 +1912,28 @@ button.status-dot:hover { opacity: 0.8; }
 
 /* ── Alerts drawer ── */
 .alerts-bell-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 4px 10px;
   line-height: 1;
+}
+.alerts-bell-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
 }
 .alerts-drawer-backdrop {
   position: fixed;
@@ -2234,6 +2251,75 @@ button.status-dot:hover { opacity: 0.8; }
   opacity: 0.7;
 }
 .alerts-rule-delete:hover { opacity: 1; }
+.alerts-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.alerts-activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.alerts-activity-item:last-child { border-bottom: none; }
+.alerts-activity-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-brand);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+.alerts-activity-item.is-unread .alerts-activity-title { color: var(--text-primary); }
+.alerts-activity-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.alerts-activity-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.alerts-activity-source {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+.alerts-activity-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+.alerts-activity-time {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.alerts-activity-title {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.alerts-activity-title:hover {
+  color: var(--color-brand);
+  text-decoration: underline;
+}
 @media (prefers-reduced-motion: reduce) {
   .alerts-drawer-backdrop { animation: none; }
   .alerts-drawer { animation: none; }

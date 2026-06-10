@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 
 const SEVERITIES = ['low', 'normal', 'high']
@@ -15,6 +15,18 @@ function severityColor(severity) {
   return 'var(--color-warning)'
 }
 
+function timeAgo(ts) {
+  if (!ts) return ''
+  const s = Math.max(0, Math.floor((Date.now() - new Date(ts).getTime()) / 1000))
+  if (s < 60) return 'just now'
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  return `${d}d ago`
+}
+
 function buildChannels(emailOn, webhookOn, canWebhook) {
   const ch = ['in_app']
   if (emailOn) ch.push('email')
@@ -22,10 +34,13 @@ function buildChannels(emailOn, webhookOn, canWebhook) {
   return ch
 }
 
-export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade }) {
+export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, onActivityRead }) {
   const [section, setSection] = useState('rules')
   const [rules, setRules] = useState([])
   const [rulesLoading, setRulesLoading] = useState(false)
+  const [events, setEvents] = useState([])
+  const [eventsLoading, setEventsLoading] = useState(false)
+  const [eventsLoaded, setEventsLoaded] = useState(false)
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState('')
 
@@ -41,6 +56,11 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade })
   const cap = entitlements.limits.alertRules ?? 0
   const atCap = canAlert && rules.length >= cap
 
+  const keywordByAlertId = useMemo(
+    () => Object.fromEntries(rules.map((r) => [r.id, r.keyword])),
+    [rules],
+  )
+
   const loadRules = useCallback(async () => {
     setRulesLoading(true)
     try {
@@ -54,6 +74,32 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade })
     }
   }, [])
 
+  const loadEvents = useCallback(async () => {
+    setEventsLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('alert_events')
+        .select('*')
+        .order('matched_at', { ascending: false })
+        .limit(50)
+      if (!error) {
+        const rows = data ?? []
+        setEvents(rows)
+        const hadUnread = rows.some((e) => !e.read_at)
+        if (hadUnread) {
+          supabase
+            .from('alert_events')
+            .update({ read_at: new Date().toISOString() })
+            .is('read_at', null)
+            .then(() => onActivityRead?.())
+        }
+      }
+    } finally {
+      setEventsLoading(false)
+      setEventsLoaded(true)
+    }
+  }, [onActivityRead])
+
   useEffect(() => {
     if (!open) return undefined
     function onKey(e) {
@@ -66,6 +112,14 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade })
   useEffect(() => {
     if (open) loadRules()
   }, [open, loadRules])
+
+  useEffect(() => {
+    if (open && section === 'activity' && !eventsLoaded && !eventsLoading) loadEvents()
+  }, [open, section, eventsLoaded, eventsLoading, loadEvents])
+
+  useEffect(() => {
+    if (!open) setEventsLoaded(false)
+  }, [open])
 
   async function handleCreate() {
     setFormError('')
@@ -350,7 +404,44 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade })
             </div>
           )}
           {section === 'activity' && (
-            <p className="alerts-drawer-empty">No activity yet.</p>
+            <div className="alerts-activity">
+              {eventsLoading && events.length === 0 && (
+                <p className="alerts-drawer-empty">Loading...</p>
+              )}
+              {!eventsLoading && events.length === 0 && (
+                <p className="alerts-drawer-empty">No activity yet.</p>
+              )}
+              {events.length > 0 && (
+                <ul className="alerts-activity-list">
+                  {events.map((ev) => {
+                    const kw = keywordByAlertId[ev.alert_id]
+                    return (
+                      <li
+                        key={ev.id}
+                        className={`alerts-activity-item${ev.read_at ? '' : ' is-unread'}`}
+                      >
+                        {!ev.read_at && <span className="alerts-activity-dot" aria-hidden />}
+                        <div className="alerts-activity-main">
+                          <div className="alerts-activity-top">
+                            {ev.source && <span className="alerts-activity-source">{ev.source}</span>}
+                            {kw && <span className="alerts-activity-tag">{kw}</span>}
+                            <span className="alerts-activity-time">{timeAgo(ev.matched_at)}</span>
+                          </div>
+                          <a
+                            className="alerts-activity-title"
+                            href={ev.item_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {ev.item_title || ev.item_url}
+                          </a>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
           )}
         </div>
       </aside>

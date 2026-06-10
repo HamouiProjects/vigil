@@ -120,6 +120,7 @@ export default function Shell() {
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
   const [showBrief, setShowBrief] = useState(false)
   const [showAlerts, setShowAlerts] = useState(false)
+  const [unreadAlerts, setUnreadAlerts] = useState(0)
   const [account, setAccount] = useState(null)
   const [themePref, setThemePrefState] = useState(getThemePref())
   const [showAuth, setShowAuth] = useState(false)
@@ -142,6 +143,19 @@ export default function Shell() {
     const { globalLive: live, setGlobalLive } = useShellStore.getState()
     if (typeof live !== 'boolean') setGlobalLive(true)
   }, [])
+
+  useEffect(() => {
+    if (!entitlements?.capabilities?.has('alerts')) return undefined
+    let cancelled = false
+    ;(async () => {
+      const { count } = await supabase
+        .from('alert_events')
+        .select('id', { count: 'exact', head: true })
+        .is('read_at', null)
+      if (!cancelled) setUnreadAlerts(count ?? 0)
+    })()
+    return () => { cancelled = true }
+  }, [entitlements])
 
   useEffect(() => {
     const onFs = () => setIsFullscreen(!!document.fullscreenElement)
@@ -433,6 +447,9 @@ export default function Shell() {
             aria-label="Alerts"
           >
             <Bell size={13} strokeWidth={1.75} aria-hidden />
+            {unreadAlerts > 0 && (
+              <span className="alerts-bell-badge">{unreadAlerts > 9 ? '9+' : unreadAlerts}</span>
+            )}
           </button>
           <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowBrief(true)}>
             Brief
@@ -479,6 +496,7 @@ export default function Shell() {
         onClose={() => setShowAlerts(false)}
         entitlements={entitlements}
         onUpgrade={() => setShowUpgrade(true)}
+        onActivityRead={() => setUnreadAlerts(0)}
       />
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
       {showAuth && (
