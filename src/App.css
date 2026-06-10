@@ -1703,6 +1703,39 @@ button.status-dot:hover { opacity: 0.8; }
   border-color: var(--accent);
   background: var(--accent-dim);
 }
+.brief-download-menu {
+  position: relative;
+}
+.brief-download-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 188px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+  z-index: 10;
+}
+.brief-download-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.brief-download-item:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+.brief-download-item:disabled {
+  cursor: default;
+  color: var(--text-muted);
+}
 .brief-panel-body {
   padding: 16px;
   display: flex;

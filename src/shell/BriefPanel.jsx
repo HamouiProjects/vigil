@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useShellStore } from '../state/shellStore.js'
 import { supabase } from '../lib/supabase.js'
 import { gatherRoomItems } from '../lib/gatherRoomItems.js'
@@ -45,14 +45,29 @@ export default function BriefPanel({ onClose }) {
   const [generatedAt, setGeneratedAt] = useState(null)
   const [loadingStage, setLoadingStage] = useState(0)
   const [pdfBusy, setPdfBusy] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef(null)
 
   useEffect(() => {
     function onKey(e) {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape') return
+      if (menuOpen) setMenuOpen(false)
+      else onClose()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, menuOpen])
+
+  useEffect(() => {
+    if (!menuOpen) return undefined
+    function onMouseDown(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [menuOpen])
 
   useEffect(() => {
     if (phase !== 'loading') return undefined
@@ -265,22 +280,55 @@ export default function BriefPanel({ onClose }) {
           <span className="modal-title">Brief</span>
           <div className="brief-header-actions">
             {phase === 'result' && brief && (
-              <>
-                <button type="button" className="brief-header-btn" onClick={handleCopy}>
-                  Copy
-                </button>
-                <button type="button" className="brief-header-btn" onClick={handleDownload}>
-                  Download
-                </button>
+              <div className="brief-download-menu" ref={menuRef}>
                 <button
                   type="button"
                   className="brief-header-btn"
-                  onClick={handleDownloadPdf}
-                  disabled={pdfBusy}
+                  onClick={() => setMenuOpen((open) => !open)}
+                  aria-expanded={menuOpen}
+                  aria-haspopup="menu"
                 >
-                  {pdfBusy ? 'Preparing PDF' : 'PDF'}
+                  Download
                 </button>
-              </>
+                {menuOpen && (
+                  <div className="brief-download-dropdown" role="menu">
+                    <button
+                      type="button"
+                      className="brief-download-item"
+                      role="menuitem"
+                      disabled={pdfBusy}
+                      onClick={() => {
+                        setMenuOpen(false)
+                        if (!pdfBusy) handleDownloadPdf()
+                      }}
+                    >
+                      {pdfBusy ? 'Preparing PDF' : 'Download as PDF'}
+                    </button>
+                    <button
+                      type="button"
+                      className="brief-download-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        handleDownload()
+                      }}
+                    >
+                      Download as text
+                    </button>
+                    <button
+                      type="button"
+                      className="brief-download-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        handleCopy()
+                      }}
+                    >
+                      Copy text to clipboard
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
             <button type="button" className="widget-btn" onClick={onClose} title="Close">
               ✕
@@ -372,11 +420,14 @@ export default function BriefPanel({ onClose }) {
                   </ul>
                 </section>
               ))}
-              {usage && (
-                <div className="brief-foot">
-                  <span>Used {usage.used} of {usage.limit} this month</span>
-                </div>
-              )}
+              {usage && (() => {
+                const remaining = Math.max(0, (usage.limit ?? 0) - (usage.used ?? 0))
+                return (
+                  <div className="brief-foot">
+                    <span>{remaining} of {usage.limit} left this month</span>
+                  </div>
+                )
+              })()}
               <p className="brief-sourcing-note">
                 Summary of this room&apos;s own sources. Vigil tracks, it does not verify.
               </p>
