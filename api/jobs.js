@@ -1,6 +1,7 @@
 import supabase from './_supabase.js'
 import { applyCors } from './_cors.js'
 import { resolveEntitlements } from '../src/entitlements/resolve.js'
+import { safeFetch } from './_ssrf.js'
 
 function readBody(req) {
   if (req.body && typeof req.body === 'object') return req.body
@@ -275,6 +276,24 @@ async function sendAlertEmail(to, keyword, region, items) {
   } catch { return false }
 }
 
+async function sendAlertWebhook(webhookUrl, keyword, region, items) {
+  const scope = region ? ` in ${region}` : ''
+  const lines = items.slice(0, 10).map((it) => `• ${it.title || it.url}${it.source ? ` (${it.source})` : ''}${it.url ? `\n${it.url}` : ''}`)
+  const text = `New items matching "${keyword}"${scope}\n\n${lines.join('\n')}\n\nVigil tracks, it does not verify.`
+  try {
+    const resp = await safeFetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(10000),
+    })
+    return resp.ok
+  } catch (e) {
+    console.error('[alert-dispatch] webhook post failed', e?.message)
+    return false
+  }
+}
+
 async function handleAlertDispatch(req, res) {
   const secret = process.env.CRON_SECRET
   const authHeader = req.headers.authorization || ''
@@ -291,6 +310,7 @@ async function handleAlertDispatch(req, res) {
   const userCache = new Map()
   let matched = 0
   let emailed = 0
+  let posted = 0
 
   for (const rule of (rules || [])) {
     let u = userCache.get(rule.user_id)
@@ -298,10 +318,10 @@ async function handleAlertDispatch(req, res) {
       const { data: ud } = await supabase.auth.admin.getUserById(rule.user_id)
       const { data: sub } = await supabase.from('subscriptions').select('plan, status, add_ons').eq('user_id', rule.user_id).maybeSingle()
       const ent = resolveEntitlements(sub?.plan ?? 'free', sub?.add_ons ?? [], sub?.status ?? null)
-      u = { email: ud?.user?.email || '', plan: ent.plan }
+      u = { email: ud?.user?.email || '', plan: ent.plan, canAlert: ent.capabilities.has('alerts'), canWebhook: ent.capabilities.has('alerts_webhook') }
       userCache.set(rule.user_id, u)
     }
-    if (u.plan === 'free') continue
+    if (!u.canAlert) continue
 
     const items = await fetchMatches(rule.keyword, rule.region)
     if (!items.length) continue
@@ -323,14 +343,19 @@ async function handleAlertDispatch(req, res) {
     matched += fresh.length
 
     const channels = Array.isArray(rule.channels) ? rule.channels : []
+    const mapped = fresh.map((f) => ({ url: f.item_url, title: f.item_title, source: f.source }))
     if (channels.includes('email') && u.email) {
-      const sent = await sendAlertEmail(u.email, rule.keyword, rule.region, fresh.map((f) => ({ url: f.item_url, title: f.item_title, source: f.source })))
+      const sent = await sendAlertEmail(u.email, rule.keyword, rule.region, mapped)
       if (sent) emailed += 1
+    }
+    if (u.canWebhook && rule.webhook_url && (channels.includes('webhook') || channels.includes('slack'))) {
+      const ok = await sendAlertWebhook(rule.webhook_url, rule.keyword, rule.region, mapped)
+      if (ok) posted += 1
     }
   }
 
-  console.log('[alert-dispatch]', JSON.stringify({ rules: (rules || []).length, matched, emailed }))
-  return res.status(200).json({ ok: true, rules: (rules || []).length, matched, emailed })
+  console.log('[alert-dispatch]', JSON.stringify({ rules: (rules || []).length, matched, emailed, posted }))
+  return res.status(200).json({ ok: true, rules: (rules || []).length, matched, emailed, posted })
 }
 
 export default async function handler(req, res) {
