@@ -1,7 +1,7 @@
 import { GN_SEARCH_URL, KF_DEFAULT_TABS } from '../widgets/NewsSearchWidget.jsx'
 import { SUGGESTIONS } from '../widgets/RssFeedWidget.jsx'
 
-export async function gatherRoomItems(workspace, { maxSources = 8, perSource = 10 } = {}) {
+export async function gatherRoomItems(workspace, { maxSources = 6, perSource = 6 } = {}) {
   if (!workspace?.widgets?.length) return []
 
   const sources = []

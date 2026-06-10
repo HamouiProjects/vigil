@@ -48,7 +48,7 @@ function normalizeItems(items) {
       publishedAt: i.publishedAt,
     }))
     .sort((a, b) => new Date(b.publishedAt || 0).getTime() - new Date(a.publishedAt || 0).getTime())
-    .slice(0, 40)
+    .slice(0, 18)
 }
 
 function buildUserContent(items) {

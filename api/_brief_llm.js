@@ -28,6 +28,7 @@ export async function fetchBriefLLM({ system, user }) {
         temperature: 0.2,
         max_tokens: 1500,
         stream: false,
+        response_format: { type: 'json_object' },
       }),
       signal: AbortSignal.timeout(60000),
     })
@@ -48,9 +49,19 @@ export async function fetchBriefLLM({ system, user }) {
     throw err
   }
 
-  const data = await res.json()
+  let data
+  try {
+    data = await res.json()
+  } catch {
+    console.error('[brief] json parse failed')
+    const err = new Error('DeepSeek response JSON parse failed')
+    err.code = 'BRIEF_PROVIDER_FAILED'
+    throw err
+  }
+
   const content = data?.choices?.[0]?.message?.content
   if (!content) {
+    console.error('[brief] empty content', JSON.stringify(data?.choices?.[0]?.message ?? {}).slice(0, 300))
     const err = new Error('Empty LLM response')
     err.code = 'BRIEF_PROVIDER_FAILED'
     throw err
