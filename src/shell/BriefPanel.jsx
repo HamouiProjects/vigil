@@ -432,7 +432,7 @@ export default function BriefPanel({ onClose }) {
                 return (
                   <div className="brief-foot">
                     <span>
-                      {remaining} of {usage.limit} briefs left. Resets in {resetDays}{' '}
+                      {remaining} briefs left. Resets in {resetDays}{' '}
                       {resetDays === 1 ? 'day' : 'days'}.
                     </span>
                   </div>
