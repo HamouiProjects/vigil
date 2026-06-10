@@ -478,6 +478,7 @@ export default function Shell() {
         open={showAlerts}
         onClose={() => setShowAlerts(false)}
         entitlements={entitlements}
+        onUpgrade={() => setShowUpgrade(true)}
       />
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
       {showAuth && (
