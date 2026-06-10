@@ -5,7 +5,15 @@ import { resolveEntitlements } from '../src/entitlements/resolve.js'
 
 const PER_USER_MONTHLY = { free: 15, pro: 40, team: 120 }
 
-const SYSTEM_PROMPT = 'You write a calm operational news brief. Summarize ONLY the provided items. Do not add any fact, context, or analysis not present in the items. Do not assert anything as verified or true. Group items into a few themes. Output ONLY valid minified JSON, no markdown and no code fences, exactly: {"headline":string,"sections":[{"title":string,"bullets":[{"text":string,"source":{"label":string,"url":string}}]}]}. Each bullet must cite exactly one provided item as its source. Be concise. Never use em-dashes; use periods, commas, or parentheses.'
+const SYSTEM_PROMPT = 'You write a calm operational news brief. Summarize ONLY the provided items. Do not add any fact, context, or analysis not present in the items. Do not assert anything as verified or true. Group items into a few themes. Output ONLY valid minified JSON, no markdown and no code fences, exactly: {"headline":string,"sections":[{"title":string,"bullets":[{"text":string,"sourceIndex":number}]}]}. For each bullet, set sourceIndex to the [n] number of the single provided item it summarizes. Be concise. Never use em-dashes; use periods, commas, or parentheses.'
+
+const BRIEF_PARSE_FALLBACK = {
+  headline: 'Brief unavailable',
+  sections: [{
+    title: '',
+    bullets: [{ text: 'The brief could not be generated cleanly. Please try again.', source: null }],
+  }],
+}
 
 function readBody(req) {
   if (req.body && typeof req.body === 'object') return req.body
@@ -56,10 +64,28 @@ function parseBriefContent(raw) {
     const parsed = JSON.parse(text)
     if (parsed?.headline != null && Array.isArray(parsed?.sections)) return parsed
   } catch { /* fallback below */ }
+  return BRIEF_PARSE_FALLBACK
+}
+
+function resolveBriefSources(parsed, normalized) {
   return {
-    headline: 'Brief',
-    sections: [{ title: '', bullets: [{ text: raw, source: null }] }],
+    headline: String(parsed.headline),
+    sections: (parsed.sections ?? []).map((section) => ({
+      title: section?.title ?? '',
+      bullets: (section?.bullets ?? []).map((bullet) => {
+        const idx = Number(bullet?.sourceIndex)
+        const item = Number.isFinite(idx) && idx >= 1 ? normalized[idx - 1] : null
+        return {
+          text: String(bullet?.text ?? ''),
+          source: item ? { label: item.source || 'Source', url: item.url } : null,
+        }
+      }),
+    })),
   }
+}
+
+function isBriefFallback(brief) {
+  return brief?.headline === BRIEF_PARSE_FALLBACK.headline
 }
 
 export default async function handler(req, res) {
@@ -140,13 +166,14 @@ export default async function handler(req, res) {
   }
 
   const parsed = parseBriefContent(rawBrief)
+  const cleaned = isBriefFallback(parsed) ? parsed : resolveBriefSources(parsed, normalized)
 
   const { data: row, error: insertErr } = await supabase
     .from('briefs')
     .insert({
       user_id: user.id,
       workspace_id: workspaceId ?? null,
-      content: parsed,
+      content: cleaned,
       period: period ?? null,
     })
     .select('id, created_at')
@@ -158,7 +185,7 @@ export default async function handler(req, res) {
   }
 
   return res.status(200).json({
-    brief: parsed,
+    brief: cleaned,
     id: row.id,
     created_at: row.created_at,
     used: used + 1,

@@ -7,6 +7,22 @@ const ACCOUNT_MSG = 'Create a free account to generate briefs.'
 const NO_ITEMS_MSG = 'Add a News Search or RSS widget to your room, then generate a brief.'
 const UNAVAILABLE_MSG = 'Briefs are temporarily unavailable. Please try again shortly.'
 
+function briefToPlainText(brief) {
+  const lines = [brief.headline, '']
+  for (const section of brief.sections ?? []) {
+    if (section.title?.trim()) {
+      lines.push(section.title)
+      lines.push('')
+    }
+    for (const bullet of section.bullets ?? []) {
+      const label = bullet.source?.label
+      lines.push(`- ${bullet.text}${label ? ` (${label})` : ''}`)
+    }
+    if ((section.bullets ?? []).length) lines.push('')
+  }
+  return lines.join('\n').trim()
+}
+
 export default function BriefPanel({ onClose }) {
   const workspaces = useShellStore((s) => s.workspaces)
   const activeWs = useShellStore((s) => s.activeWs)
@@ -94,14 +110,43 @@ export default function BriefPanel({ onClose }) {
     }
   }
 
+  function handleCopy() {
+    if (!brief) return
+    navigator.clipboard.writeText(briefToPlainText(brief)).catch(() => {})
+  }
+
+  function handleDownload() {
+    if (!brief) return
+    const text = briefToPlainText(brief)
+    const blob = new Blob([text], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'brief.txt'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal brief-panel-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">Brief</span>
-          <button type="button" className="widget-btn" onClick={onClose} title="Close">
-            ✕
-          </button>
+          <div className="brief-header-actions">
+            {phase === 'result' && brief && (
+              <>
+                <button type="button" className="brief-header-btn" onClick={handleCopy}>
+                  Copy
+                </button>
+                <button type="button" className="brief-header-btn" onClick={handleDownload}>
+                  Download
+                </button>
+              </>
+            )}
+            <button type="button" className="widget-btn" onClick={onClose} title="Close">
+              ✕
+            </button>
+          </div>
         </div>
 
         <div className="modal-body brief-panel-body">
@@ -124,35 +169,38 @@ export default function BriefPanel({ onClose }) {
               <h2 className="brief-headline">{brief.headline}</h2>
               {(brief.sections ?? []).map((section, si) => (
                 <section key={si} className="brief-section">
-                  {section.title ? (
+                  {section.title?.trim() ? (
                     <h3 className="brief-section-title">{section.title}</h3>
                   ) : null}
                   <ul className="brief-bullets">
                     {(section.bullets ?? []).map((bullet, bi) => (
                       <li key={bi} className="brief-bullet">
-                        <span>{bullet.text}</span>
-                        {bullet.source?.url?.startsWith('http') && (
-                          <>
-                            {' '}
-                            <a
-                              className="brief-source"
-                              href={bullet.source.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              {bullet.source.label || 'Source'}
-                            </a>
-                          </>
-                        )}
+                        <span className="brief-bullet-text">
+                          {bullet.text}
+                          {bullet.source?.url?.startsWith('http') && (
+                            <>
+                              {' '}
+                              <a
+                                className="brief-source"
+                                href={bullet.source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {bullet.source.label || 'Source'}
+                                {' ↗'}
+                              </a>
+                            </>
+                          )}
+                        </span>
                       </li>
                     ))}
                   </ul>
                 </section>
               ))}
               {usage && (
-                <p className="brief-meta">
-                  Used {usage.used} of {usage.limit} this month.
-                </p>
+                <div className="brief-foot">
+                  <span>Used {usage.used} of {usage.limit} this month</span>
+                </div>
               )}
             </article>
           )}

@@ -26,7 +26,7 @@ export async function fetchBriefLLM({ system, user }) {
           { role: 'user', content: user },
         ],
         temperature: 0.2,
-        max_tokens: 1200,
+        max_tokens: 1500,
         stream: false,
       }),
       signal: AbortSignal.timeout(60000),
