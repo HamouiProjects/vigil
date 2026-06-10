@@ -44,6 +44,7 @@ export default function BriefPanel({ onClose }) {
   const [sourceCount, setSourceCount] = useState(null)
   const [generatedAt, setGeneratedAt] = useState(null)
   const [loadingStage, setLoadingStage] = useState(0)
+  const [pdfBusy, setPdfBusy] = useState(false)
 
   useEffect(() => {
     function onKey(e) {
@@ -178,6 +179,85 @@ export default function BriefPanel({ onClose }) {
     URL.revokeObjectURL(url)
   }
 
+  async function handleDownloadPdf() {
+    if (!brief || pdfBusy) return
+    setPdfBusy(true)
+    try {
+      const { jsPDF } = await import('jspdf')
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+      const pageW = doc.internal.pageSize.getWidth()
+      const pageH = doc.internal.pageSize.getHeight()
+      const margin = 18
+      const contentW = pageW - margin * 2
+      let y = margin
+      const ensure = (h) => { if (y + h > pageH - margin) { doc.addPage(); y = margin } }
+      const writeWrapped = (text, opts = {}) => {
+        const { size = 10, style = 'normal', color = [33, 33, 33], gap = 1.5, lineH = 5 } = opts
+        doc.setFont('helvetica', style)
+        doc.setFontSize(size)
+        doc.setTextColor(...color)
+        for (const ln of doc.splitTextToSize(text, contentW)) {
+          ensure(lineH)
+          doc.text(ln, margin, y)
+          y += lineH
+        }
+        y += gap
+      }
+      writeWrapped(ws?.name || 'Risk Room', { size: 14, style: 'bold', gap: 1 })
+      const metaBits = []
+      if (generatedAt) {
+        metaBits.push('Generated ' + new Date(generatedAt).toLocaleString(undefined, {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }))
+      }
+      if (sourceCount != null) {
+        metaBits.push(sourceCount + (sourceCount === 1 ? ' source' : ' sources'))
+      }
+      if (metaBits.length) writeWrapped(metaBits.join('    '), { size: 9, color: [120, 120, 120], gap: 1 })
+      if (preparedFor) writeWrapped('Prepared for ' + preparedFor, { size: 10, color: [80, 80, 80], gap: 2 })
+      ensure(2)
+      doc.setDrawColor(210, 210, 210)
+      doc.line(margin, y, pageW - margin, y)
+      y += 5
+      writeWrapped(brief.headline, { size: 13, style: 'bold', gap: 3 })
+      for (const section of brief.sections ?? []) {
+        if (section.title?.trim()) writeWrapped(section.title, { size: 11, style: 'bold', gap: 1.5 })
+        for (const bullet of section.bullets ?? []) {
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          doc.setTextColor(33, 33, 33)
+          for (const ln of doc.splitTextToSize('- ' + bullet.text, contentW)) {
+            ensure(5)
+            doc.text(ln, margin, y)
+            y += 5
+          }
+          const url = bullet.source?.url
+          if (url && url.startsWith('http')) {
+            ensure(5)
+            doc.setFontSize(9)
+            doc.setTextColor(20, 90, 160)
+            doc.textWithLink(bullet.source?.label || 'Source', margin + 4, y, { url })
+            y += 6
+          } else {
+            y += 1.5
+          }
+        }
+        y += 2
+      }
+      ensure(8)
+      writeWrapped("Summary of this room's own sources. Vigil tracks, it does not verify.", { size: 8, color: [120, 120, 120] })
+      doc.save('brief.pdf')
+    } catch {
+      // txt and Copy remain available on failure
+    } finally {
+      setPdfBusy(false)
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal brief-panel-modal" onClick={(e) => e.stopPropagation()}>
@@ -191,6 +271,14 @@ export default function BriefPanel({ onClose }) {
                 </button>
                 <button type="button" className="brief-header-btn" onClick={handleDownload}>
                   Download
+                </button>
+                <button
+                  type="button"
+                  className="brief-header-btn"
+                  onClick={handleDownloadPdf}
+                  disabled={pdfBusy}
+                >
+                  {pdfBusy ? 'Preparing PDF' : 'PDF'}
                 </button>
               </>
             )}
