@@ -229,14 +229,22 @@ function renderAlertEmailText({ keyword, region, items }) {
 }
 
 async function fetchMatches(keyword, region) {
-  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://thevigilroom.com'
+  const base = 'https://thevigilroom.com'
   const q = region ? `${keyword} ${region}` : keyword
   let json = null
+  let httpStatus = 0
   try {
     const r = await fetch(`${base}/api/rss?url=${encodeURIComponent(GN_SEARCH(q))}`, { signal: AbortSignal.timeout(10000) })
+    httpStatus = r.status
     json = await r.json().catch(() => null)
-  } catch { return [] }
-  if (!json || json.status !== 'ok' || !Array.isArray(json.items)) return []
+  } catch (e) {
+    console.error('[alert-dispatch] rss fetch threw', e?.message)
+    return []
+  }
+  if (!json || json.status !== 'ok' || !Array.isArray(json.items)) {
+    console.error('[alert-dispatch] rss not ok', { httpStatus, status: json?.status, items: Array.isArray(json?.items) ? json.items.length : null })
+    return []
+  }
   const out = []
   for (const it of json.items.slice(0, 12)) {
     const url = it.link || ''
@@ -309,7 +317,7 @@ async function handleAlertDispatch(req, res) {
       .from('alert_events')
       .upsert(rows, { onConflict: 'alert_id,item_url', ignoreDuplicates: true })
       .select('item_url, item_title, source')
-    if (insErr) continue
+    if (insErr) { console.error('[alert-dispatch] upsert error', insErr?.message); continue }
     const fresh = inserted || []
     if (!fresh.length) continue
     matched += fresh.length
@@ -321,6 +329,7 @@ async function handleAlertDispatch(req, res) {
     }
   }
 
+  console.log('[alert-dispatch]', JSON.stringify({ rules: (rules || []).length, matched, emailed }))
   return res.status(200).json({ ok: true, rules: (rules || []).length, matched, emailed })
 }
 
