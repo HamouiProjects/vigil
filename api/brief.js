@@ -62,16 +62,12 @@ function parseBriefContent(raw) {
   }
 }
 
-function providerUnavailable(res) {
-  return res.status(503).json({ error: 'BRIEF_NOT_CONFIGURED' })
-}
-
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
 
-  if (!supabase) return providerUnavailable(res)
+  if (!supabase) return res.status(503).json({ error: 'SUPABASE_UNAVAILABLE' })
 
   const authHeader = req.headers.authorization || ''
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
@@ -110,7 +106,10 @@ export default async function handler(req, res) {
     .eq('user_id', user.id)
     .gte('created_at', monthStartISO())
 
-  if (countErr) return providerUnavailable(res)
+  if (countErr) {
+    console.error('[brief] count error', countErr?.message)
+    return res.status(500).json({ error: 'DB_ERROR', stage: 'count' })
+  }
 
   const used = count ?? 0
   if (used >= cap) {
@@ -130,10 +129,14 @@ export default async function handler(req, res) {
       user: buildUserContent(normalized),
     })
   } catch (err) {
-    if (err instanceof BriefLLMNotConfiguredError || err.code === 'BRIEF_PROVIDER_FAILED') {
-      return providerUnavailable(res)
+    console.error('[brief] llm error', err?.code, err?.status, err?.detail || err?.message)
+    if (err instanceof BriefLLMNotConfiguredError) {
+      return res.status(503).json({ error: 'BRIEF_NOT_CONFIGURED' })
     }
-    return providerUnavailable(res)
+    return res.status(502).json({
+      error: 'BRIEF_PROVIDER_ERROR',
+      providerStatus: err?.status ?? null,
+    })
   }
 
   const parsed = parseBriefContent(rawBrief)
@@ -149,7 +152,10 @@ export default async function handler(req, res) {
     .select('id, created_at')
     .single()
 
-  if (insertErr || !row) return providerUnavailable(res)
+  if (insertErr || !row) {
+    console.error('[brief] insert error', insertErr?.message)
+    return res.status(500).json({ error: 'DB_ERROR', stage: 'insert' })
+  }
 
   return res.status(200).json({
     brief: parsed,
