@@ -10,7 +10,7 @@ const EXCLUDED_DOMAINS = [
   'haaretz.com', 'arabnews.com', 'rt.com',
 ]
 
-const SUGGESTIONS = [
+export const SUGGESTIONS = [
   { name: 'BBC News', url: 'https://feeds.bbci.co.uk/news/rss.xml', color: '#bb1919' },
   { name: 'BBC World', url: 'https://feeds.bbci.co.uk/news/world/rss.xml', color: '#bb1919' },
   { name: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml', color: '#009966' },

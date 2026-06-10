@@ -9,6 +9,7 @@ import Grid from './Grid.jsx'
 import EntitlementDebug from './EntitlementDebug.jsx'
 import UpgradeModal from './UpgradeModal.jsx'
 import WidgetPicker from './WidgetPicker.jsx'
+import BriefPanel from './BriefPanel.jsx'
 import AccountMenu from './AccountMenu.jsx'
 import { supabase } from '../lib/supabase.js'
 import AuthScreen from '../components/layout/AuthScreen.jsx'
@@ -115,6 +116,7 @@ export default function Shell() {
   const [upgradeNudge, setUpgradeNudge] = useState(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
+  const [showBrief, setShowBrief] = useState(false)
   const [account, setAccount] = useState(null)
   const [themePref, setThemePrefState] = useState(getThemePref())
   const [showAuth, setShowAuth] = useState(false)
@@ -419,6 +421,9 @@ export default function Shell() {
 
         <div className="navbar-right" style={{ position: 'relative', zIndex: 110 }}>
           <button type="button" className="nav-add-btn btn-secondary" onClick={handleShare}>Share</button>
+          <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowBrief(true)}>
+            Brief
+          </button>
           <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowWidgetPicker(true)}>
             + Add Widget
           </button>
@@ -455,6 +460,7 @@ export default function Shell() {
       {showWidgetPicker && (
         <WidgetPicker onPick={handleAddWidget} onClose={() => setShowWidgetPicker(false)} />
       )}
+      {showBrief && <BriefPanel onClose={() => setShowBrief(false)} />}
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
       {showAuth && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100002, background: 'var(--bg, #0A0C10)' }}>
