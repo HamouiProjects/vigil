@@ -1,5 +1,11 @@
 {
   "rewrites": [{ "source": "/api/(.*)", "destination": "/api/$1" }],
+  "crons": [
+    { "path": "/api/jobs?action=alert-dispatch", "schedule": "0 6 * * *" }
+  ],
+  "functions": {
+    "api/jobs.js": { "maxDuration": 60 }
+  },
   "headers": [
     {
       "source": "/(.*)",

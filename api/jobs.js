@@ -1,5 +1,6 @@
 import supabase from './_supabase.js'
 import { applyCors } from './_cors.js'
+import { resolveEntitlements } from '../src/entitlements/resolve.js'
 
 function readBody(req) {
   if (req.body && typeof req.body === 'object') return req.body
@@ -192,6 +193,137 @@ async function handleEmailBrief(req, res) {
   }
 }
 
+// --- alert dispatch (Phase-2 sprint 2) ---
+const GN_SEARCH = (q) =>
+  `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`
+const outletOf = (t) => { const p = String(t ?? '').split(' - '); return p.length > 1 ? p[p.length - 1].trim() : '' }
+const titleOf = (t) => { const p = String(t ?? '').split(' - '); return p.length > 1 ? p.slice(0, -1).join(' - ').trim() : String(t ?? '') }
+
+function renderAlertEmailHtml({ keyword, region, items }) {
+  const scope = region ? ` in ${esc(region)}` : ''
+  let html = `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;line-height:1.5;max-width:640px;">
+<div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;">
+<div style="font-size:18px;font-weight:bold;color:#1a1a1a;">New items matching your alert</div>
+<div style="font-size:13px;color:#4b5563;margin-top:4px;">${esc(keyword)}${scope} . ${items.length} new ${items.length === 1 ? 'item' : 'items'}</div>
+</div>
+<ul style="margin:0 0 12px;padding-left:20px;">`
+  for (const it of items) {
+    const label = esc(it.source || 'Source')
+    html += `<li style="margin-bottom:8px;font-size:14px;">`
+    if (it.url) html += `<a href="${esc(it.url)}" style="color:#1d4ed8;text-decoration:none;">${esc(it.title || it.url)}</a> <span style="color:#6b7280;">(${label})</span>`
+    else html += `${esc(it.title || '')} (${label})`
+    html += `</li>`
+  }
+  html += `</ul>
+<p style="font-size:12px;color:#6b7280;margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb;">Vigil tracks, it does not verify. You are receiving this because you set an alert in Vigil.</p>
+</body></html>`
+  return html
+}
+
+function renderAlertEmailText({ keyword, region, items }) {
+  const scope = region ? ` in ${region}` : ''
+  const lines = [`New items matching your alert: ${keyword}${scope}`, '']
+  for (const it of items) lines.push(`- ${it.title || it.url} (${it.source || 'Source'}) ${it.url || ''}`.trim())
+  lines.push('', 'Vigil tracks, it does not verify.')
+  return lines.join('\n')
+}
+
+async function fetchMatches(keyword, region) {
+  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://thevigilroom.com'
+  const q = region ? `${keyword} ${region}` : keyword
+  let json = null
+  try {
+    const r = await fetch(`${base}/api/rss?url=${encodeURIComponent(GN_SEARCH(q))}`, { signal: AbortSignal.timeout(10000) })
+    json = await r.json().catch(() => null)
+  } catch { return [] }
+  if (!json || json.status !== 'ok' || !Array.isArray(json.items)) return []
+  const out = []
+  for (const it of json.items.slice(0, 12)) {
+    const url = it.link || ''
+    if (!url) continue
+    out.push({ url, title: titleOf(it.title), source: outletOf(it.title) || it.author || '' })
+  }
+  return out
+}
+
+async function sendAlertEmail(to, keyword, region, items) {
+  const key = process.env.RESEND_API_KEY
+  if (!key) return false
+  const scope = region ? ` in ${region}` : ''
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'Vigil Alerts <brief@thevigilroom.com>',
+        to: [to],
+        subject: `New items matching "${keyword}"${scope}`,
+        html: renderAlertEmailHtml({ keyword, region, items }),
+        text: renderAlertEmailText({ keyword, region, items }),
+      }),
+      signal: AbortSignal.timeout(30000),
+    })
+    return resp.ok
+  } catch { return false }
+}
+
+async function handleAlertDispatch(req, res) {
+  const secret = process.env.CRON_SECRET
+  const authHeader = req.headers.authorization || ''
+  if (!secret || authHeader !== `Bearer ${secret}`) return res.status(401).json({ error: 'UNAUTHORIZED' })
+  if (!supabase) return res.status(503).json({ error: 'SUPABASE_UNAVAILABLE' })
+
+  const { data: rules, error: rulesErr } = await supabase
+    .from('alerts')
+    .select('id, user_id, keyword, region, channels, webhook_url')
+    .eq('active', true)
+    .limit(40)
+  if (rulesErr) return res.status(500).json({ error: 'DB_ERROR', stage: 'rules' })
+
+  const userCache = new Map()
+  let matched = 0
+  let emailed = 0
+
+  for (const rule of (rules || [])) {
+    let u = userCache.get(rule.user_id)
+    if (!u) {
+      const { data: ud } = await supabase.auth.admin.getUserById(rule.user_id)
+      const { data: sub } = await supabase.from('subscriptions').select('plan, status, add_ons').eq('user_id', rule.user_id).maybeSingle()
+      const ent = resolveEntitlements(sub?.plan ?? 'free', sub?.add_ons ?? [], sub?.status ?? null)
+      u = { email: ud?.user?.email || '', plan: ent.plan }
+      userCache.set(rule.user_id, u)
+    }
+    if (u.plan === 'free') continue
+
+    const items = await fetchMatches(rule.keyword, rule.region)
+    if (!items.length) continue
+
+    const rows = items.map((it) => ({
+      alert_id: rule.id,
+      user_id: rule.user_id,
+      item_url: it.url,
+      item_title: it.title,
+      source: it.source,
+    }))
+    const { data: inserted, error: insErr } = await supabase
+      .from('alert_events')
+      .upsert(rows, { onConflict: 'alert_id,item_url', ignoreDuplicates: true })
+      .select('item_url, item_title, source')
+    if (insErr) continue
+    const fresh = inserted || []
+    if (!fresh.length) continue
+    matched += fresh.length
+
+    const channels = Array.isArray(rule.channels) ? rule.channels : []
+    if (channels.includes('email') && u.email) {
+      const sent = await sendAlertEmail(u.email, rule.keyword, rule.region, fresh.map((f) => ({ url: f.item_url, title: f.item_title, source: f.source })))
+      if (sent) emailed += 1
+    }
+  }
+
+  return res.status(200).json({ ok: true, rules: (rules || []).length, matched, emailed })
+}
+
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
@@ -202,6 +334,8 @@ export default async function handler(req, res) {
   switch (action) {
     case 'email-brief':
       return handleEmailBrief(req, res)
+    case 'alert-dispatch':
+      return handleAlertDispatch(req, res)
     default:
       return res.status(400).json({ error: 'UNKNOWN_ACTION' })
   }
