@@ -31,6 +31,12 @@ function briefToPlainText(brief) {
   return lines.join('\n').trim()
 }
 
+function daysUntilReset() {
+  const now = new Date()
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  return Math.max(1, Math.ceil((next - now) / 86400000))
+}
+
 export default function BriefPanel({ onClose }) {
   const workspaces = useShellStore((s) => s.workspaces)
   const activeWs = useShellStore((s) => s.activeWs)
@@ -422,9 +428,13 @@ export default function BriefPanel({ onClose }) {
               ))}
               {usage && (() => {
                 const remaining = Math.max(0, (usage.limit ?? 0) - (usage.used ?? 0))
+                const resetDays = daysUntilReset()
                 return (
                   <div className="brief-foot">
-                    <span>{remaining} of {usage.limit} left this month</span>
+                    <span>
+                      {remaining} of {usage.limit} briefs left. Resets in {resetDays}{' '}
+                      {resetDays === 1 ? 'day' : 'days'}.
+                    </span>
                   </div>
                 )
               })()}
