@@ -159,6 +159,9 @@ export default async function handler(req, res) {
     if (err instanceof BriefLLMNotConfiguredError) {
       return res.status(503).json({ error: 'BRIEF_NOT_CONFIGURED' })
     }
+    if (err?.code === 'BRIEF_EMPTY_CONTENT') {
+      return res.status(502).json({ error: 'BRIEF_EMPTY', finishReason: err.finishReason ?? null })
+    }
     return res.status(502).json({
       error: 'BRIEF_PROVIDER_ERROR',
       providerStatus: err?.status ?? null,
@@ -166,7 +169,11 @@ export default async function handler(req, res) {
   }
 
   const parsed = parseBriefContent(rawBrief)
-  const cleaned = isBriefFallback(parsed) ? parsed : resolveBriefSources(parsed, normalized)
+  if (isBriefFallback(parsed)) {
+    console.error('[brief] parse fallback, not inserting')
+    return res.status(502).json({ error: 'BRIEF_PARSE_FAILED' })
+  }
+  const cleaned = resolveBriefSources(parsed, normalized)
 
   const { data: row, error: insertErr } = await supabase
     .from('briefs')

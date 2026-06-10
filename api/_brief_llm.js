@@ -26,7 +26,7 @@ export async function fetchBriefLLM({ system, user }) {
           { role: 'user', content: user },
         ],
         temperature: 0.2,
-        max_tokens: 1500,
+        max_tokens: 4000,
         stream: false,
         response_format: { type: 'json_object' },
       }),
@@ -59,11 +59,15 @@ export async function fetchBriefLLM({ system, user }) {
     throw err
   }
 
-  const content = data?.choices?.[0]?.message?.content
+  const choice = data?.choices?.[0]
+  const content = choice?.message?.content
   if (!content) {
-    console.error('[brief] empty content', JSON.stringify(data?.choices?.[0]?.message ?? {}).slice(0, 300))
+    const finish = choice?.finish_reason ?? 'unknown'
+    const hasReasoning = !!choice?.message?.reasoning_content
+    console.error('[brief] empty content', 'finish_reason=' + finish, 'reasoning_content=' + hasReasoning, JSON.stringify(choice?.message ?? {}).slice(0, 200))
     const err = new Error('Empty LLM response')
-    err.code = 'BRIEF_PROVIDER_FAILED'
+    err.code = 'BRIEF_EMPTY_CONTENT'
+    err.finishReason = finish
     throw err
   }
 

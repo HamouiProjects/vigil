@@ -6,6 +6,8 @@ import { gatherRoomItems } from '../lib/gatherRoomItems.js'
 const ACCOUNT_MSG = 'Create a free account to generate briefs.'
 const NO_ITEMS_MSG = 'Add a News Search or RSS widget to your room, then generate a brief.'
 const UNAVAILABLE_MSG = 'Briefs are temporarily unavailable. Please try again shortly.'
+const EMPTY_MSG = 'The brief came back empty. This can happen on very large rooms. Try generating again, or remove a few feeds first.'
+const PARSE_MSG = 'The brief came back in an unexpected format. Please try generating again.'
 
 function briefToPlainText(brief) {
   const lines = [brief.headline, '']
@@ -96,7 +98,24 @@ export default function BriefPanel({ onClose }) {
         return
       }
 
-      if (res.status === 502 || res.status === 503) {
+      if (data.error === 'BRIEF_EMPTY') {
+        setPhase('error')
+        setErrorMsg(EMPTY_MSG)
+        return
+      }
+      if (data.error === 'BRIEF_PARSE_FAILED') {
+        setPhase('error')
+        setErrorMsg(PARSE_MSG)
+        return
+      }
+      if (data.error === 'BRIEF_PROVIDER_ERROR') {
+        setPhase('error')
+        setErrorMsg(data.providerStatus
+          ? `The brief provider returned an error (status ${data.providerStatus}). Please try again shortly.`
+          : UNAVAILABLE_MSG)
+        return
+      }
+      if (res.status === 503) {
         setPhase('error')
         setErrorMsg(UNAVAILABLE_MSG)
         return
