@@ -444,16 +444,18 @@ export default function BriefPanel({ onClose }) {
             </article>
           )}
 
-          <div className="brief-actions">
-            <button
-              type="button"
-              className="nav-add-btn btn-primary"
-              onClick={handleGenerate}
-              disabled={phase === 'loading'}
-            >
-              {phase === 'result' ? 'Generate again' : 'Generate brief'}
-            </button>
-          </div>
+          {phase !== 'result' && (
+            <div className="brief-actions">
+              <button
+                type="button"
+                className="nav-add-btn btn-primary"
+                onClick={handleGenerate}
+                disabled={phase === 'loading'}
+              >
+                Generate brief
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
