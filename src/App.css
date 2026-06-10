@@ -1710,7 +1710,6 @@ button.status-dot:hover { opacity: 0.8; }
   gap: 14px;
 }
 .brief-idle-copy,
-.brief-loading,
 .brief-error {
   font-family: var(--font-sans);
   font-size: 12px;
@@ -1719,7 +1718,77 @@ button.status-dot:hover { opacity: 0.8; }
   margin: 0;
 }
 .brief-error { color: var(--text-primary); }
-.brief-loading { color: var(--text-muted); font-style: italic; }
+.brief-masthead {
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.brief-masthead-room {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.brief-masthead-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  display: flex;
+  gap: 16px;
+  margin-top: 4px;
+}
+.brief-masthead-prepared {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+.brief-sourcing-note {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+.brief-stage {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+.brief-skeleton-line {
+  height: 12px;
+  border-radius: 3px;
+  background: var(--color-surface-2);
+  margin-bottom: 10px;
+}
+.brief-skeleton-masthead {
+  height: 14px;
+  margin-bottom: 14px;
+}
+.brief-skeleton-section {
+  margin-top: 8px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .brief-skeleton-line {
+    background: linear-gradient(
+      90deg,
+      var(--color-surface-2) 25%,
+      var(--color-surface-hover) 37%,
+      var(--color-surface-2) 63%
+    );
+    background-size: 400% 100%;
+    animation: brief-shimmer 1.4s ease infinite;
+  }
+  @keyframes brief-shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: 0 0; }
+  }
+}
 .brief-content {
   display: flex;
   flex-direction: column;

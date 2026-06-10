@@ -9,6 +9,12 @@ const UNAVAILABLE_MSG = 'Briefs are temporarily unavailable. Please try again sh
 const EMPTY_MSG = 'The brief came back empty. This can happen on very large rooms. Try generating again, or remove a few feeds first.'
 const PARSE_MSG = 'The brief came back in an unexpected format. Please try generating again.'
 
+const STAGE_LABELS = [
+  (count) => (count ? `Gathering ${count} headlines` : 'Gathering headlines'),
+  () => 'Grouping into themes',
+  () => 'Writing the brief',
+]
+
 function briefToPlainText(brief) {
   const lines = [brief.headline, '']
   for (const section of brief.sections ?? []) {
@@ -34,6 +40,10 @@ export default function BriefPanel({ onClose }) {
   const [errorMsg, setErrorMsg] = useState(null)
   const [brief, setBrief] = useState(null)
   const [usage, setUsage] = useState(null)
+  const [preparedFor, setPreparedFor] = useState(null)
+  const [sourceCount, setSourceCount] = useState(null)
+  const [generatedAt, setGeneratedAt] = useState(null)
+  const [loadingStage, setLoadingStage] = useState(0)
 
   useEffect(() => {
     function onKey(e) {
@@ -43,11 +53,28 @@ export default function BriefPanel({ onClose }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  useEffect(() => {
+    if (phase !== 'loading') return undefined
+    setLoadingStage(0)
+    const t1 = setTimeout(() => setLoadingStage(1), 2500)
+    const t2 = setTimeout(() => setLoadingStage(2), 8000)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+    }
+  }, [phase])
+
+  const stageLabel = STAGE_LABELS[loadingStage]?.(sourceCount) ?? STAGE_LABELS[0](sourceCount)
+
   async function handleGenerate() {
     setPhase('loading')
     setErrorMsg(null)
     setBrief(null)
     setUsage(null)
+    setPreparedFor(null)
+    setSourceCount(null)
+    setGeneratedAt(null)
+    setLoadingStage(0)
 
     const { data: { session } } = await supabase.auth.getSession()
     if (!session || session.user?.is_anonymous) {
@@ -56,12 +83,16 @@ export default function BriefPanel({ onClose }) {
       return
     }
 
+    setPreparedFor(session.user?.user_metadata?.username || null)
+
     const items = await gatherRoomItems(ws)
     if (!items.length) {
       setPhase('error')
       setErrorMsg(NO_ITEMS_MSG)
       return
     }
+
+    setSourceCount(Math.min(items.length, 18))
 
     try {
       const res = await fetch('/api/brief', {
@@ -82,6 +113,7 @@ export default function BriefPanel({ onClose }) {
       if (res.status === 200 && data.brief) {
         setBrief(data.brief)
         setUsage({ used: data.used, limit: data.limit })
+        setGeneratedAt(data.created_at || new Date().toISOString())
         setPhase('result')
         return
       }
@@ -176,7 +208,18 @@ export default function BriefPanel({ onClose }) {
           )}
 
           {phase === 'loading' && (
-            <p className="brief-loading">Gathering headlines and writing your brief…</p>
+            <div className="brief-skeleton" aria-busy="true" aria-live="polite">
+              <div className="brief-skeleton-line" style={{ width: '40%' }} />
+              <div className="brief-skeleton-line brief-skeleton-masthead" style={{ width: '55%' }} />
+              <div className="brief-skeleton-line" style={{ width: '30%' }} />
+              <div className="brief-skeleton-line" style={{ width: '100%' }} />
+              <div className="brief-skeleton-line" style={{ width: '90%' }} />
+              <div className="brief-skeleton-line" style={{ width: '70%' }} />
+              <div className="brief-skeleton-line brief-skeleton-section" style={{ width: '35%' }} />
+              <div className="brief-skeleton-line" style={{ width: '100%' }} />
+              <div className="brief-skeleton-line" style={{ width: '85%' }} />
+              <p className="brief-stage">{stageLabel}</p>
+            </div>
           )}
 
           {phase === 'error' && errorMsg && (
@@ -185,6 +228,31 @@ export default function BriefPanel({ onClose }) {
 
           {phase === 'result' && brief && (
             <article className="brief-content">
+              <header className="brief-masthead">
+                <div className="brief-masthead-room">{ws?.name || 'Risk Room'}</div>
+                <div className="brief-masthead-meta">
+                  {generatedAt && (
+                    <span>
+                      Generated{' '}
+                      {new Date(generatedAt).toLocaleString(undefined, {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  )}
+                  {sourceCount != null && (
+                    <span>
+                      {sourceCount} {sourceCount === 1 ? 'source' : 'sources'}
+                    </span>
+                  )}
+                </div>
+                {preparedFor && (
+                  <div className="brief-masthead-prepared">Prepared for {preparedFor}</div>
+                )}
+              </header>
               <h2 className="brief-headline">{brief.headline}</h2>
               {(brief.sections ?? []).map((section, si) => (
                 <section key={si} className="brief-section">
@@ -221,6 +289,9 @@ export default function BriefPanel({ onClose }) {
                   <span>Used {usage.used} of {usage.limit} this month</span>
                 </div>
               )}
+              <p className="brief-sourcing-note">
+                Summary of this room&apos;s own sources. Vigil tracks, it does not verify.
+              </p>
             </article>
           )}
 
