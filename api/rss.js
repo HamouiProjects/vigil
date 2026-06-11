@@ -230,6 +230,43 @@ async function fetchViaTelegram(feedUrl) {
   return { ok: true, title, image, items }
 }
 
+function blueskyHandleFromUrl(feedUrl) {
+  try {
+    const u = new URL(feedUrl)
+    if (u.hostname.toLowerCase() !== 'bsky.app') return ''
+    const m = u.pathname.match(/^\/profile\/([^/]+)\/rss\/?$/i)
+    return m ? decodeURIComponent(m[1]) : ''
+  } catch {
+    return ''
+  }
+}
+
+async function fetchViaBlueskyApi(handle) {
+  const api = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${encodeURIComponent(handle)}&limit=${MAX_ITEMS}`
+  const res = await fetch(api, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) })
+  if (!res.ok) return { ok: false }
+  const data = await res.json().catch(() => null)
+  const feed = Array.isArray(data?.feed) ? data.feed : null
+  if (!feed) return { ok: false }
+  const title = feed[0]?.post?.author?.displayName || `@${handle}`
+  const image = feed[0]?.post?.author?.avatar || ''
+  const items = feed.map(fi => {
+    const p = fi?.post
+    if (!p?.record) return null
+    const rkey = String(p.uri || '').split('/').pop()
+    const authorHandle = p.author?.handle || handle
+    return {
+      title: p.record.text || '',
+      link: `https://bsky.app/profile/${authorHandle}/post/${rkey}`,
+      pubDate: p.record.createdAt || p.indexedAt || '',
+      description: p.record.text || '',
+      author: `@${authorHandle}`,
+    }
+  }).filter(Boolean)
+  if (!items.length) return { ok: false }
+  return { ok: true, title, image, items: items.slice(0, MAX_ITEMS) }
+}
+
 // ---------- cache + response helpers ----------
 function okPayload(url, title, items, image) {
   return { status: 'ok', source: { title: title ?? '', url, image: image ?? '' }, items }
@@ -292,6 +329,18 @@ export default async function handler(req, res) {
   const { cachedRow, fresh } = await readFeedCache(url)
   if (fresh && cachedRow) {
     return res.status(200).json(okPayload(url, cachedRow.title, cachedRow.items, ''))
+  }
+
+  // 1.5) Bluesky via public XRPC API (bypasses rss2json rate limits)
+  const bskyHandle = blueskyHandleFromUrl(url)
+  if (bskyHandle) {
+    try {
+      const bsky = await fetchViaBlueskyApi(bskyHandle)
+      if (bsky.ok) {
+        await cacheWrite(url, bsky.title, bsky.items)
+        return res.status(200).json(okPayload(url, bsky.title, bsky.items, bsky.image))
+      }
+    } catch { /* fall through to rss2json/direct */ }
   }
 
   let rateLimited = false
