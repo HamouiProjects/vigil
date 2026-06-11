@@ -34,49 +34,54 @@ function AnonKeepRoomNudge() {
     return () => document.removeEventListener('mouseout', onMouseOut)
   }, [])
 
+  // Esc dismisses the prompt while it is showing (parity with the share confirmation).
+  useEffect(() => {
+    if (dismissed || showAuth) return undefined
+    function onKey(e) { if (e.key === 'Escape') setDismissed(true) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [dismissed, showAuth])
+
   return (
     <>
       {!dismissed && !showAuth && (
-        <div
-          role="status"
-          style={{
-            position: 'fixed',
-            bottom: 16,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 1050,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            maxWidth: 'calc(100vw - 32px)',
-            background: 'var(--color-surface-2)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius)',
-            padding: '8px 12px',
-            fontFamily: 'var(--font-mono, JetBrains Mono, monospace)',
-            fontSize: 11,
-          }}
-        >
-          <span style={{ color: 'var(--color-text-secondary)' }}>
-            You are not signed in. Sign up to keep this room across devices.
-          </span>
-          <button
-            type="button"
-            className="nav-add-btn btn-primary"
-            style={{ padding: '2px 10px', fontSize: 10 }}
-            onClick={() => { setAuthView('signup'); setShowAuth(true) }}
+        <div className="modal-overlay" onClick={() => setDismissed(true)}>
+          <div
+            role="status"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--color-surface-2)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius)',
+              padding: '20px 24px',
+              maxWidth: 'min(360px, calc(100vw - 40px))',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 14,
+              textAlign: 'center',
+            }}
           >
-            Save / sign up
-          </button>
-          <button
-            type="button"
-            className="widget-btn"
-            onClick={() => setDismissed(true)}
-            title="Dismiss"
-            aria-label="Dismiss"
-          >
-            ✕
-          </button>
+            <span style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 11, lineHeight: 1.5, color: 'var(--color-text-primary)' }}>
+              You are not signed in. Sign up to keep this room across devices.
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="nav-add-btn btn-primary"
+                onClick={() => { setAuthView('signup'); setShowAuth(true) }}
+              >
+                Save / sign up
+              </button>
+              <button
+                type="button"
+                className="nav-add-btn btn-secondary"
+                onClick={() => setDismissed(true)}
+              >
+                Not now
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
