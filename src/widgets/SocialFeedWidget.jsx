@@ -198,6 +198,38 @@ async function fetchAccount(account) {
   }
 }
 
+async function fetchAccountWithRetry(account, attempts = 3) {
+  let lastErr
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetchAccount(account)
+    } catch (e) {
+      lastErr = e
+      if (e?.message === 'bad_url') throw e        // permanent, never retry
+      if (i < attempts - 1) {
+        const delay = 1500 * Math.pow(2, i) + Math.random() * 500  // ~1.5s then ~3s, jittered
+        await new Promise(r => setTimeout(r, delay))
+      }
+    }
+  }
+  throw lastErr
+}
+
+async function mapPool(items, limit, fn) {
+  const results = new Array(items.length)
+  let idx = 0
+  async function worker() {
+    while (idx < items.length) {
+      const cur = idx++
+      try { results[cur] = { status: 'fulfilled', value: await fn(items[cur]) } }
+      catch (e) { results[cur] = { status: 'rejected', reason: e } }
+    }
+  }
+  const n = Math.min(limit, items.length) || 1
+  await Promise.all(Array.from({ length: n }, worker))
+  return results
+}
+
 function accountLabel(acc, metaByAccount) {
   return metaByAccount[acc.id]?.label || PLATFORMS[acc.platform].labelFor(acc.value)
 }
@@ -245,12 +277,12 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
       return
     }
     setLoading(true)
-    const results = await Promise.allSettled(enabled.map(a => fetchAccount(a)))
+    const results = await mapPool(enabled, 3, fetchAccountWithRetry)
     const newErrors = {}
     const allPosts = []
     results.forEach((r, i) => {
       if (r.status === 'fulfilled') allPosts.push(...r.value.items)
-      else newErrors[enabled[i].id] = true
+      else newErrors[enabled[i].id] = r.reason?.message || 'error'
     })
     allPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate))
     setPosts(allPosts)
@@ -363,7 +395,7 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
                   {accountLabel(acc, metaByAccount)}
                 </span>
                 {errorByAccount[acc.id] && (
-                  <span className="rss-source-err" title="Could not load">⚠</span>
+                  <span className="rss-source-err" title={errorByAccount[acc.id] === 'rate_limited' ? 'Rate-limited upstream, will retry' : 'Could not load'}>⚠</span>
                 )}
                 <span
                   className={`rss-source-toggle${acc.enabled ? ' on' : ''}`}
