@@ -476,7 +476,7 @@ export default function Shell() {
 
       <LatestTicker collapsed={tickerCollapsed} onSetCollapsed={setTickerCollapsedPersisted} />
 
-      <div ref={scrollRef} style={{ width: '100%', flex: 1, minHeight: 0, position: 'relative', overflow: 'auto' }}>
+      <div ref={scrollRef} className={`shell-grid-scroll${!globalLive ? ' is-paused-dim' : ''}`} style={{ width: '100%', flex: 1, minHeight: 0, position: 'relative', overflow: 'auto' }}>
         <Grid />
         <div aria-hidden="true" style={{ height: 36 }} />
       </div>

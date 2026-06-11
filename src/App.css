@@ -2628,3 +2628,8 @@ button.status-dot:hover { opacity: 0.8; }
   background: var(--color-surface-hover);
 }
 
+/* Calm darken-only dim of the grid when all live feeds are paused (T-14) */
+.shell-grid-scroll { transition: filter 200ms ease; }
+.shell-grid-scroll.is-paused-dim { filter: brightness(0.6); }
+@media (prefers-reduced-motion: reduce) { .shell-grid-scroll { transition: none; } }
+
