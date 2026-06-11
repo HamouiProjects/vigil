@@ -21,7 +21,7 @@ function AppSplash() {
 function AnonKeepRoomNudge() {
   const [dismissed, setDismissed] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
-  const [authView, setAuthView] = useState('login')
+  const [authView, setAuthView] = useState('signup')
 
   // Calm exit intent: when the cursor leaves through the top of the viewport
   // (toward the tab bar / close), resurface the nudge if it was dismissed.
@@ -44,7 +44,7 @@ function AnonKeepRoomNudge() {
             bottom: 16,
             left: '50%',
             transform: 'translateX(-50%)',
-            zIndex: 100000,
+            zIndex: 1050,
             display: 'flex',
             alignItems: 'center',
             gap: 12,
@@ -58,15 +58,15 @@ function AnonKeepRoomNudge() {
           }}
         >
           <span style={{ color: 'var(--color-text-secondary)' }}>
-            You are not signed in. Log in to keep this room across devices.
+            You are not signed in. Sign up to keep this room across devices.
           </span>
           <button
             type="button"
             className="nav-add-btn btn-primary"
             style={{ padding: '2px 10px', fontSize: 10 }}
-            onClick={() => { setAuthView('login'); setShowAuth(true) }}
+            onClick={() => { setAuthView('signup'); setShowAuth(true) }}
           >
-            Log in
+            Save / sign up
           </button>
           <button
             type="button"
@@ -86,7 +86,7 @@ function AnonKeepRoomNudge() {
             <AuthScreen
               authView={authView}
               setAuthView={setAuthView}
-              reason="Log in or create an account to keep this room across devices."
+              reason="Sign up to keep this room across devices."
               onClose={() => setShowAuth(false)}
               onAuthed={() => window.location.reload()}
             />
