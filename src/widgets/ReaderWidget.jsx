@@ -8,10 +8,23 @@ export default function ReaderWidget({ config, onSaveConfig, setActions }) {
   const [article, setArticle] = useState(null)
   const [error, setError] = useState(null)
   const [devOffline, setDevOffline] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+
+  const saved = config.saved ?? []
 
   const configRef = useRef(config); configRef.current = config
   const onSaveConfigRef = useRef(onSaveConfig); onSaveConfigRef.current = onSaveConfig
   function patch(p) { onSaveConfigRef.current({ ...configRef.current, ...p }) }
+
+  function toggleSave() {
+    if (!url || !article) return
+    if (saved.some(s => s.url === url)) { patch({ saved: saved.filter(s => s.url !== url) }); return }
+    let hostname = ''
+    try { hostname = new URL(url).hostname.replace(/^www\./, '') } catch { hostname = '' }
+    patch({ saved: [...saved, { url, title: article.title || url, source: article.siteName || hostname }] })
+  }
+
+  function removeSaved(targetUrl) { patch({ saved: saved.filter(s => s.url !== targetUrl) }) }
 
   async function doFetch(rawUrl) {
     let u = rawUrl.trim()
@@ -37,13 +50,23 @@ export default function ReaderWidget({ config, onSaveConfig, setActions }) {
     try { return new Date(str).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) } catch { return str }
   }
 
+  const isSaved = saved.some(s => s.url === url)
+
   useEffect(() => {
     setActions?.(
-      url ? (
-        <button type="button" className="widget-btn" onClick={() => window.open(url, '_blank', 'noopener')} title="Open in new tab">↗</button>
-      ) : null
+      <>
+        {article && (
+          <button type="button" className="widget-btn" onClick={toggleSave} title={isSaved ? 'Remove from saved' : 'Save article'} style={isSaved ? { color: 'var(--accent)' } : undefined}>{isSaved ? '★' : '☆'}</button>
+        )}
+        {saved.length > 0 && (
+          <button type="button" className="widget-btn" onClick={() => setEditMode(v => !v)} title={editMode ? 'Done editing' : 'Manage saved'} style={editMode ? { color: 'var(--accent)' } : undefined}>✏</button>
+        )}
+        {url && (
+          <button type="button" className="widget-btn" onClick={() => window.open(url, '_blank', 'noopener')} title="Open in new tab">↗</button>
+        )}
+      </>
     )
-  }, [setActions, url])
+  }, [setActions, saved, article, editMode, url])
 
   return (
     <div className="widget" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -51,6 +74,23 @@ export default function ReaderWidget({ config, onSaveConfig, setActions }) {
         <input className="rss-input" value={input} onChange={e => setInput(e.target.value)} placeholder="Paste article URL…" spellCheck={false} />
         <button className="rss-go-btn" type="submit" disabled={loading}>{loading ? '…' : 'GO'}</button>
       </form>
+
+      {saved.length > 0 && (
+        <div className="rss-filters-strip" style={{ flexShrink: 0 }} onPointerDownCapture={e => e.stopPropagation()}>
+          <div className="rss-filters-chips">
+            {saved.map((s, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <div className={`rss-filter-chip${s.url === url ? ' active' : ''}`} onClick={() => doFetch(s.url)}>
+                  <span className="rss-filter-chip-text">{s.source || s.title}</span>
+                </div>
+                {editMode && (
+                  <button className="rss-filter-chip-del" style={{ position: 'static', opacity: 1 }} onClick={() => removeSaved(s.url)} title="Remove">✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="article-reader-body">
         {loading && (
