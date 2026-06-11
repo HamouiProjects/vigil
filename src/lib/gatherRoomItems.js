@@ -63,3 +63,40 @@ export async function gatherRoomItems(workspace, { maxSources = 6, perSource = 6
 
   return [...directItems, ...fetchedItems]
 }
+
+const US_TV_PREFIXES = new Set(['NASDAQ','NYSE','NYSEARCA','AMEX','BATS','BATS_DLY','ARCA','CBOE'])
+const HEATMAP_PROXY = {
+  sp500:  { label: 'S&P 500', symbol: 'SPY' },
+  nasdaq: { label: 'Nasdaq',  symbol: 'QQQ' },
+  dow:    { label: 'Dow',     symbol: 'DIA' },
+}
+function bareUsTicker(tvSymbol) {
+  const s = String(tvSymbol || '').trim().toUpperCase()
+  if (!s) return null
+  if (!s.includes(':')) return /^[A-Z.\-]{1,8}$/.test(s) ? s : null
+  const [prefix, ...rest] = s.split(':')
+  const ticker = rest.join(':')
+  if (!US_TV_PREFIXES.has(prefix)) return null
+  return /^[A-Z.\-]{1,8}$/.test(ticker) ? ticker : null
+}
+export function gatherMarketSymbols(workspace) {
+  const out = { symbols: [], heatmaps: [] }
+  if (!workspace?.widgets?.length) return out
+  const seen = new Set(); const seenHm = new Set()
+  for (const w of workspace.widgets) {
+    if (w.type === 'chart') {
+      const t = bareUsTicker(w.config?.symbol)
+      if (t && !seen.has(t)) { seen.add(t); out.symbols.push(t) }
+    } else if (w.type === 'prices') {
+      for (const s of (w.config?.symbols ?? [])) {
+        const t = bareUsTicker(s?.tvSymbol)
+        if (t && !seen.has(t)) { seen.add(t); out.symbols.push(t) }
+      }
+    } else if (w.type === 'heatmap') {
+      const key = w.config?.market == null ? 'sp500' : w.config.market
+      const proxy = HEATMAP_PROXY[key]
+      if (proxy && !seenHm.has(proxy.symbol)) { seenHm.add(proxy.symbol); out.heatmaps.push(proxy) }
+    }
+  }
+  return out
+}

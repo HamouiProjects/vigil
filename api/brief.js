@@ -2,6 +2,7 @@ import supabase from './_supabase.js'
 import { applyCors } from './_cors.js'
 import { fetchBriefLLM, BriefLLMNotConfiguredError } from './_brief_llm.js'
 import { resolveEntitlements } from '../src/entitlements/resolve.js'
+import { getQuotes } from './_yahoo.js'
 
 const PER_USER_MONTHLY = { free: 15, pro: 40, team: 120 }
 
@@ -88,6 +89,29 @@ function isBriefFallback(brief) {
   return brief?.headline === BRIEF_PARSE_FALLBACK.headline
 }
 
+function buildMarkets(mkReq, quotes) {
+  if (!mkReq || typeof mkReq !== 'object') return null
+  const r2 = (n) => Math.round(Number(n) * 100) / 100
+  const dirOf = (p) => (p > 0 ? 'up' : p < 0 ? 'down' : 'flat')
+  const valid = (q) => q && q.country === 'us' && (q.asset_type === 'EQUITY' || q.asset_type === 'ETF') && q.price != null
+  const map = new Map()
+  for (const q of quotes) if (valid(q)) map.set(String(q.symbol).toUpperCase(), q)
+  const rows = []
+  for (const s of (mkReq.symbols || [])) {
+    const q = map.get(String(s).toUpperCase()); if (!q) continue
+    const pct = r2(q.change_pct ?? 0)
+    rows.push({ symbol: q.symbol, name: q.name || q.symbol, price: r2(q.price), changePct: pct, dir: dirOf(pct) })
+  }
+  const heatmaps = []
+  for (const h of (mkReq.heatmaps || [])) {
+    const q = map.get(String(h?.symbol).toUpperCase()); if (!q) continue
+    const pct = r2(q.change_pct ?? 0)
+    heatmaps.push({ label: h.label || h.symbol, symbol: q.symbol, changePct: pct, dir: dirOf(pct) })
+  }
+  if (!rows.length && !heatmaps.length) return null
+  return { asOf: new Date().toISOString(), rows, heatmaps }
+}
+
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
@@ -113,7 +137,7 @@ export default async function handler(req, res) {
   const body = readBody(req)
   if (!body) return res.status(400).json({ error: 'invalid body' })
 
-  const { workspaceId, items, period } = body
+  const { workspaceId, items, period, markets } = body
   const normalized = normalizeItems(items)
   if (!normalized.length) return res.status(400).json({ error: 'NO_ITEMS' })
 
@@ -148,6 +172,15 @@ export default async function handler(req, res) {
     })
   }
 
+  const mkReq = (markets && typeof markets === 'object') ? markets : null
+  const wantedSyms = mkReq
+    ? [...new Set([...(mkReq.symbols || []), ...((mkReq.heatmaps || []).map((h) => h?.symbol))]
+        .map((s) => String(s || '').trim().toUpperCase()).filter(Boolean))]
+    : []
+  const quotesPromise = wantedSyms.length
+    ? getQuotes(wantedSyms).catch((err) => { console.error('[brief] quotes failed', err?.message); return [] })
+    : Promise.resolve([])
+
   let rawBrief
   try {
     rawBrief = await fetchBriefLLM({
@@ -174,6 +207,12 @@ export default async function handler(req, res) {
     return res.status(502).json({ error: 'BRIEF_PARSE_FAILED' })
   }
   const cleaned = resolveBriefSources(parsed, normalized)
+
+  try {
+    const quotes = await quotesPromise
+    const mk = buildMarkets(mkReq, quotes)
+    if (mk) cleaned.markets = mk
+  } catch (err) { console.error('[brief] markets build failed', err?.message) }
 
   const { data: row, error: insertErr } = await supabase
     .from('briefs')

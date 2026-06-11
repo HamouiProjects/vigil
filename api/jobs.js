@@ -29,6 +29,14 @@ function clamp(str, max) {
 }
 
 function sanitizeBrief(brief) {
+  const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null }
+  const dirOk = (d) => (d === 'up' || d === 'down' || d === 'flat') ? d : 'flat'
+  const m = brief.markets
+  const markets = (m && typeof m === 'object') ? {
+    asOf: String(m.asOf ?? ''),
+    rows: Array.isArray(m.rows) ? m.rows.slice(0, 40).map((r) => ({ symbol: clamp(r.symbol, 16), name: clamp(r.name, 80), price: num(r.price), changePct: num(r.changePct), dir: dirOk(r.dir) })) : [],
+    heatmaps: Array.isArray(m.heatmaps) ? m.heatmaps.slice(0, 10).map((h) => ({ label: clamp(h.label, 40), symbol: clamp(h.symbol, 16), changePct: num(h.changePct), dir: dirOk(h.dir) })) : [],
+  } : null
   return {
     headline: clamp(brief.headline, 300),
     sections: (brief.sections ?? []).slice(0, 20).map((section) => ({
@@ -43,6 +51,7 @@ function sanitizeBrief(brief) {
           : null,
       })),
     })),
+    markets,
   }
 }
 
@@ -85,6 +94,17 @@ function renderEmailHtml({ brief, roomName, preparedFor, generatedAt }) {
     html += '</ul>'
   }
 
+  if (brief.markets && (brief.markets.rows.length || brief.markets.heatmaps.length)) {
+    const g = '#0A6B43', rd = '#AE2E27', mut = '#6b7280'
+    const cell = (p, dir) => { const c = dir === 'up' ? g : dir === 'down' ? rd : mut; const s = p > 0 ? '+' : ''; return `<span style="color:${c};">${s}${Number(p).toFixed(2)}%</span>` }
+    html += `<h2 style="font-size:13px;font-weight:bold;color:#1a1a1a;margin:16px 0 4px;text-transform:uppercase;letter-spacing:0.06em;">Markets</h2>`
+    html += `<div style="font-size:12px;color:#6b7280;margin-bottom:8px;">as of last refresh</div>`
+    html += `<table style="border-collapse:collapse;font-size:14px;margin-bottom:12px;">`
+    for (const row of brief.markets.rows) html += `<tr><td style="padding:2px 14px 2px 0;font-weight:bold;">${esc(row.symbol)}</td><td style="padding:2px 14px 2px 0;color:#4b5563;">${esc(row.name)}</td><td style="padding:2px 14px 2px 0;">${esc(String(row.price))}</td><td style="padding:2px 0;">${cell(row.changePct, row.dir)}</td></tr>`
+    for (const h of brief.markets.heatmaps) html += `<tr><td style="padding:2px 14px 2px 0;font-weight:bold;">${esc(h.label)}</td><td style="padding:2px 14px 2px 0;color:#4b5563;">(${esc(h.symbol)})</td><td></td><td style="padding:2px 0;">${cell(h.changePct, h.dir)}</td></tr>`
+    html += `</table>`
+  }
+
   html += `<p style="font-size:12px;color:#6b7280;margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb;">Vigil tracks, it does not verify.</p>
 </body></html>`
   return html
@@ -107,6 +127,13 @@ function renderEmailText({ brief, roomName, preparedFor, generatedAt }) {
       lines.push(`- ${bullet.text} (${label})`)
     }
     if (section.bullets?.length) lines.push('')
+  }
+
+  if (brief.markets && (brief.markets.rows.length || brief.markets.heatmaps.length)) {
+    lines.push('Markets (as of last refresh)', '')
+    for (const row of brief.markets.rows) lines.push(`- ${row.symbol}  ${row.price}  ${row.changePct > 0 ? '+' : ''}${Number(row.changePct).toFixed(2)}%`)
+    for (const h of brief.markets.heatmaps) lines.push(`- ${h.label} (${h.symbol})  ${h.changePct > 0 ? '+' : ''}${Number(h.changePct).toFixed(2)}%`)
+    lines.push('')
   }
 
   lines.push('Vigil tracks, it does not verify.')

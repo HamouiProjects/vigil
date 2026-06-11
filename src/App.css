@@ -2633,3 +2633,15 @@ button.status-dot:hover { opacity: 0.8; }
 .shell-grid-scroll.is-paused-dim { filter: brightness(0.6); }
 @media (prefers-reduced-motion: reduce) { .shell-grid-scroll { transition: none; } }
 
+/* Deterministic Markets block in the brief (T-08) */
+.brief-markets-caption { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-muted); margin-bottom: 6px; }
+.brief-markets-list { list-style: none; margin: 0; padding: 0; }
+.brief-markets-row { display: grid; grid-template-columns: 72px 1fr auto auto; gap: 12px; align-items: baseline; font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; padding: 2px 0; }
+.brief-markets-row .bm-sym { font-weight: 600; color: var(--color-text-primary); }
+.brief-markets-row .bm-name { color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brief-markets-row .bm-price { color: var(--color-text-primary); text-align: right; }
+.brief-markets-row .bm-chg { text-align: right; min-width: 64px; }
+.bm-up { color: var(--color-success); }
+.bm-down { color: var(--color-error); }
+.bm-flat { color: var(--color-text-muted); }
+

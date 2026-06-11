@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useShellStore } from '../state/shellStore.js'
 import { supabase } from '../lib/supabase.js'
-import { gatherRoomItems } from '../lib/gatherRoomItems.js'
+import { gatherRoomItems, gatherMarketSymbols } from '../lib/gatherRoomItems.js'
+
+function fmtPct(p) { const n = Number(p); if (!Number.isFinite(n)) return ''; return (n > 0 ? '+' : '') + n.toFixed(2) + '%' }
 
 const ACCOUNT_MSG = 'Create a free account to generate briefs.'
 const NO_ITEMS_MSG = 'Add a News Search or RSS widget to your room, then generate a brief.'
@@ -27,6 +29,13 @@ function briefToPlainText(brief) {
       lines.push(`- ${bullet.text}${label ? ` (${label})` : ''}`)
     }
     if ((section.bullets ?? []).length) lines.push('')
+  }
+  const mk = brief.markets
+  if (mk && ((mk.rows?.length) || (mk.heatmaps?.length))) {
+    lines.push('Markets (as of last refresh)', '')
+    for (const r of (mk.rows ?? [])) lines.push(`- ${r.symbol}  ${r.price}  ${fmtPct(r.changePct)}`)
+    for (const h of (mk.heatmaps ?? [])) lines.push(`- ${h.label} (${h.symbol})  ${fmtPct(h.changePct)}`)
+    lines.push('')
   }
   return lines.join('\n').trim()
 }
@@ -134,11 +143,7 @@ export default function BriefPanel({ onClose }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          workspaceId: ws?.id,
-          items,
-          period: 'on_demand',
-        }),
+        body: JSON.stringify({ workspaceId: ws?.id, items, period: 'on_demand', markets: gatherMarketSymbols(ws) }),
       })
 
       const data = await res.json().catch(() => ({}))
@@ -333,6 +338,24 @@ export default function BriefPanel({ onClose }) {
         }
         y += 2
       }
+      const mkp = brief.markets
+      if (mkp && ((mkp.rows?.length) || (mkp.heatmaps?.length))) {
+        writeWrapped('Markets', { size: 11, style: 'bold', gap: 1 })
+        writeWrapped('as of last refresh', { size: 8, color: [120, 120, 120], gap: 1.5 })
+        const green = [10, 107, 67], red = [174, 46, 39], grey = [120, 120, 120], neutral = [33, 33, 33]
+        const pdfRow = (left, price, pct, dir) => {
+          ensure(5)
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...neutral)
+          doc.text(String(left), margin, y)
+          if (price != null) doc.text(String(price), margin + 78, y)
+          const col = dir === 'up' ? green : dir === 'down' ? red : grey
+          doc.setTextColor(...col); doc.text(fmtPct(pct), margin + 108, y)
+          y += 5
+        }
+        for (const r of (mkp.rows ?? [])) pdfRow(`${r.symbol}  ${r.name}`, r.price, r.changePct, r.dir)
+        for (const h of (mkp.heatmaps ?? [])) pdfRow(`${h.label} (${h.symbol})`, null, h.changePct, h.dir)
+        y += 2
+      }
       ensure(8)
       writeWrapped("Summary of this room's own sources. Vigil tracks, it does not verify.", { size: 8, color: [120, 120, 120] })
       doc.save('brief.pdf')
@@ -510,6 +533,30 @@ export default function BriefPanel({ onClose }) {
                   </ul>
                 </section>
               ))}
+              {brief.markets && ((brief.markets.rows?.length) || (brief.markets.heatmaps?.length)) ? (
+                <section className="brief-section brief-markets">
+                  <h3 className="brief-section-title">Markets</h3>
+                  <div className="brief-markets-caption">as of last refresh</div>
+                  <ul className="brief-markets-list">
+                    {(brief.markets.rows ?? []).map((r) => (
+                      <li key={r.symbol} className="brief-markets-row">
+                        <span className="bm-sym">{r.symbol}</span>
+                        <span className="bm-name">{r.name}</span>
+                        <span className="bm-price">{r.price}</span>
+                        <span className={`bm-chg bm-${r.dir}`}>{fmtPct(r.changePct)}</span>
+                      </li>
+                    ))}
+                    {(brief.markets.heatmaps ?? []).map((h) => (
+                      <li key={h.symbol} className="brief-markets-row">
+                        <span className="bm-sym">{h.label}</span>
+                        <span className="bm-name">({h.symbol})</span>
+                        <span className="bm-price"></span>
+                        <span className={`bm-chg bm-${h.dir}`}>{fmtPct(h.changePct)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
               {usage && (() => {
                 const remaining = Math.max(0, (usage.limit ?? 0) - (usage.used ?? 0))
                 const resetDays = daysUntilReset()
