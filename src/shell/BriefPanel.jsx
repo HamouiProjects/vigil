@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useShellStore } from '../state/shellStore.js'
 import { supabase } from '../lib/supabase.js'
-import { gatherRoomItems, gatherMarketSymbols } from '../lib/gatherRoomItems.js'
+import { gatherRoomItems, gatherMarketSymbols, gatherTrendsRequest } from '../lib/gatherRoomItems.js'
 
 function fmtPct(p) { const n = Number(p); if (!Number.isFinite(n)) return ''; return (n > 0 ? '+' : '') + n.toFixed(2) + '%' }
+function trendGlyph(dir) { return dir === 'up' ? '↑' : dir === 'down' ? '↓' : '→' }
 
 const ACCOUNT_MSG = 'Create a free account to generate briefs.'
 const NO_ITEMS_MSG = 'Add a News Search or RSS widget to your room, then generate a brief.'
@@ -35,6 +36,12 @@ function briefToPlainText(brief) {
     lines.push('Markets (as of last refresh)', '')
     for (const r of (mk.rows ?? [])) lines.push(`- ${r.symbol}  ${r.price}  ${fmtPct(r.changePct)}`)
     for (const h of (mk.heatmaps ?? [])) lines.push(`- ${h.label} (${h.symbol})  ${fmtPct(h.changePct)}`)
+    lines.push('')
+  }
+  const tr = brief.trends
+  if (tr && (tr.terms?.length)) {
+    lines.push(`Search interest (relative, not volume${tr.windowLabel ? `, last ${tr.windowLabel}` : ''})`, '')
+    for (const t of (tr.terms ?? [])) lines.push(`- ${t.term}  ${t.value}  ${trendGlyph(t.dir)}`)
     lines.push('')
   }
   return lines.join('\n').trim()
@@ -143,7 +150,7 @@ export default function BriefPanel({ onClose }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ workspaceId: ws?.id, items, period: 'on_demand', markets: gatherMarketSymbols(ws) }),
+        body: JSON.stringify({ workspaceId: ws?.id, items, period: 'on_demand', markets: gatherMarketSymbols(ws), trends: gatherTrendsRequest(ws) }),
       })
 
       const data = await res.json().catch(() => ({}))
@@ -356,6 +363,20 @@ export default function BriefPanel({ onClose }) {
         for (const h of (mkp.heatmaps ?? [])) pdfRow(`${h.label} (${h.symbol})`, null, h.changePct, h.dir)
         y += 2
       }
+      const trp = brief.trends
+      if (trp && (trp.terms?.length)) {
+        writeWrapped('Search Interest', { size: 11, style: 'bold', gap: 1 })
+        writeWrapped(`relative search interest${trp.windowLabel ? ` over the last ${trp.windowLabel}` : ''}, not volume`, { size: 8, color: [120, 120, 120], gap: 1.5 })
+        for (const t of (trp.terms ?? [])) {
+          ensure(5)
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(33, 33, 33)
+          doc.text(String(t.term), margin, y)
+          doc.text(String(t.value), margin + 78, y)
+          doc.setTextColor(80, 80, 80); doc.text(trendGlyph(t.dir), margin + 108, y)
+          y += 5
+        }
+        y += 2
+      }
       ensure(8)
       writeWrapped("Summary of this room's own sources. Vigil tracks, it does not verify.", { size: 8, color: [120, 120, 120] })
       doc.save('brief.pdf')
@@ -552,6 +573,22 @@ export default function BriefPanel({ onClose }) {
                         <span className="bm-name">({h.symbol})</span>
                         <span className="bm-price"></span>
                         <span className={`bm-chg bm-${h.dir}`}>{fmtPct(h.changePct)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+              {brief.trends && (brief.trends.terms?.length) ? (
+                <section className="brief-section brief-markets">
+                  <h3 className="brief-section-title">Search Interest</h3>
+                  <div className="brief-markets-caption">relative search interest{brief.trends.windowLabel ? ` over the last ${brief.trends.windowLabel}` : ''}, not volume</div>
+                  <ul className="brief-markets-list">
+                    {(brief.trends.terms ?? []).map((t) => (
+                      <li key={t.term} className="brief-markets-row">
+                        <span className="bm-sym">{t.term}</span>
+                        <span className="bm-name"></span>
+                        <span className="bm-price">{t.value}</span>
+                        <span className="bm-chg bm-flat">{trendGlyph(t.dir)}</span>
                       </li>
                     ))}
                   </ul>

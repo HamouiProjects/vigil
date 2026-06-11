@@ -112,6 +112,36 @@ function buildMarkets(mkReq, quotes) {
   return { asOf: new Date().toISOString(), rows, heatmaps }
 }
 
+async function fetchTrends(trReq) {
+  if (!trReq || !Array.isArray(trReq.terms) || !trReq.terms.length) return null
+  const url = `https://thevigilroom.com/api/trends?keyword=${encodeURIComponent(trReq.terms.join(','))}&date=${encodeURIComponent(trReq.window || 'today 12-m')}`
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) })
+    const data = await r.json().catch(() => null)
+    if (!data || data.error || !Array.isArray(data.points) || !data.points.length) return null
+    return data
+  } catch { return null }
+}
+function buildTrends(trReq, data) {
+  if (!trReq || !data || !Array.isArray(data.points) || !data.points.length) return null
+  const terms = (Array.isArray(data.keywords) && data.keywords.length) ? data.keywords : trReq.terms
+  const out = []
+  terms.forEach((term, ki) => {
+    let first = null, last = null
+    for (const p of data.points) {
+      const v = p?.values?.[ki]
+      if (v == null) continue
+      if (first == null) first = v
+      last = v
+    }
+    if (last == null) return
+    const dir = first == null ? 'flat' : (last > first ? 'up' : last < first ? 'down' : 'flat')
+    out.push({ term: String(term), value: last, dir })
+  })
+  if (!out.length) return null
+  return { window: trReq.window || 'today 12-m', windowLabel: trReq.windowLabel || '', asOf: new Date().toISOString(), terms: out }
+}
+
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
@@ -137,7 +167,7 @@ export default async function handler(req, res) {
   const body = readBody(req)
   if (!body) return res.status(400).json({ error: 'invalid body' })
 
-  const { workspaceId, items, period, markets } = body
+  const { workspaceId, items, period, markets, trends } = body
   const normalized = normalizeItems(items)
   if (!normalized.length) return res.status(400).json({ error: 'NO_ITEMS' })
 
@@ -181,6 +211,9 @@ export default async function handler(req, res) {
     ? getQuotes(wantedSyms).catch((err) => { console.error('[brief] quotes failed', err?.message); return [] })
     : Promise.resolve([])
 
+  const trReq = (trends && typeof trends === 'object') ? trends : null
+  const trendsPromise = (trReq && Array.isArray(trReq.terms) && trReq.terms.length) ? fetchTrends(trReq) : Promise.resolve(null)
+
   let rawBrief
   try {
     rawBrief = await fetchBriefLLM({
@@ -213,6 +246,12 @@ export default async function handler(req, res) {
     const mk = buildMarkets(mkReq, quotes)
     if (mk) cleaned.markets = mk
   } catch (err) { console.error('[brief] markets build failed', err?.message) }
+
+  try {
+    const trData = await trendsPromise
+    const tr = buildTrends(trReq, trData)
+    if (tr) cleaned.trends = tr
+  } catch (err) { console.error('[brief] trends build failed', err?.message) }
 
   const { data: row, error: insertErr } = await supabase
     .from('briefs')

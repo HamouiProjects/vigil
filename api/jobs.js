@@ -37,6 +37,13 @@ function sanitizeBrief(brief) {
     rows: Array.isArray(m.rows) ? m.rows.slice(0, 40).map((r) => ({ symbol: clamp(r.symbol, 16), name: clamp(r.name, 80), price: num(r.price), changePct: num(r.changePct), dir: dirOk(r.dir) })) : [],
     heatmaps: Array.isArray(m.heatmaps) ? m.heatmaps.slice(0, 10).map((h) => ({ label: clamp(h.label, 40), symbol: clamp(h.symbol, 16), changePct: num(h.changePct), dir: dirOk(h.dir) })) : [],
   } : null
+  const tr = brief.trends
+  const trends = (tr && typeof tr === 'object' && Array.isArray(tr.terms)) ? {
+    window: String(tr.window ?? ''),
+    windowLabel: clamp(tr.windowLabel, 40),
+    asOf: String(tr.asOf ?? ''),
+    terms: tr.terms.slice(0, 5).map((t) => ({ term: clamp(t.term, 80), value: num(t.value), dir: dirOk(t.dir) })),
+  } : null
   return {
     headline: clamp(brief.headline, 300),
     sections: (brief.sections ?? []).slice(0, 20).map((section) => ({
@@ -52,6 +59,7 @@ function sanitizeBrief(brief) {
       })),
     })),
     markets,
+    trends,
   }
 }
 
@@ -105,6 +113,15 @@ function renderEmailHtml({ brief, roomName, preparedFor, generatedAt }) {
     html += `</table>`
   }
 
+  if (brief.trends && brief.trends.terms.length) {
+    const glyph = (d) => d === 'up' ? '&#8593;' : d === 'down' ? '&#8595;' : '&#8594;'
+    html += `<h2 style="font-size:13px;font-weight:bold;color:#1a1a1a;margin:16px 0 4px;text-transform:uppercase;letter-spacing:0.06em;">Search Interest</h2>`
+    html += `<div style="font-size:12px;color:#6b7280;margin-bottom:8px;">relative search interest${brief.trends.windowLabel ? ` over the last ${esc(brief.trends.windowLabel)}` : ''}, not volume</div>`
+    html += `<table style="border-collapse:collapse;font-size:14px;margin-bottom:12px;">`
+    for (const t of brief.trends.terms) html += `<tr><td style="padding:2px 14px 2px 0;font-weight:bold;">${esc(t.term)}</td><td style="padding:2px 14px 2px 0;">${esc(String(t.value))}</td><td style="padding:2px 0;color:#4b5563;">${glyph(t.dir)}</td></tr>`
+    html += `</table>`
+  }
+
   html += `<p style="font-size:12px;color:#6b7280;margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb;">Vigil tracks, it does not verify.</p>
 </body></html>`
   return html
@@ -133,6 +150,13 @@ function renderEmailText({ brief, roomName, preparedFor, generatedAt }) {
     lines.push('Markets (as of last refresh)', '')
     for (const row of brief.markets.rows) lines.push(`- ${row.symbol}  ${row.price}  ${row.changePct > 0 ? '+' : ''}${Number(row.changePct).toFixed(2)}%`)
     for (const h of brief.markets.heatmaps) lines.push(`- ${h.label} (${h.symbol})  ${h.changePct > 0 ? '+' : ''}${Number(h.changePct).toFixed(2)}%`)
+    lines.push('')
+  }
+
+  if (brief.trends && brief.trends.terms.length) {
+    const g = (d) => d === 'up' ? '↑' : d === 'down' ? '↓' : '→'
+    lines.push(`Search interest (relative, not volume${brief.trends.windowLabel ? `, last ${brief.trends.windowLabel}` : ''})`, '')
+    for (const t of brief.trends.terms) lines.push(`- ${t.term}  ${t.value}  ${g(t.dir)}`)
     lines.push('')
   }
 

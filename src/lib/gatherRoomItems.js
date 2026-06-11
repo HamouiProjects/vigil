@@ -100,3 +100,16 @@ export function gatherMarketSymbols(workspace) {
   }
   return out
 }
+
+const TREND_WINDOW_LABELS = { 'now 7-d': '7 days', 'today 1-m': '30 days', 'today 12-m': '12 months', 'today 5-y': '5 years' }
+export function gatherTrendsRequest(workspace) {
+  if (!workspace?.widgets?.length) return null
+  const w = workspace.widgets.find((x) => x.type === 'trends')
+  if (!w) return null
+  const cfg = w.config || {}
+  let terms = (Array.isArray(cfg.keywords) && cfg.keywords.length) ? cfg.keywords : (cfg.keyword ? [cfg.keyword] : [])
+  terms = terms.map((t) => String(t || '').trim()).filter(Boolean).slice(0, 5)
+  if (!terms.length) return null
+  const window = cfg.time || 'today 12-m'
+  return { terms, window, windowLabel: TREND_WINDOW_LABELS[window] || window }
+}
