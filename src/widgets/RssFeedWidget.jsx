@@ -71,6 +71,38 @@ async function fetchRssFeed(url) {
   return { error: true }
 }
 
+async function fetchRssFeedWithRetry(url, attempts = 3) {
+  let last = { error: true }
+  for (let i = 0; i < attempts; i++) {
+    try {
+      last = await fetchRssFeed(url)
+    } catch {
+      last = { error: true }
+    }
+    if (last.ok || last.error) return last      // success, or a hard error: do not retry
+    if (i < attempts - 1) {                       // only a transient rate_limit falls through
+      const delay = 1500 * Math.pow(2, i) + Math.random() * 500
+      await new Promise(r => setTimeout(r, delay))
+    }
+  }
+  return last
+}
+
+async function mapPool(items, limit, fn) {
+  const results = new Array(items.length)
+  let idx = 0
+  async function worker() {
+    while (idx < items.length) {
+      const cur = idx++
+      try { results[cur] = { status: 'fulfilled', value: await fn(items[cur]) } }
+      catch (e) { results[cur] = { status: 'rejected', reason: e } }
+    }
+  }
+  const n = Math.min(limit, items.length) || 1
+  await Promise.all(Array.from({ length: n }, worker))
+  return results
+}
+
 export default function RssFeedWidget({
   id,
   paused,
@@ -150,9 +182,7 @@ export default function RssFeedWidget({
       return
     }
     setLoading(true)
-    const results = await Promise.allSettled(
-      enabled.map(f => fetchRssFeed(f.url)),
-    )
+    const results = await mapPool(enabled, 3, f => fetchRssFeedWithRetry(f.url))
     const newErrors = {}
     setItemsBySource(prev => {
       const next = { ...prev }
@@ -161,7 +191,8 @@ export default function RssFeedWidget({
         if (r.status === 'fulfilled' && r.value.ok) {
           next[f.sourceId] = mapItems(r.value.items, f)
         } else {
-          newErrors[f.sourceId] = true
+          const v = r.status === 'fulfilled' ? r.value : null
+          newErrors[f.sourceId] = v?.rateLimited ? 'rate_limited' : 'error'
         }
       })
       return next
@@ -190,10 +221,10 @@ export default function RssFeedWidget({
           return next
         })
       } else {
-        setErrorBySource(prev => ({ ...prev, [feed.sourceId]: true }))
+        setErrorBySource(prev => ({ ...prev, [feed.sourceId]: result.rateLimited ? 'rate_limited' : 'error' }))
       }
     } catch {
-      setErrorBySource(prev => ({ ...prev, [feed.sourceId]: true }))
+      setErrorBySource(prev => ({ ...prev, [feed.sourceId]: 'error' }))
     }
   }
 
@@ -405,7 +436,7 @@ export default function RssFeedWidget({
                     {hasErr && (
                       <span
                         className="rss-source-err"
-                        title="Failed — click to retry"
+                        title={errorBySource[f.sourceId] === 'rate_limited' ? 'Rate-limited, retrying' : 'Unreachable, click to retry'}
                         onClick={e => {
                           e.stopPropagation()
                           retrySingleFeed(f)
