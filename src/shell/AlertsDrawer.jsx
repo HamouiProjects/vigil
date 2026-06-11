@@ -260,7 +260,7 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
                     value={keyword}
                     onChange={(e) => setKeyword(e.target.value)}
                     maxLength={120}
-                    placeholder="e.g. Ukraine"
+                    placeholder="e.g. rare earths"
                   />
                 </label>
                 <label className="alerts-field">
@@ -271,7 +271,7 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
                     value={region}
                     onChange={(e) => setRegion(e.target.value)}
                     maxLength={120}
-                    placeholder="e.g. Middle East"
+                    placeholder="e.g. China"
                   />
                 </label>
 
