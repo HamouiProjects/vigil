@@ -116,6 +116,7 @@ export default function Shell() {
   const addWidget = useShellStore(s => s.addWidget)
 
   const [upgradeNudge, setUpgradeNudge] = useState(null)
+  const [shareNotice, setShareNotice] = useState(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
   const [showBrief, setShowBrief] = useState(false)
@@ -168,6 +169,13 @@ export default function Shell() {
     const t = setTimeout(() => setUpgradeNudge(null), 4000)
     return () => clearTimeout(t)
   }, [upgradeNudge])
+
+  useEffect(() => {
+    if (!shareNotice) return undefined
+    function onKey(e) { if (e.key === 'Escape') setShareNotice(null) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [shareNotice])
 
   useEffect(() => {
     if (!uid) return
@@ -261,10 +269,10 @@ export default function Shell() {
     try {
       const url = await publishWorkspace(s.uid, s.activeWs, window.location.origin)
       await navigator.clipboard.writeText(url)
-      setUpgradeNudge('Public link copied — anyone with it can view this room')
+      setShareNotice('Public link copied. Anyone with it can view this room.')
     } catch (e) {
       console.error(e)
-      setUpgradeNudge('Could not create share link')
+      setShareNotice('Could not create share link.')
     }
   }
 
@@ -326,6 +334,34 @@ export default function Shell() {
         onDismiss={() => setUpgradeNudge(null)}
         onUpgrade={() => { setUpgradeNudge(null); setShowUpgrade(true) }}
       />
+
+      {shareNotice && (
+        <div className="modal-overlay" onClick={() => setShareNotice(null)}>
+          <div
+            role="status"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--color-surface-2)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius)',
+              padding: '20px 24px',
+              maxWidth: 'min(360px, calc(100vw - 40px))',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 14,
+              textAlign: 'center',
+            }}
+          >
+            <span style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 11, lineHeight: 1.5, color: 'var(--color-text-primary)' }}>
+              {shareNotice}
+            </span>
+            <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShareNotice(null)}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
 
       {navCollapsed
         ? <div className="nav-reveal-handle" onClick={() => setNavCollapsedPersisted(false)} title="Show toolbar" aria-label="Show toolbar">
