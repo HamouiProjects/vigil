@@ -5,6 +5,8 @@ export async function gatherRoomItems(workspace, { maxSources = 6, perSource = 6
   if (!workspace?.widgets?.length) return []
 
   const sources = []
+  const directItems = []
+  const directSeen = new Set()
   for (const w of workspace.widgets) {
     if (w.type === 'feed') {
       const tabs = w.config?.tabs ?? KF_DEFAULT_TABS
@@ -14,6 +16,12 @@ export async function gatherRoomItems(workspace, { maxSources = 6, perSource = 6
     } else if (w.type === 'rss') {
       for (const f of SUGGESTIONS.slice(0, 6)) {
         sources.push({ label: f.name, url: f.url, kind: 'rss' })
+      }
+    } else if (w.type === 'browser') {
+      for (const a of (w.config?.saved ?? [])) {
+        if (!a?.url || !a?.title || directSeen.has(a.url)) continue
+        directSeen.add(a.url)
+        directItems.push({ source: a.source || '', title: a.title, url: a.url, publishedAt: a.publishedAt ?? null })
       }
     }
   }
@@ -49,7 +57,9 @@ export async function gatherRoomItems(workspace, { maxSources = 6, perSource = 6
     }),
   )
 
-  return results
+  const fetchedItems = results
     .filter((r) => r.status === 'fulfilled')
     .flatMap((r) => r.value)
+
+  return [...directItems, ...fetchedItems]
 }
