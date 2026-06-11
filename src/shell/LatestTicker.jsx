@@ -187,6 +187,20 @@ export default function LatestTicker({ collapsed, onSetCollapsed }) {
             <path d="M6 15l6-6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
+        {items.length > 1 && (
+          <div className="latest-ticker-nav">
+            <button type="button" onClick={() => step(-1)} title="Previous headline" aria-label="Previous headline">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <button type="button" onClick={() => step(1)} title="Next headline" aria-label="Next headline">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+        )}
         {current && (
           <div
             className={`latest-ticker-rotator${visible ? ' is-visible' : ''}${reduceMotion ? ' is-static' : ''}`}
@@ -205,20 +219,6 @@ export default function LatestTicker({ collapsed, onSetCollapsed }) {
           </div>
         )}
       </div>
-      {items.length > 1 && (
-        <div className="latest-ticker-nav">
-          <button type="button" onClick={() => step(-1)} title="Previous headline" aria-label="Previous headline">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <button type="button" onClick={() => step(1)} title="Next headline" aria-label="Next headline">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-      )}
     </div>
   )
 }
