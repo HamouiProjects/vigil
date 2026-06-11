@@ -525,7 +525,7 @@ export default function RssFeedWidget({
                   <div
                     key={kw}
                     className={`rss-filter-chip${filterInput === kw ? ' active' : ''}`}
-                    onClick={() => applyFilter(kw)}
+                    onClick={() => applyFilter(filterInput === kw ? '' : kw)}
                   >
                     <span className="rss-filter-chip-text">{kw}</span>
                     <button
