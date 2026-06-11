@@ -2,7 +2,7 @@
 import { supabase } from '../../lib/supabase'
 import { validatePassword } from '../../lib/validatePassword'
 
-export default function AuthScreen({ authView, setAuthView, onAuthed, onClose }) {
+export default function AuthScreen({ authView, setAuthView, onAuthed, onClose, reason }) {
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
   const [confirm,  setConfirm]  = useState('')
@@ -90,6 +90,12 @@ export default function AuthScreen({ authView, setAuthView, onAuthed, onClose })
           <span className="auth-logo-text">VIGIL</span>
           <span className="auth-tagline">Build your own situation room.</span>
         </div>
+
+        {reason && (
+          <p style={{ margin: '0 0 14px', textAlign: 'center', fontFamily: 'var(--font-sans)', fontSize: 12, lineHeight: 1.4, color: 'var(--color-text-secondary)' }}>
+            {reason}
+          </p>
+        )}
 
         {authView !== 'forgot' && (
           <div className="auth-tabs">
