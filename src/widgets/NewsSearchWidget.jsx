@@ -205,7 +205,7 @@ export default function NewsSearchWidget({ paused, config, onSaveConfig, setActi
           </div>
         ) : (
           <div className="feed-list">
-            {showFallback && <div className="ns-fallback-msg">No headlines matched "{activeTab?.keyword}" exactly — showing related results</div>}
+            {showFallback && <div className="ns-fallback-msg">No headlines matched "{activeTab?.keyword}" exactly. Showing related results</div>}
             {displayArticles.map((art, i) => {
               const src = nsExtractSource(art.title) || art.source
               const title = nsCleanTitle(art.title)

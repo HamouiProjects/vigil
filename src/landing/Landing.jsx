@@ -245,6 +245,8 @@ export default function Landing() {
       <footer className="lp-footer" onClick={(e) => e.stopPropagation()}>
         <span className="lp-foot-note">Vigil tracks, it does not verify.</span>
         <nav className="lp-foot-links">
+          <a href="/?p=about">About</a>
+          <a href="/?p=faq">FAQ</a>
           <a href="/?p=impressum">Impressum</a>
           <a href="/?p=privacy">Privacy</a>
           <a href="/?p=terms">Terms</a>

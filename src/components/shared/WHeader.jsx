@@ -21,8 +21,8 @@ const LiveBtn = ({ isLive, workspacePaused, onToggle }) => {
       className={`widget-live-btn${paused ? ' is-paused' : ' is-live'}${overridden ? ' is-overridden' : ''}`}
       onClick={overridden ? undefined : onToggle}
       title={
-        !globalLive ? 'Global live feed is paused — manage in Settings'
-        : workspacePaused ? 'Workspace is paused — right-click the tab to resume'
+        !globalLive ? 'Global live feed is paused. Manage in Settings.'
+        : workspacePaused ? 'Workspace is paused. Right-click the tab to resume.'
         : isLive ? 'Pause this widget'
         : 'Resume this widget'
       }

@@ -178,7 +178,7 @@ export default function PriceTrackerWidget({ id, paused, config, onSaveConfig, s
               textAlign: 'center',
             }}
           >
-            No instruments yet — search on the right to add one.
+            No instruments yet. Search on the right to add one.
           </div>
         ) : (
           <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex' }}>
@@ -235,7 +235,7 @@ export default function PriceTrackerWidget({ id, paused, config, onSaveConfig, s
               className="rss-input"
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Add symbol — e.g. Apple, BTC, DAX"
+              placeholder="Add symbol, e.g. Apple, BTC, DAX"
               spellCheck={false}
               onPointerDownCapture={e => e.stopPropagation()}
             />

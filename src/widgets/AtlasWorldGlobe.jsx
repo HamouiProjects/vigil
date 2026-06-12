@@ -694,7 +694,7 @@ function buildStormPopupHtml(props) {
   const from = formatIsoDate(props.fromdate)
   const to = formatIsoDate(props.todate)
   if (from || to) {
-    const active = from && to ? `${from} – ${to}` : from || to
+    const active = from && to ? `${from} to ${to}` : from || to
     rows.push(['Active', active])
   }
 

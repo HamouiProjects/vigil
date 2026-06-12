@@ -51,7 +51,7 @@ export default function UpgradeModal({ onClose }) {
       .insert({ email: email.trim(), source: 'upgrade' })
     setLoading(false)
     if (insertErr) {
-      setError('Something went wrong — please try again.')
+      setError('Something went wrong. Please try again.')
       return
     }
     track('signup', { source: 'upgrade' })
@@ -128,7 +128,7 @@ export default function UpgradeModal({ onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <span className="modal-title">Individual — coming soon</span>
+          <span className="modal-title">Individual (coming soon)</span>
           <button type="button" className="widget-btn" onClick={onClose} title="Close">✕</button>
         </div>
 

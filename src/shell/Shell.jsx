@@ -520,6 +520,8 @@ export default function Shell() {
       <div className={`bottom-bar${atBottom ? ' is-visible' : ''}`} aria-hidden={!atBottom}>
         <span className="bottom-bar-note">Vigil tracks, it does not verify.</span>
         <nav className="bottom-bar-links">
+          <a href="/?p=about">About</a>
+          <a href="/?p=faq">FAQ</a>
           <a href="/?p=impressum">Impressum</a>
           <a href="/?p=privacy">Privacy</a>
           <a href="/?p=terms">Terms</a>

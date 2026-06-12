@@ -22,17 +22,17 @@ const COMING_SOON = [
   {
     label: 'Conflict',
     tag: 'SOON',
-    tooltip: 'Verified conflict feed — coming soon',
+    tooltip: 'Verified conflict feed (coming soon)',
   },
   {
     label: 'Your sources on the map',
     tag: 'SOON',
-    tooltip: 'Your own feeds & sources plotted on the globe — coming soon',
+    tooltip: 'Your own feeds and sources plotted on the globe (coming soon)',
   },
   {
     label: 'Military ships',
     tag: 'SOON',
-    tooltip: 'Live military vessel tracking — coming soon',
+    tooltip: 'Live military vessel tracking (coming soon)',
   },
 ]
 
@@ -308,7 +308,7 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
               <div style={{ color: 'var(--color-text-muted)', marginBottom: 4, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                 Globe layers
               </div>
-              <div>Earthquakes — USGS · Storms — GDACS · Aircraft — adsb.lol · Wildfires — NASA FIRMS</div>
+              <div>Earthquakes via USGS · Storms via GDACS · Aircraft via adsb.lol · Wildfires via NASA FIRMS</div>
             </div>
             <div style={{ marginBottom: 8 }}>
               <div style={{ color: 'var(--color-text-muted)', marginBottom: 4, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
@@ -317,7 +317,7 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
               <div>
                 {['conflict', 'marine', 'flights', 'cyber'].map((key, i, arr) => (
                   <span key={key}>
-                    {EMBEDDED_SOURCE_LABELS[key]} — {IFRAME_CREDIT[key].replace(/^via /i, '')}
+                    {EMBEDDED_SOURCE_LABELS[key]} via {IFRAME_CREDIT[key].replace(/^via /i, '')}
                     {i < arr.length - 1 ? ' · ' : ''}
                   </span>
                 ))}

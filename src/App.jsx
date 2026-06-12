@@ -7,6 +7,7 @@ const PublicRoom = lazy(() => import('./shell/PublicRoom.jsx'))
 const Landing = lazy(() => import('./landing/Landing.jsx'))
 const AuthScreen = lazy(() => import('./components/layout/AuthScreen.jsx'))
 const LegalPage = lazy(() => import('./legal/LegalPage.jsx'))
+const InfoPage = lazy(() => import('./info/InfoPage.jsx'))
 
 function AppSplash() {
   return (
@@ -108,11 +109,12 @@ export default function App() {
   const slug = params.get('r')
   const legalPage = params.get('p')
   const isLegal = ['impressum', 'privacy', 'terms'].includes(legalPage)
+  const isInfo = ['about', 'faq'].includes(legalPage)
   const [sessionState, setSessionState] = useState('pending')
   const [anonSession, setAnonSession] = useState(false)
 
   useEffect(() => {
-    if (slug || isLegal) return
+    if (slug || isLegal || isInfo) return
 
     let cancelled = false
 
@@ -126,12 +128,20 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [slug, isLegal])
+  }, [slug, isLegal, isInfo])
 
   if (isLegal) {
     return (
       <Suspense fallback={<AppSplash />}>
         <LegalPage page={legalPage} />
+      </Suspense>
+    )
+  }
+
+  if (isInfo) {
+    return (
+      <Suspense fallback={<AppSplash />}>
+        <InfoPage page={legalPage} />
       </Suspense>
     )
   }
