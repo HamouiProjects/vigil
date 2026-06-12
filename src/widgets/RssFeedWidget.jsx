@@ -45,7 +45,7 @@ function rssRelTime(pubDate) {
     if (diff < 1440) return `${Math.floor(diff / 60)}h`
     return `${Math.floor(diff / 1440)}d`
   } catch {
-    return '—'
+    return '·'
   }
 }
 
@@ -633,7 +633,7 @@ export default function RssFeedWidget({
             {!hasFeeds ? (
               <div className="empty-state">
                 <span className="empty-state-icon">📡</span>
-                No feeds — add a source
+                No feeds. Add a source
               </div>
             ) : isFirstLoad ? (
               <SkeletonFeedItems count={6} />

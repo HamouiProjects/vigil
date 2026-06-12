@@ -334,7 +334,7 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
     const value = PLATFORMS[selectedPlatform].normalize(raw)
     if (!value) return
     if (selectedPlatform === 'youtube' && !buildYouTubeFeedUrl(value)) {
-      setAddError('Use a channel ID or youtube.com/channel/… URL — an @handle won\'t work yet')
+      setAddError('Use a channel ID or youtube.com/channel/… URL. An @handle won\'t work yet')
       return
     }
     if (accounts.some(a => a.platform === selectedPlatform && a.value.toLowerCase() === value.toLowerCase())) {

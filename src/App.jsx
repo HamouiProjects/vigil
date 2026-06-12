@@ -6,6 +6,7 @@ const Shell = lazy(() => import('./shell/Shell.jsx'))
 const PublicRoom = lazy(() => import('./shell/PublicRoom.jsx'))
 const Landing = lazy(() => import('./landing/Landing.jsx'))
 const AuthScreen = lazy(() => import('./components/layout/AuthScreen.jsx'))
+const LegalPage = lazy(() => import('./legal/LegalPage.jsx'))
 
 function AppSplash() {
   return (
@@ -103,12 +104,15 @@ function AnonKeepRoomNudge() {
 }
 
 export default function App() {
-  const slug = new URLSearchParams(window.location.search).get('r')
+  const params = new URLSearchParams(window.location.search)
+  const slug = params.get('r')
+  const legalPage = params.get('p')
+  const isLegal = ['impressum', 'privacy', 'terms'].includes(legalPage)
   const [sessionState, setSessionState] = useState('pending')
   const [anonSession, setAnonSession] = useState(false)
 
   useEffect(() => {
-    if (slug) return
+    if (slug || isLegal) return
 
     let cancelled = false
 
@@ -122,7 +126,15 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [slug])
+  }, [slug, isLegal])
+
+  if (isLegal) {
+    return (
+      <Suspense fallback={<AppSplash />}>
+        <LegalPage page={legalPage} />
+      </Suspense>
+    )
+  }
 
   if (slug) {
     return (
