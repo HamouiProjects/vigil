@@ -19,9 +19,13 @@ function isRateLimited(httpStatus, data) {
 }
 
 function buildRss2JsonUrl(feedUrl) {
-  let u = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}`
-  if (process.env.RSS2JSON_KEY) u += `&api_key=${process.env.RSS2JSON_KEY}&count=${MAX_ITEMS}`
-  return u
+  const u = new URL('https://api.rss2json.com/v1/api.json')
+  u.searchParams.set('rss_url', feedUrl)
+  if (process.env.RSS2JSON_KEY) {
+    u.searchParams.set('api_key', process.env.RSS2JSON_KEY)
+    u.searchParams.set('count', String(MAX_ITEMS))
+  }
+  return u.toString()
 }
 
 async function fetchViaRss2Json(feedUrl) {
@@ -242,8 +246,10 @@ function blueskyHandleFromUrl(feedUrl) {
 }
 
 async function fetchViaBlueskyApi(handle) {
-  const api = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${encodeURIComponent(handle)}&limit=${MAX_ITEMS}`
-  const res = await fetch(api, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) })
+  const api = new URL('https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed')
+  api.searchParams.set('actor', handle)
+  api.searchParams.set('limit', String(MAX_ITEMS))
+  const res = await fetch(api.toString(), { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) })
   if (!res.ok) return { ok: false }
   const data = await res.json().catch(() => null)
   const feed = Array.isArray(data?.feed) ? data.feed : null
