@@ -3,7 +3,7 @@ import { track } from '@vercel/analytics'
 import { LAND } from './landData.js'
 import './landing.css'
 
-const DEMO_URL = '/?r=d4c736d45f18'
+const DEMO_URL = '/?r=2f1e3b568b8e'
 
 const CARDS = [
   {
