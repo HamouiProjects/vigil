@@ -4,8 +4,6 @@ import { fetchBriefLLM, BriefLLMNotConfiguredError } from './_brief_llm.js'
 import { resolveEntitlements } from '../src/entitlements/resolve.js'
 import { getQuotes } from './_yahoo.js'
 
-const PER_USER_MONTHLY = { free: 15, pro: 40, team: 120 }
-
 const SYSTEM_PROMPT = 'You write a calm operational news brief. Summarize ONLY the provided items. Do not add any fact, context, or analysis not present in the items. Do not assert anything as verified or true. Group items into a few themes. Output ONLY valid minified JSON, no markdown and no code fences, exactly: {"headline":string,"sections":[{"title":string,"bullets":[{"text":string,"sourceIndex":number}]}]}. For each bullet, set sourceIndex to the [n] number of the single provided item it summarizes. Be concise. Never use em-dashes; use periods, commas, or parentheses.'
 
 const BRIEF_PARSE_FALLBACK = {
@@ -178,7 +176,7 @@ export default async function handler(req, res) {
     .maybeSingle()
 
   const ent = resolveEntitlements(sub?.plan ?? 'free', sub?.add_ons ?? [], sub?.status ?? null)
-  const cap = PER_USER_MONTHLY[ent.plan] ?? PER_USER_MONTHLY.free
+  const cap = ent.limits.briefsPerMonth ?? resolveEntitlements('free').limits.briefsPerMonth
 
   const { count, error: countErr } = await supabase
     .from('briefs')

@@ -43,6 +43,9 @@ function formatPlanCaps(plan) {
   if (capabilities.has('alerts')) {
     parts.push('alert notifications')
   }
+  if (limits.briefsPerMonth != null) {
+    parts.push(`${limits.briefsPerMonth} briefs per month`)
+  }
   return parts.join(', ')
 }
 
