@@ -199,6 +199,7 @@ export default function SettingsModal({
               {activeSection === 'security' && (
                 <SecuritySection
                   isReal={isReal}
+                  email={email}
                   onAuth={onAuth}
                   onClose={onClose}
                 />
@@ -342,15 +343,15 @@ function SubscriptionSection({ plan, isPaid, onUpgrade }) {
           aria-label="Paid plan"
           className={`account-switch${isPaid ? ' on' : ''}`}
           onClick={() => { if (!isPaid) onUpgrade() }}
-          title={isPaid ? 'Active during early access' : 'Off. Vigil never turns this on by itself.'}
+          title={isPaid ? 'Active during early access.' : 'Off. Only you can turn this on.'}
         >
           <span className="account-switch-knob" />
         </button>
       </div>
       <p className="account-menu-note">
         {isPaid
-          ? 'Active for early access. Vigil never auto-charges or auto-renews.'
-          : 'Vigil never turns this on by itself. No auto-charge, no auto-renew, and no charge at all during early access.'}
+          ? 'Active for early access. Only you control this toggle. Vigil never turns it on or off for you, and nothing is charged during early access.'
+          : 'Only you control this toggle. Vigil never turns it on or off for you. Nothing is charged during early access.'}
       </p>
       {!isPaid && (
         <button type="button" className="settings-btn" style={{ marginTop: 8 }} onClick={onUpgrade}>
@@ -454,7 +455,8 @@ function NotificationsSection({ isReal, hasAlerts, onAuth, onClose, flashSaved, 
   )
 }
 
-function SecuritySection({ isReal, onAuth, onClose }) {
+function SecuritySection({ isReal, email, onAuth, onClose }) {
+  const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState(null)
@@ -481,16 +483,27 @@ function SecuritySection({ isReal, onAuth, onClose }) {
     e.preventDefault()
     setError(null)
     setSuccess(false)
+    setSaving(true)
+    const { error: authErr } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    })
+    if (authErr) {
+      setSaving(false)
+      setError('Current password is incorrect.')
+      return
+    }
     const pwError = validatePassword(password)
     if (pwError) {
+      setSaving(false)
       setError(pwError)
       return
     }
     if (password !== confirm) {
+      setSaving(false)
       setError('Passwords do not match')
       return
     }
-    setSaving(true)
     const { error: upErr } = await supabase.auth.updateUser({ password })
     setSaving(false)
     if (upErr) {
@@ -498,6 +511,7 @@ function SecuritySection({ isReal, onAuth, onClose }) {
       return
     }
     setSuccess(true)
+    setCurrentPassword('')
     setPassword('')
     setConfirm('')
   }
@@ -506,6 +520,16 @@ function SecuritySection({ isReal, onAuth, onClose }) {
     <>
       <h2 className="settings-section-title">Security</h2>
       <form onSubmit={handleSubmit}>
+        <div className="settings-field">
+          <div className="settings-field-label">Current password</div>
+          <input
+            type="password"
+            className="settings-input"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+        </div>
         <div className="settings-field">
           <div className="settings-field-label">New password</div>
           <input
