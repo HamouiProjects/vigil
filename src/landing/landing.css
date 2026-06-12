@@ -122,13 +122,18 @@
 }
 
 .lp-hgroup {
-  max-width: 560px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   opacity: 0;
   transform: translateY(10px);
   animation: lp-rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) 0.15s forwards;
+}
+
+.lp-headline,
+.lp-sub {
+  max-width: 560px;
 }
 
 @keyframes lp-rise {
@@ -168,7 +173,31 @@
   line-height: 1.65;
   color: var(--color-text-secondary);
   margin: 16px 0 0;
-  max-width: 34em;
+}
+
+.lp-shot {
+  width: 100%;
+  max-width: min(1040px, 100%);
+  margin: 28px auto 0;
+  align-self: center;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 4px;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.lp-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lp-shot-cap {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
 }
 
 .lp-sub strong {
@@ -260,6 +289,10 @@
   color: var(--color-text-secondary);
 }
 
+.lp-closing p + p {
+  margin-top: 16px;
+}
+
 .lp-closing strong {
   color: var(--color-text-primary);
   font-weight: 600;
@@ -315,17 +348,37 @@
 .lp-footer {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 8px 18px;
-  padding: 28px 24px 40px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px 24px;
+  padding: 28px clamp(24px, 7vw, 120px) 40px;
   border-top: 1px solid var(--color-border);
   font-family: var(--font-sans);
   font-size: 11px;
   color: var(--color-text-muted);
-  text-align: center;
 }
-.lp-foot-links { display: flex; gap: 14px; }
+
+.lp-foot-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 220px;
+  max-width: 42em;
+  text-align: left;
+}
+
+.lp-foot-note,
+.lp-foot-data {
+  display: block;
+  line-height: 1.5;
+}
+
+.lp-foot-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-self: center;
+}
 .lp-footer a { color: var(--color-text-muted); text-decoration: none; }
 .lp-footer a:hover { color: var(--color-text-secondary); text-decoration: underline; }
 .lp-foot-meta { font-variant-numeric: tabular-nums; }

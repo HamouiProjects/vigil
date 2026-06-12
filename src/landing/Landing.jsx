@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { track } from '@vercel/analytics'
 import { LAND } from './landData.js'
+import roomDark from './assets/room-dark.webp'
 import './landing.css'
 
 const DEMO_URL = '/?r=91dd31b84220'
@@ -16,7 +17,7 @@ const CARDS = [
   },
   {
     title: 'The alerts',
-    body: 'Some things you cannot afford to miss. Name the places, people, and keywords that matter, and when something new matching them lands in your room, Vigil tells you, in the app or by email. Teams can route the same alerts straight into Slack. A quiet, cited heads up, never a false alarm.',
+    body: 'Some things you cannot afford to miss. Name the places, people, and keywords that matter, and when something new matching them lands in your room, Vigil flags it in its daily digest, in the app, by email, or straight into Slack for teams. A quiet, cited heads up.',
   },
 ]
 
@@ -191,6 +192,17 @@ export default function Landing() {
               <br />
               <span className="lp-headline-accent">Not twenty tabs.</span>
             </h1>
+            <figure className="lp-shot">
+              <img
+                src={roomDark}
+                alt="The Vigil operations room: an EU and China desk with feeds, map, markets, and social monitors on one screen."
+                width={1926}
+                height={1096}
+                loading="eager"
+                decoding="async"
+              />
+              <figcaption className="lp-shot-cap">A real Vigil room: an EU and China desk.</figcaption>
+            </figure>
             <p className="lp-sub">
               Right now you probably have a wire feed, two news sites, a markets ticker, a map, and three
               social accounts open in separate tabs. By the time you have checked them all, the first one has
@@ -203,9 +215,10 @@ export default function Landing() {
               matters.
             </p>
             <p className="lp-sub">
-              Then Vigil does the watching for you. It briefs you each morning or week on what changed, alerts
-              you the moment something you are tracking moves, and leaves a short read in your inbox for the
-              days you cannot sit in front of it.
+              Then Vigil does the watching with you. Ask for a brief whenever you need one: a short, cited
+              summary of what your own room is saying, sent to your screen or your inbox. Set alerts on the
+              places, people, and keywords you cannot afford to miss, and Vigil flags what landed, in the app,
+              by email, or in Slack.
             </p>
           </div>
         </div>
@@ -239,11 +252,26 @@ export default function Landing() {
             <strong>Built for the people who watch the world for a living.</strong> The analysts, field teams,
             and newsrooms who want one calm, reliable picture of it, not twenty tabs and a wall of alarms.
           </p>
+          <p>
+            There are free dashboards you can host and maintain yourself. Vigil is the hosted room that stays
+            running without you wiring it, with a cited brief of your own sources when you ask for one. It is in
+            early access, built by one person, and everything on this page is shipped and live today. Nothing
+            here is a mockup.
+          </p>
         </div>
       </section>
 
       <footer className="lp-footer" onClick={(e) => e.stopPropagation()}>
-        <span className="lp-foot-note">Vigil tracks, it does not verify.</span>
+        <div className="lp-foot-notes">
+          <span className="lp-foot-note">
+            Every brief cites the sources it came from, so you can check every line yourself. Vigil tracks, it
+            does not verify.
+          </span>
+          <span className="lp-foot-data">
+            Your room and account data are stored in the EU. Delete your account and everything with it at any
+            time, in the app.
+          </span>
+        </div>
         <nav className="lp-foot-links">
           <a href="/?p=about">About</a>
           <a href="/?p=faq">FAQ</a>
