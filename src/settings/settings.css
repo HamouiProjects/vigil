@@ -373,6 +373,56 @@
   }
 }
 
+.settings-privacy-copy {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+  margin: 0 0 20px;
+}
+
+.settings-btn-danger-outline {
+  background: var(--color-surface-1);
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.settings-btn-danger-outline:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.settings-btn-destructive {
+  background: var(--color-error);
+  border-color: var(--color-error);
+  color: var(--color-on-brand);
+}
+
+.settings-btn-destructive:hover:not(:disabled) {
+  background: var(--color-error);
+  border-color: var(--color-error);
+  opacity: 0.9;
+}
+
+.settings-btn-destructive:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.settings-delete-confirm {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-delete-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .settings-rail-btn,
   .settings-option-row,

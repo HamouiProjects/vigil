@@ -1,18 +1,20 @@
 // src/settings/SettingsModal.jsx — centered settings modal with left section rail
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { X, Check, ChevronLeft } from 'lucide-react'
 import { resolveEntitlements } from '../entitlements/resolve.js'
 import { validatePassword } from '../lib/validatePassword.js'
 import { supabase } from '../lib/supabase.js'
+import { useFocusTrap } from '../hooks/useFocusTrap.js'
 import WidgetErrorBoundary from '../shell/WidgetErrorBoundary.jsx'
 import './settings.css'
 
-const SECTIONS = [
+const ALL_SECTIONS = [
   { id: 'profile', label: 'Profile' },
   { id: 'appearance', label: 'Appearance' },
   { id: 'subscription', label: 'Subscription' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'security', label: 'Security' },
+  { id: 'data-privacy', label: 'Data & Privacy' },
 ]
 
 const THEMES = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]
@@ -83,12 +85,19 @@ export default function SettingsModal({
   const [mobilePane, setMobilePane] = useState('list')
   const [savedFlash, setSavedFlash] = useState(false)
 
+  const modalRef = useRef(null)
+  useFocusTrap(modalRef)
+
   const isReal = account && account.isAnon === false
   const isPaid = !!plan && plan !== 'free'
   const email = account?.email || ''
   const username = account?.username || ''
   const ent = resolveEntitlements(plan || 'free')
   const hasAlerts = ent.capabilities.has('alerts')
+  const sections = useMemo(
+    () => (isReal ? ALL_SECTIONS : ALL_SECTIONS.filter((s) => s.id !== 'data-privacy')),
+    [isReal]
+  )
 
   const flashSaved = useCallback(() => {
     setSavedFlash(true)
@@ -119,7 +128,7 @@ export default function SettingsModal({
 
   return (
     <div className="modal-overlay settings-modal-overlay" onClick={onClose}>
-      <div className="settings-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Settings">
+      <div ref={modalRef} className="settings-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Settings">
         <div className="settings-modal-header">
           <span className="settings-modal-title">Settings</span>
           <button type="button" className="widget-btn" onClick={onClose} title="Close" aria-label="Close settings">
@@ -129,7 +138,7 @@ export default function SettingsModal({
 
         <div className={bodyClass}>
           <nav className="settings-rail" aria-label="Settings sections">
-            {SECTIONS.map((s) => (
+            {sections.map((s) => (
               <button
                 key={s.id}
                 type="button"
@@ -142,7 +151,7 @@ export default function SettingsModal({
           </nav>
 
           <div className="settings-mobile-section-list">
-            {SECTIONS.map((s) => (
+            {sections.map((s) => (
               <button
                 key={s.id}
                 type="button"
@@ -206,6 +215,9 @@ export default function SettingsModal({
                   onAuth={onAuth}
                   onClose={onClose}
                 />
+              )}
+              {activeSection === 'data-privacy' && isReal && (
+                <DataPrivacySection />
               )}
             </WidgetErrorBoundary>
           </div>
@@ -559,6 +571,113 @@ function SecuritySection({ isReal, email, onAuth, onClose }) {
         {success && <p className="settings-msg-success">Password updated.</p>}
         {error && <p className="settings-msg-error">{error}</p>}
       </form>
+    </>
+  )
+}
+
+function DataPrivacySection() {
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
+  const [error, setError] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const canDelete = confirmText === 'DELETE'
+
+  async function handleDelete() {
+    if (!canDelete || deleting) return
+    setDeleting(true)
+    setError(null)
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      setError('You are not signed in.')
+      setDeleting(false)
+      return
+    }
+
+    try {
+      const res = await fetch('/api/jobs?action=delete-account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ confirm: 'DELETE' }),
+      })
+
+      if (res.status === 200) {
+        const data = await res.json().catch(() => ({}))
+        if (data.ok) {
+          await supabase.auth.signOut()
+          location.href = '/'
+          return
+        }
+      }
+
+      if (res.status === 401) {
+        setError('You are not signed in.')
+      } else {
+        setError('Could not delete your account. Please try again.')
+      }
+    } catch {
+      setError('Could not delete your account. Please try again.')
+    }
+    setDeleting(false)
+  }
+
+  function handleCancel() {
+    setConfirmOpen(false)
+    setConfirmText('')
+    setError(null)
+  }
+
+  return (
+    <>
+      <h2 className="settings-section-title">Data & Privacy</h2>
+      <p className="settings-privacy-copy">
+        Vigil stores your account email, your rooms and sources, generated briefs, and your alert rules and events.
+        Deleting your account removes all of this permanently and immediately.
+      </p>
+
+      {!confirmOpen ? (
+        <button
+          type="button"
+          className="settings-btn settings-btn-danger-outline"
+          onClick={() => setConfirmOpen(true)}
+        >
+          Delete account
+        </button>
+      ) : (
+        <div className="settings-delete-confirm">
+          <div className="settings-field-label">Type DELETE to confirm</div>
+          <input
+            className="settings-input"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            autoComplete="off"
+            aria-label="Type DELETE to confirm account deletion"
+          />
+          <div className="settings-delete-actions">
+            <button
+              type="button"
+              className="settings-btn settings-btn-destructive"
+              disabled={!canDelete || deleting}
+              onClick={handleDelete}
+            >
+              {deleting ? 'Deleting...' : 'Delete account'}
+            </button>
+            <button
+              type="button"
+              className="settings-btn"
+              disabled={deleting}
+              onClick={handleCancel}
+            >
+              Cancel
+            </button>
+          </div>
+          {error && <p className="settings-msg-error">{error}</p>}
+        </div>
+      )}
     </>
   )
 }

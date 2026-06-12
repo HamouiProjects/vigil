@@ -46,14 +46,34 @@ export default function UpgradeModal({ onClose }) {
     }
     setLoading(true)
     setError(null)
-    const { error: insertErr } = await supabase
-      .from('email_signups')
-      .insert({ email: email.trim(), source: 'upgrade' })
-    setLoading(false)
-    if (insertErr) {
+    try {
+      const res = await fetch('/api/jobs?action=email-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), source: 'upgrade' }),
+      })
+      if (res.status === 429) {
+        setError('Too many attempts, try again in a minute.')
+        setLoading(false)
+        return
+      }
+      if (!res.ok) {
+        setError('Something went wrong. Please try again.')
+        setLoading(false)
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      if (!data.ok) {
+        setError('Something went wrong. Please try again.')
+        setLoading(false)
+        return
+      }
+    } catch {
       setError('Something went wrong. Please try again.')
+      setLoading(false)
       return
     }
+    setLoading(false)
     track('signup', { source: 'upgrade' })
     setSuccess('You\'re on the early access list. We\'ll email you when Individual opens.')
   }

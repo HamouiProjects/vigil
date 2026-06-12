@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useShellStore } from '../state/shellStore.js'
 import { supabase } from '../lib/supabase.js'
 import { gatherRoomItems, gatherMarketSymbols, gatherTrendsRequest } from '../lib/gatherRoomItems.js'
+import { useFocusTrap } from '../hooks/useFocusTrap.js'
 
 function fmtPct(p) { const n = Number(p); if (!Number.isFinite(n)) return ''; return (n > 0 ? '+' : '') + n.toFixed(2) + '%' }
 function trendGlyph(dir) { return dir === 'up' ? '↑' : dir === 'down' ? '↓' : '→' }
@@ -70,7 +71,17 @@ export default function BriefPanel({ onClose }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [emailState, setEmailState] = useState('idle')
   const [emailError, setEmailError] = useState('')
+  const [briefEmailEnabled, setBriefEmailEnabled] = useState(true)
   const menuRef = useRef(null)
+  const modalRef = useRef(null)
+  useFocusTrap(modalRef)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const meta = data?.user?.user_metadata ?? {}
+      setBriefEmailEnabled(meta.notify_brief_email !== false)
+    })
+  }, [])
 
   useEffect(() => {
     function onKey(e) {
@@ -389,7 +400,7 @@ export default function BriefPanel({ onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal brief-panel-modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={modalRef} className="modal brief-panel-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <span className="modal-title">Brief</span>
           <div className="brief-header-actions">
@@ -445,8 +456,10 @@ export default function BriefPanel({ onClose }) {
                         type="button"
                         className="brief-download-item"
                         role="menuitem"
-                        disabled={emailState === 'sending'}
+                        disabled={emailState === 'sending' || !briefEmailEnabled}
+                        title={!briefEmailEnabled ? 'Brief emails are turned off in Settings.' : undefined}
                         onClick={() => {
+                          if (!briefEmailEnabled) return
                           setMenuOpen(false)
                           handleEmailBrief()
                         }}
