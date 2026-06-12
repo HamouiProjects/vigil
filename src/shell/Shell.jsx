@@ -1,5 +1,5 @@
 /* global __APP_VERSION__ */
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, lazy, Suspense } from 'react'
 import { useShellStore, isWorkspacePaused } from '../state/shellStore.js'
 import { useShellPersistence } from '../data/useShellPersistence.js'
 import { publishWorkspace } from '../data/workspacesRepo.js'
@@ -13,6 +13,8 @@ import BriefPanel from './BriefPanel.jsx'
 import AlertsDrawer from './AlertsDrawer.jsx'
 import { Bell } from 'lucide-react'
 import AccountMenu from './AccountMenu.jsx'
+
+const SettingsModal = lazy(() => import('../settings/SettingsModal.jsx'))
 import { supabase } from '../lib/supabase.js'
 import AuthScreen from '../components/layout/AuthScreen.jsx'
 import LatestTicker from './LatestTicker.jsx'
@@ -125,6 +127,7 @@ export default function Shell() {
   const [account, setAccount] = useState(null)
   const [themePref, setThemePrefState] = useState(getThemePref())
   const [showAuth, setShowAuth] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [authView, setAuthView] = useState('login')
   const [navCollapsed, setNavCollapsed] = useState(() => { try { return localStorage.getItem('vigil_nav_collapsed') === '1' } catch { return false } })
   const [wsBarCollapsed, setWsBarCollapsed] = useState(() => { try { return localStorage.getItem('vigil_ws_bar_collapsed') === '1' } catch { return false } })
@@ -497,12 +500,9 @@ export default function Shell() {
           <AccountMenu
             account={account}
             plan={plan}
-            themePref={themePref}
-            onSetTheme={setTheme}
-            onUpgrade={() => setShowUpgrade(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
             onAuth={(view) => { setAuthView(view); setShowAuth(true) }}
             onSignOut={async () => { await supabase.auth.signOut(); window.location.reload() }}
-            onSetUsername={handleSetUsername}
           />
           <button type="button" className="nav-collapse-btn" onClick={() => setNavCollapsedPersisted(true)} title="Hide toolbar" aria-label="Hide toolbar">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 15l6-6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -542,6 +542,21 @@ export default function Shell() {
         onActivityRead={() => setUnreadAlerts(0)}
       />
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
+      {settingsOpen && (
+        <Suspense fallback={null}>
+          <SettingsModal
+            account={account}
+            plan={plan}
+            themePref={themePref}
+            onSetTheme={setTheme}
+            onUpgrade={() => setShowUpgrade(true)}
+            onSignOut={async () => { await supabase.auth.signOut(); window.location.reload() }}
+            onClose={() => setSettingsOpen(false)}
+            onAuth={(view) => { setSettingsOpen(false); setAuthView(view); setShowAuth(true) }}
+            onSetUsername={handleSetUsername}
+          />
+        </Suspense>
+      )}
       {showAuth && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100002, background: 'var(--bg, #0A0C10)' }}>
           <AuthScreen

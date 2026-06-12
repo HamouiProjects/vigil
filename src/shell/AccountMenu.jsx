@@ -1,12 +1,9 @@
-// src/shell/AccountMenu.jsx — account avatar + dropdown (appearance/theme, upgrade, auth)
+// src/shell/AccountMenu.jsx — account avatar + thin launcher dropdown
 import { useState, useRef, useEffect } from 'react'
 
-export default function AccountMenu({ account, plan, themePref, onSetTheme, onUpgrade, onAuth, onSignOut, onSetUsername }) {
+export default function AccountMenu({ account, plan, onOpenSettings, onAuth, onSignOut }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const [appearanceOpen, setAppearanceOpen] = useState(false)
   const username = account?.username || ''
 
   useEffect(() => {
@@ -17,9 +14,7 @@ export default function AccountMenu({ account, plan, themePref, onSetTheme, onUp
   }, [open])
 
   const isReal = account && account.isAnon === false
-  const isPaid = !!plan && plan !== 'free'
   const email = account?.email || ''
-  const themes = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -37,53 +32,13 @@ export default function AccountMenu({ account, plan, themePref, onSetTheme, onUp
             <span className="account-menu-plan">{plan && plan !== 'free' ? plan.toUpperCase() : 'FREE'}</span>
           </div>
 
-          {isReal && (editing
-            ? <div className="account-menu-edit">
-                <input className="account-menu-input" value={draft} maxLength={32} placeholder="Username" autoFocus onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { const v = draft.trim(); if (v) { onSetUsername(v); setEditing(false) } } }} />
-                <button type="button" className="account-menu-item" style={{ width: 'auto' }} onClick={() => { const v = draft.trim(); if (v) { onSetUsername(v); setEditing(false) } }}>Save</button>
-              </div>
-            : <button type="button" className="account-menu-item" onClick={() => { setDraft(username); setEditing(true) }}>{username ? 'Edit username' : 'Set username'}</button>
-          )}
-
-          <button type="button" className="account-menu-item" onClick={() => setAppearanceOpen(v => !v)} aria-expanded={appearanceOpen}>
-            <span>Appearance</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-text-muted)' }}>
-              <span style={{ fontSize: 11 }}>{(themes.find(([v]) => v === themePref) || [])[1]}</span>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style={{ transform: appearanceOpen ? 'rotate(90deg)' : 'none', transition: 'transform 120ms ease' }}><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </span>
+          <button
+            type="button"
+            className="account-menu-item"
+            onClick={() => { setOpen(false); onOpenSettings() }}
+          >
+            Settings
           </button>
-          {appearanceOpen && themes.map(([val, lbl]) => (
-            <button key={val} type="button" className="account-menu-item" style={{ paddingLeft: 24 }} onClick={() => onSetTheme(val)}>
-              <span>{lbl}</span>
-              {themePref === val && <span className="account-menu-check">✓</span>}
-            </button>
-          ))}
-
-          <div className="account-menu-divider" />
-
-          <div className="account-menu-label">Subscription</div>
-          <div className="account-menu-sub-row">
-            <span>Paid plan</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={isPaid}
-              aria-label="Paid plan"
-              className={`account-switch${isPaid ? ' on' : ''}`}
-              onClick={() => { if (!isPaid) { setOpen(false); onUpgrade() } }}
-              title={isPaid ? 'Active during early access' : 'Off. Vigil never turns this on by itself.'}
-            >
-              <span className="account-switch-knob" />
-            </button>
-          </div>
-          <p className="account-menu-note">
-            {isPaid
-              ? 'Active for early access. Vigil never auto-charges or auto-renews.'
-              : 'Vigil never turns this on by itself. No auto-charge, no auto-renew, and no charge at all during early access.'}
-          </p>
-          {!isPaid && (
-            <button type="button" className="account-menu-item" onClick={() => { setOpen(false); onUpgrade() }}>See upgrade options</button>
-          )}
 
           <div className="account-menu-divider" />
 
