@@ -212,7 +212,7 @@ export default function Shell() {
           const sub = await loadSubscription(uid)
           if (sub?.plan === 'pro') {
             useShellStore.getState().setEntitlements(resolveEntitlements('pro', sub.addOns ?? [], sub?.status))
-            setUpgradeNudge('Welcome to Individual — real-time data unlocked.')
+            setUpgradeNudge('Welcome to Individual. Real-time data unlocked.')
             return
           }
         } catch {}
@@ -374,7 +374,7 @@ export default function Shell() {
             type="button"
             className="widget-btn"
             onClick={toggleFullscreen}
-            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen (hide browser UI — for recording)'}
+            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen (hide browser UI, for recording)'}
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
             style={{ marginLeft: 10 }}
           >
@@ -500,7 +500,7 @@ export default function Shell() {
             themePref={themePref}
             onSetTheme={setTheme}
             onUpgrade={() => setShowUpgrade(true)}
-            onLogin={() => { setAuthView('login'); setShowAuth(true) }}
+            onAuth={(view) => { setAuthView(view); setShowAuth(true) }}
             onSignOut={async () => { await supabase.auth.signOut(); window.location.reload() }}
             onSetUsername={handleSetUsername}
           />

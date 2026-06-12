@@ -1,7 +1,7 @@
 // src/shell/AccountMenu.jsx — account avatar + dropdown (appearance/theme, upgrade, auth)
 import { useState, useRef, useEffect } from 'react'
 
-export default function AccountMenu({ account, plan, themePref, onSetTheme, onUpgrade, onLogin, onSignOut, onSetUsername }) {
+export default function AccountMenu({ account, plan, themePref, onSetTheme, onUpgrade, onAuth, onSignOut, onSetUsername }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const [editing, setEditing] = useState(false)
@@ -17,6 +17,7 @@ export default function AccountMenu({ account, plan, themePref, onSetTheme, onUp
   }, [open])
 
   const isReal = account && account.isAnon === false
+  const isPaid = !!plan && plan !== 'free'
   const email = account?.email || ''
   const themes = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]
 
@@ -60,13 +61,40 @@ export default function AccountMenu({ account, plan, themePref, onSetTheme, onUp
 
           <div className="account-menu-divider" />
 
-          {plan === 'free' && (
-            <button type="button" className="account-menu-item" onClick={() => { setOpen(false); onUpgrade() }}>Upgrade to Pro</button>
+          <div className="account-menu-label">Subscription</div>
+          <div className="account-menu-sub-row">
+            <span>Paid plan</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isPaid}
+              aria-label="Paid plan"
+              className={`account-switch${isPaid ? ' on' : ''}`}
+              onClick={() => { if (!isPaid) { setOpen(false); onUpgrade() } }}
+              title={isPaid ? 'Active during early access' : 'Off. Vigil never turns this on by itself.'}
+            >
+              <span className="account-switch-knob" />
+            </button>
+          </div>
+          <p className="account-menu-note">
+            {isPaid
+              ? 'Active for early access. Vigil never auto-charges or auto-renews.'
+              : 'Vigil never turns this on by itself. No auto-charge, no auto-renew, and no charge at all during early access.'}
+          </p>
+          {!isPaid && (
+            <button type="button" className="account-menu-item" onClick={() => { setOpen(false); onUpgrade() }}>See upgrade options</button>
           )}
-          {isReal
-            ? <button type="button" className="account-menu-item account-menu-signout" onClick={() => { setOpen(false); onSignOut() }}>Sign out</button>
-            : <button type="button" className="account-menu-item" onClick={() => { setOpen(false); onLogin() }}>Log in / Sign up</button>
-          }
+
+          <div className="account-menu-divider" />
+
+          {isReal ? (
+            <button type="button" className="account-menu-item account-menu-signout" onClick={() => { setOpen(false); onSignOut() }}>Sign out</button>
+          ) : (
+            <>
+              <button type="button" className="account-menu-item account-menu-primary" onClick={() => { setOpen(false); onAuth('signup') }}>Sign up</button>
+              <button type="button" className="account-menu-item" onClick={() => { setOpen(false); onAuth('login') }}>Log in</button>
+            </>
+          )}
         </div>
       )}
     </div>
