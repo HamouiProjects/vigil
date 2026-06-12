@@ -5,21 +5,40 @@ import { withinLimit } from '../entitlements/index.js'
 import { widgetRegistry } from '../shell/widgetRegistry.js'
 
 const DEMO_WS_ID = 'demo-ws'
-const DEMO_WEATHER_ID = 'demo-weather'
 
 export const SEED_WORKSPACES = [
   {
     id: DEMO_WS_ID,
-    name: 'Demo',
+    name: 'EU & China',
     widgets: [
-      {
-        id: DEMO_WEATHER_ID,
-        type: 'weather',
-        config: { city: 'Berlin', latLon: null, locName: 'Berlin' },
-      },
+      { id: 'seed-feed', type: 'feed', config: { tabs: [
+        { id: 'eu-china', keyword: 'EU China relations' },
+        { id: 'china-economy', keyword: 'China economy' },
+        { id: 'semiconductors', keyword: 'semiconductors' },
+        { id: 'taiwan', keyword: 'Taiwan' },
+        { id: 'tariffs', keyword: 'trade tariffs' },
+        { id: 'sanctions', keyword: 'sanctions' },
+        { id: 'supply-chain', keyword: 'supply chain' },
+      ] } },
+      { id: 'seed-map', type: 'map', config: {} },
+      { id: 'seed-rss', type: 'rss', config: {} },
+      { id: 'seed-social', type: 'social', config: { accounts: [
+        { id: 'acc-0', platform: 'reddit', value: 'geopolitics', enabled: true },
+        { id: 'acc-1', platform: 'reddit', value: 'china', enabled: true },
+        { id: 'acc-2', platform: 'reddit', value: 'europe', enabled: true },
+      ] } },
+      { id: 'seed-trends', type: 'trends', config: { keywords: ['tariffs', 'semiconductors', 'rare earths'], time: 'today 12-m' } },
+      { id: 'seed-heatmap', type: 'heatmap', config: {} },
+      { id: 'seed-prices', type: 'prices', config: {} },
     ],
     layout: [
-      { i: DEMO_WEATHER_ID, x: 0, y: 0, w: 8, h: 8 },
+      { i: 'seed-feed',    x: 0,  y: 0,  w: 12, h: 10 },
+      { i: 'seed-map',     x: 12, y: 0,  w: 12, h: 10 },
+      { i: 'seed-rss',     x: 0,  y: 10, w: 12, h: 9 },
+      { i: 'seed-social',  x: 12, y: 10, w: 12, h: 9 },
+      { i: 'seed-trends',  x: 0,  y: 19, w: 12, h: 8 },
+      { i: 'seed-heatmap', x: 12, y: 19, w: 12, h: 8 },
+      { i: 'seed-prices',  x: 0,  y: 27, w: 12, h: 7 },
     ],
   },
 ]
