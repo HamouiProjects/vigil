@@ -1,5 +1,6 @@
 import { safeFetch } from './_ssrf.js'
 import { applyCors } from './_cors.js'
+import { rateLimit } from './_ratelimit.js'
 
 function decodeEntities(s) {
   return (s || '')
@@ -57,6 +58,12 @@ export default async function handler(req, res) {
   try { parsed = new URL(url) } catch { return res.status(400).json({ error: 'Invalid URL' }) }
   if (!['http:', 'https:'].includes(parsed.protocol))
     return res.status(400).json({ error: 'Only HTTP/HTTPS URLs are supported' })
+
+  const rl = await rateLimit(req, 'fetch-article', 10)
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', String(rl.retryAfter))
+    return res.status(429).json({ error: 'rate_limited' })
+  }
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 8000)

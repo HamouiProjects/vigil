@@ -1,6 +1,7 @@
 import supabase from './_supabase.js'
 import { safeFetch } from './_ssrf.js'
 import { applyCors } from './_cors.js'
+import { rateLimit } from './_ratelimit.js'
 import { XMLParser } from 'fast-xml-parser'
 
 const FRESH_MS = 120_000
@@ -311,6 +312,12 @@ export default async function handler(req, res) {
   const url = (req.query.url || '').trim()
   if (!url || !/^https?:\/\//i.test(url)) {
     return res.status(400).json({ status: 'error', error: 'invalid url', items: [] })
+  }
+
+  const rl = await rateLimit(req, 'rss', 60)
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', String(rl.retryAfter))
+    return res.status(429).json({ error: 'rate_limited' })
   }
 
   if (isTelegramUrl(url)) {

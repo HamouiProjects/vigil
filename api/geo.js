@@ -1,4 +1,5 @@
 import { applyCors } from './_cors.js'
+import { rateLimit } from './_ratelimit.js'
 
 const EMPTY_FC = { type: 'FeatureCollection', features: [] }
 const AIRCRAFT_UPSTREAM = 'https://api.adsb.lol/v2/mil'
@@ -32,6 +33,10 @@ function getStaleCache(key) {
 
 function setGeoHeaders(res) {
   res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300')
+}
+
+function debugAllowed() {
+  return process.env.NODE_ENV !== 'production' || process.env.DEBUG_ENDPOINTS === '1'
 }
 
 function redactUpstreamUrl(url) {
@@ -250,7 +255,17 @@ export default async function handler(req, res) {
 
   const source = (req.query.source || '').toLowerCase()
 
-  if (req.query.debug === '1') {
+  if (source !== 'aircraft' && source !== 'firms') {
+    return res.status(400).json({ error: 'invalid source' })
+  }
+
+  const rl = await rateLimit(req, 'geo', 30)
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', String(rl.retryAfter))
+    return res.status(429).json({ error: 'rate_limited' })
+  }
+
+  if (req.query.debug === '1' && debugAllowed()) {
     return handleDebugPassthrough(req, res, source)
   }
 
@@ -264,8 +279,6 @@ export default async function handler(req, res) {
       case 'firms':
         body = await handleFirms()
         break
-      default:
-        return res.status(400).json({ error: 'invalid source' })
     }
 
     setGeoHeaders(res)

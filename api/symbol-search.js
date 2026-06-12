@@ -1,4 +1,5 @@
 import { applyCors } from './_cors.js'
+import { rateLimit } from './_ratelimit.js'
 
 const CACHE_TTL_MS = 5 * 60 * 1000
 const MAX_CACHE_ENTRIES = 200
@@ -72,6 +73,10 @@ function setResponseHeaders(res) {
   res.setHeader('Cache-Control', 'public, max-age=300')
 }
 
+function debugAllowed() {
+  return process.env.NODE_ENV !== 'production' || process.env.DEBUG_ENDPOINTS === '1'
+}
+
 async function fetchUpstream(q) {
   const url = `${UPSTREAM_BASE}?text=${encodeURIComponent(q)}&hl=0&exchange=&lang=en&type=&domain=production`
   return fetch(url, { headers: BROWSER_HEADERS, signal: AbortSignal.timeout(10000) })
@@ -88,7 +93,13 @@ export default async function handler(req, res) {
     return res.status(200).json({ results: [] })
   }
 
-  if (req.query.debug) {
+  const rl = await rateLimit(req, 'symbol-search', 30)
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', String(rl.retryAfter))
+    return res.status(429).json({ error: 'rate_limited' })
+  }
+
+  if (req.query.debug && debugAllowed()) {
     try {
       const upstream = await fetchUpstream(q)
       let items = []

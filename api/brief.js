@@ -113,8 +113,12 @@ function buildMarkets(mkReq, quotes) {
 async function fetchTrends(trReq) {
   if (!trReq || !Array.isArray(trReq.terms) || !trReq.terms.length) return null
   const url = `https://thevigilroom.com/api/trends?keyword=${encodeURIComponent(trReq.terms.join(','))}&date=${encodeURIComponent(trReq.window || 'today 12-m')}`
+  const headers = {}
+  if (process.env.CRON_SECRET) {
+    headers.Authorization = `Bearer ${process.env.CRON_SECRET}`
+  }
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(8000) })
+    const r = await fetch(url, { headers, signal: AbortSignal.timeout(8000) })
     const data = await r.json().catch(() => null)
     if (!data || data.error || !Array.isArray(data.points) || !data.points.length) return null
     return data

@@ -2,6 +2,7 @@ import supabase from './_supabase.js'
 import { applyCors } from './_cors.js'
 import { resolveEntitlements } from '../src/entitlements/resolve.js'
 import { safeFetch } from './_ssrf.js'
+import { rateLimit } from './_ratelimit.js'
 
 function readBody(req) {
   if (req.body && typeof req.body === 'object') return req.body
@@ -177,6 +178,12 @@ async function handleEmailBrief(req, res) {
   if (userErr || !user?.id) return res.status(401).json({ error: 'UNAUTHORIZED' })
   if (user.is_anonymous === true) return res.status(403).json({ error: 'EMAIL_REQUIRES_ACCOUNT' })
   if (!user.email) return res.status(400).json({ error: 'NO_EMAIL' })
+
+  const rl = await rateLimit(req, 'email-brief', 5, 3600, user.id)
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', String(rl.retryAfter))
+    return res.status(429).json({ error: 'rate_limited' })
+  }
 
   const body = readBody(req)
   if (!body) return res.status(400).json({ error: 'invalid body' })
@@ -406,7 +413,47 @@ async function handleAlertDispatch(req, res) {
   }
 
   console.log('[alert-dispatch]', JSON.stringify({ rules: (rules || []).length, matched, emailed, posted }))
+
+  await cleanupStaleRows()
+
   return res.status(200).json({ ok: true, rules: (rules || []).length, matched, emailed, posted })
+}
+
+async function cleanupStaleRows() {
+  if (!supabase) return
+
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+  try {
+    const { data: rlRows, error: rlErr } = await supabase
+      .from('rate_limits')
+      .delete()
+      .lt('window_start', oneDayAgo)
+      .select('bucket')
+    if (rlErr) {
+      console.error('[cleanup] rate_limits delete error', rlErr.message)
+    } else {
+      console.log('[cleanup] rate_limits deleted', rlRows?.length ?? 0)
+    }
+  } catch (err) {
+    console.error('[cleanup] rate_limits delete threw', err?.message)
+  }
+
+  try {
+    const { data: fcRows, error: fcErr } = await supabase
+      .from('feed_cache')
+      .delete()
+      .lt('updated_at', sevenDaysAgo)
+      .select('feed_url')
+    if (fcErr) {
+      console.error('[cleanup] feed_cache delete error', fcErr.message)
+    } else {
+      console.log('[cleanup] feed_cache deleted', fcRows?.length ?? 0)
+    }
+  } catch (err) {
+    console.error('[cleanup] feed_cache delete threw', err?.message)
+  }
 }
 
 export default async function handler(req, res) {
