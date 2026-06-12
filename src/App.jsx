@@ -1,6 +1,7 @@
 import { useEffect, useState, lazy, Suspense } from 'react'
 import './App.css'
 import { supabase } from './lib/supabase.js'
+import AppErrorBoundary from './shell/AppErrorBoundary.jsx'
 
 const Shell = lazy(() => import('./shell/Shell.jsx'))
 const PublicRoom = lazy(() => import('./shell/PublicRoom.jsx'))
@@ -133,7 +134,9 @@ export default function App() {
   if (isLegal) {
     return (
       <Suspense fallback={<AppSplash />}>
-        <LegalPage page={legalPage} />
+        <AppErrorBoundary>
+          <LegalPage page={legalPage} />
+        </AppErrorBoundary>
       </Suspense>
     )
   }
@@ -141,7 +144,9 @@ export default function App() {
   if (isInfo) {
     return (
       <Suspense fallback={<AppSplash />}>
-        <InfoPage page={legalPage} />
+        <AppErrorBoundary>
+          <InfoPage page={legalPage} />
+        </AppErrorBoundary>
       </Suspense>
     )
   }
@@ -149,7 +154,9 @@ export default function App() {
   if (slug) {
     return (
       <Suspense fallback={<AppSplash />}>
-        <PublicRoom slug={slug} />
+        <AppErrorBoundary>
+          <PublicRoom slug={slug} />
+        </AppErrorBoundary>
       </Suspense>
     )
   }
@@ -159,15 +166,19 @@ export default function App() {
   if (sessionState === 'authenticated') {
     return (
       <Suspense fallback={<AppSplash />}>
-        <Shell />
-        {anonSession && <AnonKeepRoomNudge />}
+        <AppErrorBoundary>
+          <Shell />
+          {anonSession && <AnonKeepRoomNudge />}
+        </AppErrorBoundary>
       </Suspense>
     )
   }
 
   return (
     <Suspense fallback={<AppSplash />}>
-      <Landing />
+      <AppErrorBoundary>
+        <Landing />
+      </AppErrorBoundary>
     </Suspense>
   )
 }

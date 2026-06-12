@@ -5,6 +5,7 @@ import 'react-resizable/css/styles.css'
 import { ensureSession } from '../data/session.js'
 import { loadPublicRoom, cloneRoom } from '../data/workspacesRepo.js'
 import WidgetHost from './WidgetHost.jsx'
+import AppErrorBoundary from './AppErrorBoundary.jsx'
 
 const SizedGridLayout = WidthProvider(GridLayout)
 
@@ -92,39 +93,41 @@ export default function PublicRoom({ slug }) {
       </div>
 
       <div style={{ width: '100%', height: 'calc(100vh - 40px)', overflow: 'auto' }}>
-        <SizedGridLayout
-          layout={room.layout}
-          cols={24}
-          rowHeight={32}
-          margin={[6, 6]}
-          containerPadding={[8, 8]}
-          compactType="vertical"
-          preventCollision={false}
-          isResizable={false}
-          isDraggable={false}
-        >
-          {room.widgets.map(widget => {
-            const gridItem = room.layout.find(item => item.i === widget.id)
-            if (!gridItem) return null
-            return (
-              <div
-                key={widget.id}
-                data-grid={{ ...gridItem }}
-                style={{ height: '100%', overflow: 'hidden' }}
-              >
-                <WidgetHost
-                  widget={widget}
-                  workspacePaused={false}
-                  widgetPaused={false}
-                  entitlements={{}}
-                  onSaveConfig={() => {}}
-                  sources={room.sources ?? []}
-                  readOnly
-                />
-              </div>
-            )
-          })}
-        </SizedGridLayout>
+        <AppErrorBoundary>
+          <SizedGridLayout
+            layout={room.layout}
+            cols={24}
+            rowHeight={32}
+            margin={[6, 6]}
+            containerPadding={[8, 8]}
+            compactType="vertical"
+            preventCollision={false}
+            isResizable={false}
+            isDraggable={false}
+          >
+            {room.widgets.map(widget => {
+              const gridItem = room.layout.find(item => item.i === widget.id)
+              if (!gridItem) return null
+              return (
+                <div
+                  key={widget.id}
+                  data-grid={{ ...gridItem }}
+                  style={{ height: '100%', overflow: 'hidden' }}
+                >
+                  <WidgetHost
+                    widget={widget}
+                    workspacePaused={false}
+                    widgetPaused={false}
+                    entitlements={{}}
+                    onSaveConfig={() => {}}
+                    sources={room.sources ?? []}
+                    readOnly
+                  />
+                </div>
+              )
+            })}
+          </SizedGridLayout>
+        </AppErrorBoundary>
       </div>
     </div>
   )
