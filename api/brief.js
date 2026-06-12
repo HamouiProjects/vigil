@@ -36,6 +36,25 @@ function monthStartISO() {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isWellFormedUuid(value) {
+  return typeof value === 'string' && UUID_RE.test(value)
+}
+
+async function countBriefsThisMonth(userId) {
+  const { count, error } = await supabase
+    .from('briefs')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', monthStartISO())
+  if (error) {
+    console.error('[brief] count error', error?.message)
+    return null
+  }
+  return count ?? 0
+}
+
 function normalizeItems(items) {
   if (!Array.isArray(items) || !items.length) return []
   return items
@@ -182,28 +201,6 @@ export default async function handler(req, res) {
   const ent = resolveEntitlements(sub?.plan ?? 'free', sub?.add_ons ?? [], sub?.status ?? null)
   const cap = ent.limits.briefsPerMonth ?? resolveEntitlements('free').limits.briefsPerMonth
 
-  const { count, error: countErr } = await supabase
-    .from('briefs')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-    .gte('created_at', monthStartISO())
-
-  if (countErr) {
-    console.error('[brief] count error', countErr?.message)
-    return res.status(500).json({ error: 'DB_ERROR', stage: 'count' })
-  }
-
-  const used = count ?? 0
-  if (used >= cap) {
-    return res.status(429).json({
-      error: 'BRIEF_LIMIT_REACHED',
-      limit: cap,
-      used,
-      resetsAt: firstDayNextMonthISO(),
-      message: `You have used all ${cap} briefs for this month. Your allowance resets on the 1st.`,
-    })
-  }
-
   const mkReq = (markets && typeof markets === 'object') ? markets : null
   const wantedSyms = mkReq
     ? [...new Set([...(mkReq.symbols || []), ...((mkReq.heatmaps || []).map((h) => h?.symbol))]
@@ -255,27 +252,52 @@ export default async function handler(req, res) {
     if (tr) cleaned.trends = tr
   } catch (err) { console.error('[brief] trends build failed', err?.message) }
 
-  const { data: row, error: insertErr } = await supabase
-    .from('briefs')
-    .insert({
-      user_id: user.id,
-      workspace_id: workspaceId ?? null,
-      content: cleaned,
-      period: period ?? null,
-    })
-    .select('id, created_at')
-    .single()
+  const workspaceUuid = isWellFormedUuid(workspaceId) ? workspaceId : null
 
-  if (insertErr || !row) {
+  const { data: briefId, error: insertErr } = await supabase.rpc('brief_insert_capped', {
+    p_user: user.id,
+    p_workspace: workspaceUuid,
+    p_content: cleaned,
+    p_period: period ?? null,
+    p_cap: cap,
+  })
+
+  if (insertErr) {
     console.error('[brief] insert error', insertErr?.message)
     return res.status(500).json({ error: 'DB_ERROR', stage: 'insert' })
   }
 
+  if (!briefId) {
+    const used = await countBriefsThisMonth(user.id)
+    if (used == null) return res.status(500).json({ error: 'DB_ERROR', stage: 'count' })
+    return res.status(429).json({
+      error: 'BRIEF_LIMIT_REACHED',
+      limit: cap,
+      used,
+      resetsAt: firstDayNextMonthISO(),
+      message: `You have used all ${cap} briefs for this month. Your allowance resets on the 1st.`,
+    })
+  }
+
+  const { data: row, error: rowErr } = await supabase
+    .from('briefs')
+    .select('created_at')
+    .eq('id', briefId)
+    .single()
+
+  if (rowErr || !row) {
+    console.error('[brief] fetch inserted row error', rowErr?.message)
+    return res.status(500).json({ error: 'DB_ERROR', stage: 'insert' })
+  }
+
+  const usedAfter = await countBriefsThisMonth(user.id)
+  if (usedAfter == null) return res.status(500).json({ error: 'DB_ERROR', stage: 'count' })
+
   return res.status(200).json({
     brief: cleaned,
-    id: row.id,
+    id: briefId,
     created_at: row.created_at,
-    used: used + 1,
+    used: usedAfter,
     limit: cap,
   })
 }

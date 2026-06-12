@@ -29,6 +29,12 @@ function clamp(str, max) {
   return String(str ?? '').slice(0, max)
 }
 
+function isValidSignupEmail(email) {
+  if (typeof email !== 'string') return false
+  const e = email.trim()
+  return e.length >= 3 && e.length <= 254 && e.includes('@') && e.indexOf('@') > 0
+}
+
 function sanitizeBrief(brief) {
   const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null }
   const dirOk = (d) => (d === 'up' || d === 'down' || d === 'flat') ? d : 'flat'
@@ -376,7 +382,13 @@ async function handleAlertDispatch(req, res) {
       const { data: ud } = await supabase.auth.admin.getUserById(rule.user_id)
       const { data: sub } = await supabase.from('subscriptions').select('plan, status, add_ons').eq('user_id', rule.user_id).maybeSingle()
       const ent = resolveEntitlements(sub?.plan ?? 'free', sub?.add_ons ?? [], sub?.status ?? null)
-      u = { email: ud?.user?.email || '', plan: ent.plan, canAlert: ent.capabilities.has('alerts'), canWebhook: ent.capabilities.has('alerts_webhook') }
+      u = {
+        email: ud?.user?.email || '',
+        plan: ent.plan,
+        canAlert: ent.capabilities.has('alerts'),
+        canWebhook: ent.capabilities.has('alerts_webhook'),
+        notifyAlertEmail: ud?.user?.user_metadata?.notify_alert_email !== false,
+      }
       userCache.set(rule.user_id, u)
     }
     if (!u.canAlert) continue
@@ -402,7 +414,7 @@ async function handleAlertDispatch(req, res) {
 
     const channels = Array.isArray(rule.channels) ? rule.channels : []
     const mapped = fresh.map((f) => ({ url: f.item_url, title: f.item_title, source: f.source }))
-    if (channels.includes('email') && u.email) {
+    if (channels.includes('email') && u.email && u.notifyAlertEmail) {
       const sent = await sendAlertEmail(u.email, rule.keyword, rule.region, mapped)
       if (sent) emailed += 1
     }
@@ -417,6 +429,119 @@ async function handleAlertDispatch(req, res) {
   await cleanupStaleRows()
 
   return res.status(200).json({ ok: true, rules: (rules || []).length, matched, emailed, posted })
+}
+
+async function handleDeleteAccount(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
+  if (!supabase) return res.status(503).json({ error: 'SUPABASE_UNAVAILABLE' })
+
+  const rl = await rateLimit(req, 'delete-account', 3, 60)
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', String(rl.retryAfter))
+    return res.status(429).json({ error: 'rate_limited' })
+  }
+
+  const authHeader = req.headers.authorization || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
+  if (!token) return res.status(401).json({ error: 'UNAUTHORIZED' })
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser(token)
+  const user = userData?.user
+  if (userErr || !user?.id) return res.status(401).json({ error: 'UNAUTHORIZED' })
+
+  const body = readBody(req)
+  if (!body || body.confirm !== 'DELETE') return res.status(400).json({ error: 'CONFIRM_REQUIRED' })
+
+  const uid = user.id
+
+  const { data: sub } = await supabase
+    .from('subscriptions')
+    .select('stripe_customer_id')
+    .eq('user_id', uid)
+    .maybeSingle()
+
+  const stripeCustomerId = sub?.stripe_customer_id || null
+
+  const tables = ['alert_events', 'alerts', 'briefs', 'sources', 'workspaces', 'subscriptions']
+  for (const table of tables) {
+    const { error } = await supabase.from(table).delete().eq('user_id', uid)
+    if (error) {
+      console.error('[delete-account] delete error', table, error.message)
+      return res.status(500).json({ error: 'DB_ERROR', stage: table })
+    }
+  }
+
+  if (user.email) {
+    const { error: esErr } = await supabase
+      .from('email_signups')
+      .delete()
+      .ilike('email', user.email)
+    if (esErr) {
+      console.error('[delete-account] email_signups delete error', esErr.message)
+      return res.status(500).json({ error: 'DB_ERROR', stage: 'email_signups' })
+    }
+  }
+
+  if (stripeCustomerId) {
+    console.log('[delete-account] stripe customer for manual cleanup', stripeCustomerId)
+  }
+
+  const { error: authDelErr } = await supabase.auth.admin.deleteUser(uid)
+  if (authDelErr) {
+    console.error('[delete-account] auth delete error', authDelErr.message)
+    return res.status(500).json({ error: 'AUTH_DELETE_FAILED' })
+  }
+
+  return res.status(200).json({ ok: true })
+}
+
+async function handleEmailSignup(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
+  if (!supabase) return res.status(503).json({ error: 'SUPABASE_UNAVAILABLE' })
+
+  const rl = await rateLimit(req, 'email-signup', 3, 60)
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', String(rl.retryAfter))
+    return res.status(429).json({ error: 'rate_limited' })
+  }
+
+  const body = readBody(req)
+  if (!body) return res.status(400).json({ error: 'invalid body' })
+
+  const { email, source } = body
+  if (!isValidSignupEmail(email)) return res.status(400).json({ error: 'INVALID_EMAIL' })
+
+  const normalizedEmail = email.trim().toLowerCase()
+  const safeSource = clamp(source, 120) || 'landing'
+
+  const { error: insErr } = await supabase
+    .from('email_signups')
+    .insert({ email: normalizedEmail, source: safeSource })
+
+  if (insErr?.code === '23505') {
+    const { data: existing, error: selErr } = await supabase
+      .from('email_signups')
+      .select('id')
+      .ilike('email', normalizedEmail)
+      .maybeSingle()
+    if (selErr || !existing?.id) {
+      console.error('[email-signup] conflict lookup error', selErr?.message || insErr.message)
+      return res.status(500).json({ error: 'DB_ERROR' })
+    }
+    const { error: updErr } = await supabase
+      .from('email_signups')
+      .update({ source: safeSource })
+      .eq('id', existing.id)
+    if (updErr) {
+      console.error('[email-signup] update error', updErr.message)
+      return res.status(500).json({ error: 'DB_ERROR' })
+    }
+  } else if (insErr) {
+    console.error('[email-signup] insert error', insErr.message)
+    return res.status(500).json({ error: 'DB_ERROR' })
+  }
+
+  return res.status(200).json({ ok: true })
 }
 
 async function cleanupStaleRows() {
@@ -468,6 +593,10 @@ export default async function handler(req, res) {
       return handleEmailBrief(req, res)
     case 'alert-dispatch':
       return handleAlertDispatch(req, res)
+    case 'delete-account':
+      return handleDeleteAccount(req, res)
+    case 'email-signup':
+      return handleEmailSignup(req, res)
     default:
       return res.status(400).json({ error: 'UNKNOWN_ACTION' })
   }
