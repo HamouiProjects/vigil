@@ -1,5 +1,6 @@
 .legal {
-  min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
   background: var(--color-bg);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
