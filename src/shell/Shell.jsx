@@ -120,6 +120,7 @@ export default function Shell() {
   const [upgradeNudge, setUpgradeNudge] = useState(null)
   const [shareNotice, setShareNotice] = useState(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
+  const [roomCapOpen, setRoomCapOpen] = useState(false)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
   const [showBrief, setShowBrief] = useState(false)
   const [showAlerts, setShowAlerts] = useState(false)
@@ -179,6 +180,13 @@ export default function Shell() {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [shareNotice])
+
+  useEffect(() => {
+    if (!roomCapOpen) return undefined
+    function onKey(e) { if (e.key === 'Escape') setRoomCapOpen(false) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [roomCapOpen])
 
   useEffect(() => {
     if (!uid) return
@@ -256,7 +264,7 @@ export default function Shell() {
 
   function handleAddWorkspace() {
     const ok = addWorkspace()
-    if (!ok) nudgeUpgrade('Free includes 1 room. Upgrade for more.')
+    if (!ok) setRoomCapOpen(true)
   }
 
   function handleAddWidget(type) {
@@ -337,6 +345,51 @@ export default function Shell() {
         onDismiss={() => setUpgradeNudge(null)}
         onUpgrade={() => { setUpgradeNudge(null); setShowUpgrade(true) }}
       />
+      {roomCapOpen && (
+        <div className="modal-overlay" onClick={() => setRoomCapOpen(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="roomcap-title"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--color-surface-2)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius)',
+              padding: '20px 24px',
+              maxWidth: 'min(360px, calc(100vw - 40px))',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 14,
+              textAlign: 'center',
+            }}
+          >
+            <span id="roomcap-title" style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+              Free includes one room.
+            </span>
+            <span style={{ fontFamily: 'var(--font-sans, Geist Sans, sans-serif)', fontSize: 13, lineHeight: 1.5, color: 'var(--color-text-secondary)' }}>
+              Upgrade to open more rooms.
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="nav-add-btn btn-primary"
+                onClick={() => {
+                  setRoomCapOpen(false)
+                  if (account?.isAnon !== false) { setAuthView('signup'); setShowAuth(true) }
+                  else { setShowUpgrade(true) }
+                }}
+              >
+                {account?.isAnon !== false ? 'Sign up' : 'Upgrade'}
+              </button>
+              <button type="button" className="nav-add-btn btn-secondary" onClick={() => setRoomCapOpen(false)}>
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {shareNotice && (
         <div className="modal-overlay" onClick={() => setShareNotice(null)}>
