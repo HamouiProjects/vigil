@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { track } from '@vercel/analytics'
 import { LAND } from './landData.js'
-import roomDark from './assets/room-dark.webp'
 import './landing.css'
 
 const DEMO_URL = '/?r=91dd31b84220'
@@ -192,17 +191,6 @@ export default function Landing() {
               <br />
               <span className="lp-headline-accent">Not twenty tabs.</span>
             </h1>
-            <figure className="lp-shot">
-              <img
-                src={roomDark}
-                alt="The Vigil operations room: an EU and China desk with feeds, map, markets, and social monitors on one screen."
-                width={1926}
-                height={1096}
-                loading="eager"
-                decoding="async"
-              />
-              <figcaption className="lp-shot-cap">A real Vigil room: an EU and China desk.</figcaption>
-            </figure>
             <p className="lp-sub">
               Right now you probably have a wire feed, two news sites, a markets ticker, a map, and three
               social accounts open in separate tabs. By the time you have checked them all, the first one has
