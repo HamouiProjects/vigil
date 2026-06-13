@@ -119,15 +119,21 @@ export default function App() {
 
     let cancelled = false
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const applyUser = (user) => {
       if (cancelled) return
-      const user = session?.user
       setAnonSession(user?.is_anonymous === true)
       setSessionState(user?.id ? 'authenticated' : 'anonymous')
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => applyUser(session?.user))
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      applyUser(session?.user)
     })
 
     return () => {
       cancelled = true
+      subscription?.unsubscribe()
     }
   }, [slug, isLegal, isInfo])
 
