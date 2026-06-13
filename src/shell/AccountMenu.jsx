@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 export default function AccountMenu({ account, plan, onOpenSettings, onAuth, onSignOut }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
+  const avatarRef = useRef(null)
   const username = account?.username || ''
 
   useEffect(() => {
@@ -18,7 +19,7 @@ export default function AccountMenu({ account, plan, onOpenSettings, onAuth, onS
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button type="button" className="account-avatar" onClick={() => setOpen(v => !v)} title="Account" aria-label="Account menu">
+      <button ref={avatarRef} type="button" className="account-avatar" onClick={() => setOpen(v => !v)} title="Account" aria-label="Account menu">
         {username
           ? username[0].toUpperCase()
           : (isReal && email
@@ -35,7 +36,7 @@ export default function AccountMenu({ account, plan, onOpenSettings, onAuth, onS
           <button
             type="button"
             className="account-menu-item"
-            onClick={() => { setOpen(false); onOpenSettings() }}
+            onClick={() => { setOpen(false); avatarRef.current?.focus(); onOpenSettings() }}
           >
             Settings
           </button>
