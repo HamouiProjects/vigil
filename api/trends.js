@@ -1,6 +1,12 @@
 import supabase from './_supabase.js'
 import { applyCors } from './_cors.js'
 import { rateLimit } from './_ratelimit.js'
+import crypto from 'node:crypto'
+function safeEqual(a, b) {
+  const ah = crypto.createHash('sha256').update(String(a)).digest()
+  const bh = crypto.createHash('sha256').update(String(b)).digest()
+  return crypto.timingSafeEqual(ah, bh)
+}
 
 const FRESH_MS = 12 * 60 * 60 * 1000
 const MAX_KEYWORDS = 5
@@ -64,7 +70,7 @@ async function isFreshAuthorized(req) {
   if (!token) return false
 
   const cronSecret = process.env.CRON_SECRET
-  if (cronSecret && token === cronSecret) return true
+  if (cronSecret && safeEqual(token, cronSecret)) return true
 
   if (!supabase) return false
   try {

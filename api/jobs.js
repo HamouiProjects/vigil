@@ -3,6 +3,16 @@ import { applyCors } from './_cors.js'
 import { resolveEntitlements } from '../src/entitlements/resolve.js'
 import { safeFetch } from './_ssrf.js'
 import { rateLimit } from './_ratelimit.js'
+import crypto from 'node:crypto'
+function safeEqual(a, b) {
+  const ah = crypto.createHash('sha256').update(String(a)).digest()
+  const bh = crypto.createHash('sha256').update(String(b)).digest()
+  return crypto.timingSafeEqual(ah, bh)
+}
+function isHttpUrl(u) {
+  if (typeof u !== 'string') return false
+  try { const p = new URL(u); return p.protocol === 'http:' || p.protocol === 'https:' } catch { return false }
+}
 
 function readBody(req) {
   if (req.body && typeof req.body === 'object') return req.body
@@ -99,7 +109,7 @@ function renderEmailHtml({ brief, roomName, preparedFor, generatedAt }) {
     for (const bullet of section.bullets) {
       const label = bullet.source?.label || 'Source'
       html += `<li style="margin-bottom:8px;font-size:14px;">${esc(bullet.text)} `
-      if (bullet.source?.url) {
+      if (isHttpUrl(bullet.source?.url)) {
         html += `<a href="${esc(bullet.source.url)}" style="color:#1d4ed8;text-decoration:none;">${esc(label)}</a>`
       } else {
         html += `(${esc(label)})`
@@ -275,7 +285,7 @@ function renderAlertEmailHtml({ keyword, region, items }) {
   for (const it of items) {
     const label = esc(it.source || 'Source')
     html += `<li style="margin-bottom:8px;font-size:14px;">`
-    if (it.url) html += `<a href="${esc(it.url)}" style="color:#1d4ed8;text-decoration:none;">${esc(it.title || it.url)}</a> <span style="color:#6b7280;">(${label})</span>`
+    if (isHttpUrl(it.url)) html += `<a href="${esc(it.url)}" style="color:#1d4ed8;text-decoration:none;">${esc(it.title || it.url)}</a> <span style="color:#6b7280;">(${label})</span>`
     else html += `${esc(it.title || '')} (${label})`
     html += `</li>`
   }
@@ -361,7 +371,7 @@ async function sendAlertWebhook(webhookUrl, keyword, region, items) {
 async function handleAlertDispatch(req, res) {
   const secret = process.env.CRON_SECRET
   const authHeader = req.headers.authorization || ''
-  if (!secret || authHeader !== `Bearer ${secret}`) return res.status(401).json({ error: 'UNAUTHORIZED' })
+  if (!secret || !safeEqual(authHeader, `Bearer ${secret}`)) return res.status(401).json({ error: 'UNAUTHORIZED' })
   if (!supabase) return res.status(503).json({ error: 'SUPABASE_UNAVAILABLE' })
 
   const { data: rules, error: rulesErr } = await supabase
