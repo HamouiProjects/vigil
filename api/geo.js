@@ -3,6 +3,10 @@ import { rateLimit } from './_ratelimit.js'
 
 const EMPTY_FC = { type: 'FeatureCollection', features: [] }
 const AIRCRAFT_UPSTREAM = 'https://api.adsb.lol/v2/mil'
+const AIRCRAFT_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  Accept: 'application/json',
+}
 
 const SOURCE_TTL_MS = {
   aircraft: 15_000,
@@ -171,7 +175,7 @@ async function fetchFirms() {
 }
 
 async function fetchAircraft() {
-  const res = await fetch(AIRCRAFT_UPSTREAM, { signal: AbortSignal.timeout(8000) })
+  const res = await fetch(AIRCRAFT_UPSTREAM, { headers: AIRCRAFT_HEADERS, signal: AbortSignal.timeout(8000) })
   let raw = null
   try {
     raw = await res.json()
@@ -221,7 +225,7 @@ async function handleDebugPassthrough(req, res, source) {
   }
 
   try {
-    const upstream = await fetch(upstreamUrl, { signal: AbortSignal.timeout(8000) })
+    const upstream = await fetch(upstreamUrl, { headers: source === 'aircraft' ? AIRCRAFT_HEADERS : undefined, signal: AbortSignal.timeout(8000) })
     const contentType = upstream.headers.get('content-type') || ''
     const text = await upstream.text()
     return res.status(200).json({
