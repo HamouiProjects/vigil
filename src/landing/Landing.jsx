@@ -8,11 +8,11 @@ const DEMO_URL = '/?r=91dd31b84220'
 const CARDS = [
   {
     title: 'The room',
-    body: 'The problem is the tabs. A wire feed, two news sites, a markets ticker, a map, a couple of social accounts, all open at once, and by the time you have checked them the first one has already moved. Vigil puts all of it on one screen, arranged how you think. You build the room once and it keeps running. One switch pauses everything, so you can step away and come back to exactly where you left off, with no doom scrolling to catch the one update that matters.',
+    body: 'The room is one screen you arrange yourself. Drop in the feeds, the map, the markets, and the social accounts you actually watch, lay them out how your eye moves, and leave it running. Hit pause when you step away and it freezes exactly there, so you pick up where you stopped.',
   },
   {
     title: 'The brief',
-    body: 'When you want a read on what changed, Vigil reads your own room and writes a short, plain summary on the spot. No fixed daily or weekly schedule, you generate one whenever you need it, up to the number your plan includes. Every line links to the source it came from, so you can open the original and judge it for yourself. It summarizes what your sources said. It never decides for you.',
+    body: 'When you want a read on what changed, Vigil reads your own room and writes a short, plain summary on the go. Every line links to the source it came from, so you can open the original and judge it for yourself. It summarizes what your sources said. It never decides for you.',
   },
   {
     title: 'The alerts',
@@ -237,24 +237,22 @@ export default function Landing() {
         </div>
         <div className="lp-closing">
           <p>
-            <strong>Built for the people who watch the world for a living.</strong> The analysts, field teams,
-            and newsrooms who want one calm, reliable picture of it, not twenty tabs and a wall of alarms.
+            Built for those who have to stay vigilant. The analysts, the field teams, the newsrooms, anyone
+            whose job is to stay informed and notice things before everyone else does. You already know the cost
+            of the work: a dozen apps that never agree, notifications firing all over the place, and an evening
+            lost to scrolling a feed in case the one post that matters slips past. Vigil ends that.
           </p>
           <p>
-            There are free dashboards you can host and maintain yourself. Vigil is the hosted room that stays
-            running without you wiring it, with a cited brief of your own sources when you ask for one. It is in
-            early access, built by one person, and everything on this page is shipped and live today. Nothing
-            here is a mockup.
+            Picture a single screen that holds your whole watch, still running while you are waiting for your
+            plane or the train, on a weak signal, or away from your desk. You open it, see what moved, ask for a
+            brief if you need one, and close it again. Pause it or pause any parts that you don't look at.
           </p>
         </div>
       </section>
 
       <footer className="lp-footer" onClick={(e) => e.stopPropagation()}>
         <div className="lp-foot-notes">
-          <span className="lp-foot-note">
-            Every brief cites the sources it came from, so you can check every line yourself. Vigil tracks, it
-            does not verify.
-          </span>
+          <span className="lp-foot-note">Vigil tracks, it does not verify.</span>
           <span className="lp-foot-data">
             Your room and account data are stored in the EU. Delete your account and everything with it at any
             time, in the app.
