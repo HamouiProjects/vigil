@@ -8,6 +8,19 @@ const AIRCRAFT_HEADERS = {
   Accept: 'application/json',
 }
 
+const SOURCE_META = {
+  aircraft: {
+    source: 'aircraft',
+    sourceName: 'adsb.lol military ADS-B',
+    sourceUrl: 'https://adsb.lol/',
+  },
+  firms: {
+    source: 'firms',
+    sourceName: 'NASA FIRMS VIIRS NOAA-20 NRT',
+    sourceUrl: 'https://firms.modaps.eosdis.nasa.gov/',
+  },
+}
+
 const SOURCE_TTL_MS = {
   aircraft: 15_000,
   firms: 900_000,
@@ -33,6 +46,18 @@ function setCache(key, body) {
 
 function getStaleCache(key) {
   return memoryCache.get(key)?.body ?? null
+}
+
+function getCacheStoredAt(source) {
+  const entry = memoryCache.get(cacheKey(source, {}))
+  return entry ? entry.storedAt : null
+}
+
+function buildMeta(source, body) {
+  const storedAt = getCacheStoredAt(source)
+  const fetchedAt = new Date(storedAt ?? Date.now()).toISOString()
+  const count = Array.isArray(body?.features) ? body.features.length : 0
+  return { ...SOURCE_META[source], fetchedAt, count }
 }
 
 function setGeoHeaders(res) {
@@ -286,11 +311,12 @@ export default async function handler(req, res) {
     }
 
     setGeoHeaders(res)
-    return res.status(200).json(body)
+    return res.status(200).json({ ...body, meta: buildMeta(source, body) })
   } catch {
     const key = staleCacheKey(source)
     const stale = key ? getStaleCache(key) : null
+    const fallbackBody = stale ?? EMPTY_FC
     setGeoHeaders(res)
-    return res.status(200).json(stale ?? EMPTY_FC)
+    return res.status(200).json({ ...fallbackBody, meta: buildMeta(source, fallbackBody) })
   }
 }
