@@ -112,6 +112,7 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
   const [showSources, setShowSources] = useState(false)
   const [refreshNonce, setRefreshNonce] = useState(0)
   const [refreshSpinning, setRefreshSpinning] = useState(false)
+  const [homeNonce, setHomeNonce] = useState(0)
 
   const sourcesPanelRef = useRef(null)
   const sourcesToggleRef = useRef(null)
@@ -154,6 +155,16 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
         >
           {barsCollapsed ? '▴' : '▾'}
         </button>
+        {mapMode === 'world' && (
+          <button
+            type="button"
+            className="widget-btn"
+            onClick={() => setHomeNonce((n) => n + 1)}
+            title="Reset view"
+          >
+            ⌂
+          </button>
+        )}
         <button
           type="button"
           className="widget-btn"
@@ -181,7 +192,7 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
         </button>
       </>,
     )
-  }, [setActions, barsCollapsed, showSources, refreshSpinning])
+  }, [setActions, barsCollapsed, showSources, refreshSpinning, mapMode])
 
   const iframeSrc = (key) => (mapMode === key && !paused) ? IFRAME_URLS[key] : 'about:blank'
 
@@ -341,6 +352,9 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
             paused={paused || mapMode !== 'world'}
             layers={layers}
             refreshNonce={refreshNonce}
+            aoi={config.aoi}
+            onAoiChange={(next) => onSaveConfigRef.current({ ...configRef.current, aoi: next })}
+            homeNonce={homeNonce}
           />
         </div>
 

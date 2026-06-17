@@ -26,6 +26,7 @@ const ROTATE_LNG_PER_FRAME = 0.02
 const ROTATE_MAX_ZOOM = 2
 const DEFAULT_GLOBE_ZOOM = 1.4
 const DEFAULT_GLOBE_LAT = 20
+const DEFAULT_VIEW = { center: [55, 30], zoom: 1.9 }
 const USGS_QUAKES_URL =
   'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson'
 const GDACS_STORMS_URL = 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP'
@@ -781,7 +782,7 @@ function fitBoundsStub(map, bounds, padding = 40) {
 void flyToStub
 void fitBoundsStub
 
-export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
+export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi = null, onAoiChange, homeNonce = 0 }) {
   const wrapRef = useRef(null)
   const containerRef = useRef(null)
   const countryReadoutRef = useRef(null)
@@ -802,6 +803,9 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
   const countryBBoxesRef = useRef(null)
   const hoverRAFRef = useRef(0)
   const lastHoverLngLatRef = useRef(null)
+  const initialAoiRef = useRef(aoi)
+  const onAoiChangeRef = useRef(onAoiChange)
+  onAoiChangeRef.current = onAoiChange
 
   pausedRef.current = paused
   layersRef.current = layers
@@ -987,11 +991,16 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
 
     ensureRtlTextPlugin()
 
+    const startAoi = initialAoiRef.current
+    const startCenter = startAoi && Array.isArray(startAoi.center) ? startAoi.center : DEFAULT_VIEW.center
+    const startZoom = startAoi && typeof startAoi.zoom === 'number' ? startAoi.zoom : DEFAULT_VIEW.zoom
+    lngRef.current = startCenter[0]
+
     const map = new maplibregl.Map({
       container,
       style: chain[styleIndex],
-      center: [lngRef.current, DEFAULT_GLOBE_LAT],
-      zoom: DEFAULT_GLOBE_ZOOM,
+      center: startCenter,
+      zoom: startZoom,
       attributionControl: true,
     })
     mapRef.current = map
@@ -1372,49 +1381,16 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
       ensureWildfiresLayer()
     }
 
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
-    let rotateSuppressed = false
-    let resetEaseToken = 0
-
-    const onIdleExpired = () => {
-      interactingRef.current = false
-      if (reducedMotion.matches) return
-
+    let aoiSaveTimer = null
+    const persistAoi = () => {
       const m = mapRef.current
-      if (!m) return
-
-      if (m.getZoom() > ROTATE_MAX_ZOOM) {
-        const lng = m.getCenter().lng
-        lngRef.current = lng
-        rotateSuppressed = true
-        const token = ++resetEaseToken
-
-        m.easeTo({
-          center: [lng, DEFAULT_GLOBE_LAT],
-          zoom: DEFAULT_GLOBE_ZOOM,
-          duration: 1500,
-        })
-
-        const onMoveEnd = () => {
-          m.off('moveend', onMoveEnd)
-          if (token !== resetEaseToken) return
-          rotateSuppressed = false
-          interactingRef.current = false
-          lngRef.current = m.getCenter().lng
-        }
-        m.on('moveend', onMoveEnd)
-      } else {
-        lngRef.current = m.getCenter().lng
-      }
+      if (!m || typeof onAoiChangeRef.current !== 'function') return
+      const c = m.getCenter()
+      onAoiChangeRef.current({ center: [c.lng, c.lat], zoom: m.getZoom() })
     }
-
-    const markInteracting = (e) => {
-      if (e && e.originalEvent == null) return
-      interactingRef.current = true
-      resetEaseToken += 1
-      rotateSuppressed = false
-      clearTimeout(idleTimerRef.current)
-      idleTimerRef.current = setTimeout(onIdleExpired, IDLE_MS)
+    const onMoveEndPersist = () => {
+      clearTimeout(aoiSaveTimer)
+      aoiSaveTimer = setTimeout(persistAoi, 600)
     }
 
     map.on('style.load', onStyleLoad)
@@ -1422,33 +1398,9 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
       if (styleLocked) return
       if (!map.isStyleLoaded()) tryAdvanceStyle()
     })
-    map.on('dragstart', markInteracting)
-    map.on('zoomstart', markInteracting)
-    map.on('rotatestart', markInteracting)
-    map.on('pitchstart', markInteracting)
-    map.on('mousedown', markInteracting)
-    map.on('wheel', markInteracting)
+    map.on('moveend', onMoveEndPersist)
 
     scheduleWatchdog()
-
-    const tick = () => {
-      const m = mapRef.current
-      const mayRotate =
-        m &&
-        !pausedRef.current &&
-        !interactingRef.current &&
-        !rotateSuppressed &&
-        !reducedMotion.matches &&
-        m.getZoom() <= ROTATE_MAX_ZOOM
-
-      if (mayRotate) {
-        lngRef.current = (lngRef.current + ROTATE_LNG_PER_FRAME) % 360
-        if (lngRef.current > 180) lngRef.current -= 360
-        m.setCenter([lngRef.current, DEFAULT_GLOBE_LAT], { duration: 0 })
-      }
-      rafRef.current = requestAnimationFrame(tick)
-    }
-    rafRef.current = requestAnimationFrame(tick)
 
     fetch(COUNTRIES_GEO_URL)
       .then((res) => {
@@ -1463,16 +1415,24 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0 }) {
 
     return () => {
       themeObserver.disconnect()
-      resetEaseToken += 1
       popup?.remove()
       cancelAnimationFrame(rafRef.current)
       cancelAnimationFrame(hoverRAFRef.current)
       clearTimeout(idleTimerRef.current)
+      clearTimeout(aoiSaveTimer)
       clearWatchdog()
       map.remove()
       mapRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    if (!homeNonce) return
+    const m = mapRef.current
+    if (!m) return
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    m.easeTo({ center: DEFAULT_VIEW.center, zoom: DEFAULT_VIEW.zoom, duration: reduced ? 0 : 600 })
+  }, [homeNonce])
 
   return (
     <div
