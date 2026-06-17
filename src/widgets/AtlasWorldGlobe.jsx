@@ -427,12 +427,50 @@ function countryFromHex(hex) {
   return null
 }
 
-/** Interim palette — Phase D will align with design tokens */
+/** Static palette for AtlasWidget layer chips; globe markers use runtime CSS tokens */
 export const LAYER_COLORS = {
   earthquakes: '#F2A03D',
   storms: '#58B4E6',
   aircraft: '#E2E8F0',
   wildfires: '#EA5F38',
+}
+
+const LAYER_SWATCH_CSS = {
+  earthquakes: 'var(--color-warning)',
+  storms: 'var(--color-info)',
+  wildfires: 'var(--color-error)',
+  aircraft: 'var(--color-text-primary)',
+}
+
+function resolveLayerMarkerColors() {
+  const styles = getComputedStyle(document.documentElement)
+  return {
+    earthquakes: styles.getPropertyValue('--color-warning').trim(),
+    storms: styles.getPropertyValue('--color-info').trim(),
+    wildfires: styles.getPropertyValue('--color-error').trim(),
+    aircraft: styles.getPropertyValue('--color-text-primary').trim(),
+  }
+}
+
+function applyLayerMarkerColors(map) {
+  if (!map) return
+  const colors = resolveLayerMarkerColors()
+  try {
+    if (map.getLayer('quakes-layer')) {
+      map.setPaintProperty('quakes-layer', 'circle-color', colors.earthquakes)
+    }
+    if (map.getLayer('storms-layer')) {
+      map.setPaintProperty('storms-layer', 'circle-color', colors.storms)
+    }
+    if (map.getLayer('wildfires-layer')) {
+      map.setPaintProperty('wildfires-layer', 'circle-color', colors.wildfires)
+    }
+    if (map.hasImage(AIRCRAFT_ICON_ID)) {
+      map.updateImage(AIRCRAFT_ICON_ID, createAircraftPlaneImageData(colors.aircraft))
+    }
+  } catch {
+    /* layers or icon not ready */
+  }
 }
 
 const LAYER_ORDER = ['earthquakes', 'storms', 'aircraft', 'wildfires']
@@ -503,7 +541,7 @@ function tracePlanePath(ctx, cx) {
   ctx.closePath()
 }
 
-function createAircraftPlaneImageData(color = LAYER_COLORS.aircraft) {
+function createAircraftPlaneImageData(color) {
   const size = 18
   const canvas = document.createElement('canvas')
   canvas.width = size
@@ -522,8 +560,13 @@ function createAircraftPlaneImageData(color = LAYER_COLORS.aircraft) {
 }
 
 function registerAircraftIcon(map) {
-  if (map.hasImage(AIRCRAFT_ICON_ID)) map.removeImage(AIRCRAFT_ICON_ID)
-  map.addImage(AIRCRAFT_ICON_ID, createAircraftPlaneImageData())
+  const { aircraft } = resolveLayerMarkerColors()
+  const imageData = createAircraftPlaneImageData(aircraft)
+  if (map.hasImage(AIRCRAFT_ICON_ID)) {
+    map.updateImage(AIRCRAFT_ICON_ID, imageData)
+  } else {
+    map.addImage(AIRCRAFT_ICON_ID, imageData)
+  }
 }
 
 function buildStyleChain() {
@@ -772,7 +815,7 @@ function buildEarthquakePopupHtml(feature, prov) {
   const footerExtra = updated !== '—' ? `Updated ${updated}` : null
 
   return buildPopupCard({
-    dotColor: LAYER_COLORS.earthquakes,
+    dotColor: 'var(--color-warning)',
     kicker: 'EARTHQUAKE',
     title,
     rows,
@@ -796,7 +839,7 @@ function buildStormPopupHtml(props, prov) {
   }
 
   return buildPopupCard({
-    dotColor: LAYER_COLORS.storms,
+    dotColor: 'var(--color-info)',
     kicker: 'TROPICAL CYCLONE',
     title: name,
     rows,
@@ -816,7 +859,7 @@ function buildWildfirePopupHtml(props, newsSearchQuery, prov) {
   if (detected) rows.push(['Detected', `${detected} UTC`])
 
   return buildPopupCard({
-    dotColor: LAYER_COLORS.wildfires,
+    dotColor: 'var(--color-error)',
     kicker: 'ACTIVE WILDFIRE',
     title: 'Active fire detection',
     rows,
@@ -850,7 +893,7 @@ function buildAircraftPopupHtml(props, { country = null, photo = null, prov = nu
   }
 
   return buildPopupCard({
-    dotColor: LAYER_COLORS.aircraft,
+    dotColor: 'var(--color-text-primary)',
     kicker: 'MILITARY AIRCRAFT',
     title,
     titleRows,
@@ -1196,6 +1239,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
 
     const themeObserver = new MutationObserver(() => {
       applyTheme()
+      applyLayerMarkerColors(map)
     })
     themeObserver.observe(document.documentElement, {
       attributes: true,
@@ -1245,6 +1289,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       }
 
       if (!map.getLayer('quakes-layer')) {
+        const markerColors = resolveLayerMarkerColors()
         map.addLayer({
           id: 'quakes-layer',
           type: 'circle',
@@ -1259,7 +1304,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
               7,
               14,
             ],
-            'circle-color': LAYER_COLORS.earthquakes,
+            'circle-color': markerColors.earthquakes,
             'circle-opacity': 0.85,
             'circle-stroke-color': CIRCLE_STROKE_COLOR,
             'circle-stroke-width': CIRCLE_STROKE_WIDTH,
@@ -1306,13 +1351,14 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       }
 
       if (!map.getLayer('storms-layer')) {
+        const markerColors = resolveLayerMarkerColors()
         map.addLayer({
           id: 'storms-layer',
           type: 'circle',
           source: 'storms',
           paint: {
             'circle-radius': 6,
-            'circle-color': LAYER_COLORS.storms,
+            'circle-color': markerColors.storms,
             'circle-opacity': 0.85,
             'circle-stroke-color': CIRCLE_STROKE_COLOR,
             'circle-stroke-width': CIRCLE_STROKE_WIDTH,
@@ -1441,6 +1487,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       }
 
       if (!map.getLayer('wildfires-layer')) {
+        const markerColors = resolveLayerMarkerColors()
         map.addLayer({
           id: 'wildfires-layer',
           type: 'circle',
@@ -1457,7 +1504,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
               500,
               8,
             ],
-            'circle-color': LAYER_COLORS.wildfires,
+            'circle-color': markerColors.wildfires,
             'circle-opacity': 0.85,
             'circle-stroke-color': CIRCLE_STROKE_COLOR,
             'circle-stroke-width': CIRCLE_STROKE_WIDTH,
@@ -1531,6 +1578,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       ensureStormsLayer()
       ensureAircraftLayer()
       ensureWildfiresLayer()
+      applyLayerMarkerColors(map)
     }
 
     let aoiSaveTimer = null
@@ -1630,7 +1678,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
                   <div className="atlas-globe-legend-row">
                     <span
                       className="atlas-globe-legend-swatch"
-                      style={{ background: LAYER_COLORS[key] }}
+                      style={{ background: LAYER_SWATCH_CSS[key] }}
                       aria-hidden="true"
                     />
                     <span className="atlas-globe-legend-label">{p.label}</span>
