@@ -13,6 +13,7 @@ import BriefPanel from './BriefPanel.jsx'
 import AlertsDrawer from './AlertsDrawer.jsx'
 import { Bell } from 'lucide-react'
 import AccountMenu from './AccountMenu.jsx'
+import GlobeGlyph from '../brand/GlobeGlyph.jsx'
 
 const SettingsModal = lazy(() => import('../settings/SettingsModal.jsx'))
 import { supabase } from '../lib/supabase.js'
@@ -425,7 +426,10 @@ export default function Shell() {
           </div>
         : (<nav className="navbar">
         <div className="navbar-left">
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-wordmark)' }}>VIGIL</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <GlobeGlyph size={22} />
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--color-wordmark)' }}>VIGIL</span>
+          </span>
           <button
             type="button"
             className="widget-btn"

@@ -1,6 +1,7 @@
 ﻿import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { validatePassword } from '../../lib/validatePassword'
+import GlobeMark from '../../brand/GlobeMark.jsx'
 
 export default function AuthScreen({ authView, setAuthView, onAuthed, onClose, reason }) {
   const [email,    setEmail]    = useState('')
@@ -86,7 +87,8 @@ export default function AuthScreen({ authView, setAuthView, onAuthed, onClose, r
         >
           ✕
         </button>
-        <div className="auth-logo">
+        <div className="auth-logo" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+          <GlobeMark size={56} />
           <span className="auth-logo-text">VIGIL</span>
           <span className="auth-tagline">Build your own situation room.</span>
         </div>

@@ -2,6 +2,7 @@ import { useEffect, useState, lazy, Suspense } from 'react'
 import './App.css'
 import { supabase } from './lib/supabase.js'
 import AppErrorBoundary from './shell/AppErrorBoundary.jsx'
+import GlobeMark from './brand/GlobeMark.jsx'
 
 const Shell = lazy(() => import('./shell/Shell.jsx'))
 const PublicRoom = lazy(() => import('./shell/PublicRoom.jsx'))
@@ -13,7 +14,10 @@ const InfoPage = lazy(() => import('./info/InfoPage.jsx'))
 function AppSplash() {
   return (
     <div className="app-splash" aria-hidden="true">
-      <span className="vigil-wordmark">VIGIL</span>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+        <GlobeMark size={64} />
+        <span className="vigil-wordmark">VIGIL</span>
+      </div>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { Component } from 'react'
+import GlobeGlyph from '../brand/GlobeGlyph.jsx'
 
 /**
  * AppErrorBoundary — top-level guard so a render/lifecycle crash in route
@@ -46,6 +47,7 @@ export default class AppErrorBoundary extends Component {
               borderRadius: 4,
             }}
           >
+            <GlobeGlyph size={28} />
             <span
               style={{
                 fontFamily: 'var(--font-mono, JetBrains Mono, monospace)',

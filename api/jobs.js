@@ -92,6 +92,7 @@ function renderEmailHtml({ brief, roomName, preparedFor, generatedAt }) {
   const nWord = n === 1 ? 'source' : 'sources'
 
   let html = `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;line-height:1.5;max-width:640px;">
+<img src="https://thevigilroom.com/email-logo.png" alt="Vigil" width="120" style="display:block;margin:0 0 16px;" />
 <div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;">
 <div style="font-size:18px;font-weight:bold;color:#1a1a1a;">${room}</div>
 <div style="font-size:12px;color:#6b7280;margin-top:4px;">Generated ${esc(genAt)} . ${n} ${nWord}</div>`
@@ -277,6 +278,7 @@ const titleOf = (t) => { const p = String(t ?? '').split(' - '); return p.length
 function renderAlertEmailHtml({ keyword, region, items }) {
   const scope = region ? ` in ${esc(region)}` : ''
   let html = `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;line-height:1.5;max-width:640px;">
+<img src="https://thevigilroom.com/email-logo.png" alt="Vigil" width="120" style="display:block;margin:0 0 16px;" />
 <div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;">
 <div style="font-size:18px;font-weight:bold;color:#1a1a1a;">New items matching your alert</div>
 <div style="font-size:13px;color:#4b5563;margin-top:4px;">${esc(keyword)}${scope} . ${items.length} new ${items.length === 1 ? 'item' : 'items'}</div>

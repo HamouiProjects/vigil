@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { track } from '@vercel/analytics'
 import { LAND } from './landData.js'
+import GlobeGlyph from '../brand/GlobeGlyph.jsx'
 import './landing.css'
 
 const DEMO_URL = '/?r=91dd31b84220'
@@ -166,7 +167,10 @@ export default function Landing() {
   return (
     <div className="lp">
       <header className="lp-chrome">
-        <div className="lp-wordmark">VIGIL</div>
+        <div className="lp-wordmark" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <GlobeGlyph size={24} />
+          VIGIL
+        </div>
         <div className="lp-live">
           <span className="lp-livedot" aria-hidden="true" />
           LIVE

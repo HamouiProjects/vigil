@@ -6,6 +6,7 @@ import { ensureSession } from '../data/session.js'
 import { loadPublicRoom, cloneRoom } from '../data/workspacesRepo.js'
 import WidgetHost from './WidgetHost.jsx'
 import AppErrorBoundary from './AppErrorBoundary.jsx'
+import GlobeGlyph from '../brand/GlobeGlyph.jsx'
 
 const SizedGridLayout = WidthProvider(GridLayout)
 
@@ -80,6 +81,7 @@ export default function PublicRoom({ slug }) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <GlobeGlyph size={22} />
           <span style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 11, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {room.name}
           </span>

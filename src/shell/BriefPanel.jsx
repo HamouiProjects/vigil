@@ -3,9 +3,32 @@ import { useShellStore } from '../state/shellStore.js'
 import { supabase } from '../lib/supabase.js'
 import { gatherRoomItems, gatherMarketSymbols, gatherTrendsRequest } from '../lib/gatherRoomItems.js'
 import { useFocusTrap } from '../hooks/useFocusTrap.js'
+import GlobeGlyph from '../brand/GlobeGlyph.jsx'
 
 function fmtPct(p) { const n = Number(p); if (!Number.isFinite(n)) return ''; return (n > 0 ? '+' : '') + n.toFixed(2) + '%' }
 function trendGlyph(dir) { return dir === 'up' ? '↑' : dir === 'down' ? '↓' : '→' }
+
+// Load a same-origin PNG into a dataURL (with natural dimensions) for jsPDF.
+// Resolves null on any failure so the PDF export can fall back gracefully.
+function loadPngDataUrl(src) {
+  return new Promise((resolve) => {
+    try {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = img.naturalWidth
+          canvas.height = img.naturalHeight
+          canvas.getContext('2d').drawImage(img, 0, 0)
+          resolve({ dataUrl: canvas.toDataURL('image/png'), width: img.naturalWidth, height: img.naturalHeight })
+        } catch { resolve(null) }
+      }
+      img.onerror = () => resolve(null)
+      img.src = src
+    } catch { resolve(null) }
+  })
+}
 
 const ACCOUNT_MSG = 'Create a free account to generate briefs.'
 const NO_ITEMS_MSG = 'Add a News Search or RSS widget to your room, then generate a brief.'
@@ -299,6 +322,17 @@ export default function BriefPanel({ onClose }) {
       const contentW = pageW - margin * 2
       let y = margin
       const ensure = (h) => { if (y + h > pageH - margin) { doc.addPage(); y = margin } }
+      // White-surface mark at the top margin. On any load failure, fall back to
+      // the title-only header (y stays at margin) and never break the export.
+      try {
+        const logo = await loadPngDataUrl('/email-logo-mark.png')
+        if (logo && logo.width && logo.height) {
+          const logoH = 14
+          const logoW = logoH * (logo.width / logo.height)
+          doc.addImage(logo.dataUrl, 'PNG', margin, y, logoW, logoH)
+          y += logoH + 5
+        }
+      } catch { /* title-only header */ }
       const writeWrapped = (text, opts = {}) => {
         const { size = 10, style = 'normal', color = [33, 33, 33], gap = 1.5, lineH = 5 } = opts
         doc.setFont('helvetica', style)
@@ -402,7 +436,10 @@ export default function BriefPanel({ onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div ref={modalRef} className="modal brief-panel-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <span className="modal-title">Brief</span>
+          <span className="modal-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <GlobeGlyph size={20} />
+            Brief
+          </span>
           <div className="brief-header-actions">
             {phase === 'result' && brief && (
               <>
