@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
@@ -435,6 +435,60 @@ export const LAYER_COLORS = {
   wildfires: '#EA5F38',
 }
 
+const LAYER_ORDER = ['earthquakes', 'storms', 'aircraft', 'wildfires']
+
+function createDefaultProvenance() {
+  return {
+    earthquakes: {
+      label: 'Earthquakes',
+      sourceName: 'USGS (M2.5+, past day)',
+      sourceUrl: 'https://earthquake.usgs.gov/earthquakes/map/',
+      fetchedAt: null,
+      count: null,
+    },
+    storms: {
+      label: 'Tropical cyclones',
+      sourceName: 'GDACS',
+      sourceUrl: 'https://www.gdacs.org/',
+      fetchedAt: null,
+      count: null,
+    },
+    aircraft: {
+      label: 'Aircraft (military transponder)',
+      sourceName: 'adsb.lol military ADS-B',
+      sourceUrl: 'https://adsb.lol/',
+      fetchedAt: null,
+      count: null,
+    },
+    wildfires: {
+      label: 'Active wildfires',
+      sourceName: 'NASA FIRMS VIIRS NOAA-20 NRT',
+      sourceUrl: 'https://firms.modaps.eosdis.nasa.gov/',
+      fetchedAt: null,
+      count: null,
+    },
+  }
+}
+
+function featureCollectionFromGeoResponse(json) {
+  if (!json || json.type !== 'FeatureCollection') return EMPTY_GEOJSON
+  return { type: 'FeatureCollection', features: json.features ?? [] }
+}
+
+function formatRelativeTime(iso) {
+  if (!iso) return null
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return null
+  const diffSec = Math.max(0, Math.floor((Date.now() - then) / 1000))
+  if (diffSec < 45) return 'just now'
+  const min = Math.floor(diffSec / 60)
+  if (min < 60) return `${min} min ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} hr ago`
+  const day = Math.floor(hr / 24)
+  return `${day} day ago`
+}
+
 const CIRCLE_STROKE_COLOR = 'rgba(8,11,19,0.6)'
 const CIRCLE_STROKE_WIDTH = 1.2
 const AIRCRAFT_ICON_ID = 'vigil-aircraft-plane'
@@ -552,6 +606,36 @@ function attachPopupNewsSearchButton(popup) {
   })
 }
 
+function wirePopupDismiss(popup, map) {
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape') popup.remove()
+  }
+  const onMapClick = (e) => {
+    const root = popup.getElement()
+    if (!root) return
+    const target = e.originalEvent?.target
+    if (target && root.contains(target)) return
+    const markerHits = map.queryRenderedFeatures(e.point, { layers: DATA_MARKER_LAYERS })
+    if (markerHits.length) return
+    popup.remove()
+  }
+  document.addEventListener('keydown', onKeyDown)
+  map.on('click', onMapClick)
+  popup.once('close', () => {
+    document.removeEventListener('keydown', onKeyDown)
+    map.off('click', onMapClick)
+  })
+}
+
+function buildSourceLinkHtml(sourceName, sourceUrl) {
+  if (!sourceName || !sourceUrl) return ''
+  const raw = String(sourceUrl)
+  if (!raw.startsWith('http://') && !raw.startsWith('https://')) return ''
+  const href = safeHttpUrl(raw)
+  if (!href) return ''
+  return `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" style="font-size:10px;color:var(--color-text-muted);text-decoration:none;">Source: ${escapeHtml(sourceName)} \u2197</a>`
+}
+
 function formatTime(epochMs) {
   if (epochMs == null || Number.isNaN(Number(epochMs))) return '—'
   return new Date(Number(epochMs)).toLocaleString()
@@ -599,13 +683,23 @@ function buildPopupCard({
   title,
   titleRows,
   rows,
-  footer,
+  footerExtra,
   photoHtml,
   newsSearchQuery,
+  sourceName,
+  sourceUrl,
 }) {
   const titleRowsHtml = titleRows?.length ? popupRowsHtml(titleRows) : ''
   const rowsHtml = rows?.length ? popupRowsHtml(rows) : ''
   const searchBtn = buildNewsSearchButtonHtml(newsSearchQuery)
+  const sourceLink = buildSourceLinkHtml(sourceName, sourceUrl)
+  const footerExtraHtml = footerExtra
+    ? `<span style="color:var(--color-text-muted);font-size:10px;">${escapeHtml(footerExtra)}</span>`
+    : ''
+  const footerParts = [sourceLink, footerExtraHtml].filter(Boolean)
+  const footerBlock = footerParts.length
+    ? `<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--color-border);display:flex;flex-wrap:wrap;gap:4px;align-items:center;">${footerParts.join('<span style="color:var(--color-text-muted);font-size:10px;opacity:0.5;"> · </span>')}</div>`
+    : ''
 
   return `${photoHtml || ''}<div style="${POPUP_BODY_STYLE}">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
@@ -615,7 +709,7 @@ function buildPopupCard({
     <div style="font-weight:600;font-size:13px;margin-bottom:6px;line-height:1.35;color:var(--color-text-primary);">${escapeHtml(title)}</div>
     ${titleRowsHtml}
     ${rowsHtml}
-    <div style="color:var(--color-text-muted);font-size:10px;margin-top:8px;padding-top:6px;border-top:1px solid var(--color-border);">${escapeHtml(footer)}</div>
+    ${footerBlock}
     ${searchBtn}
   </div>`
 }
@@ -653,7 +747,7 @@ async function fetchPlanespottersPhoto(hex, cache) {
   }
 }
 
-function buildEarthquakePopupHtml(feature, updatedAt) {
+function buildEarthquakePopupHtml(feature, prov) {
   const props = feature.properties || {}
   const mag = props.mag
   const place = props.place || 'Unknown location'
@@ -673,21 +767,23 @@ function buildEarthquakePopupHtml(feature, updatedAt) {
     if (t !== '—') rows.push(['Time', t])
   }
 
-  const updated = formatTime(props.updated ?? updatedAt)
-  const footer =
-    updated !== '—' ? `Source: USGS · updated ${updated}` : 'Source: USGS'
+  const updatedAtMs = prov?.fetchedAt ? Date.parse(prov.fetchedAt) : null
+  const updated = formatTime(props.updated ?? updatedAtMs)
+  const footerExtra = updated !== '—' ? `Updated ${updated}` : null
 
   return buildPopupCard({
     dotColor: LAYER_COLORS.earthquakes,
     kicker: 'EARTHQUAKE',
     title,
     rows,
-    footer,
+    footerExtra,
+    sourceName: prov?.sourceName,
+    sourceUrl: prov?.sourceUrl,
     newsSearchQuery: earthquakeNewsSearchQuery(place),
   })
 }
 
-function buildStormPopupHtml(props) {
+function buildStormPopupHtml(props, prov) {
   const name = props.name || props.eventname || 'Unknown event'
   const rows = []
   if (props.country) rows.push(['Region', props.country])
@@ -704,12 +800,13 @@ function buildStormPopupHtml(props) {
     kicker: 'TROPICAL CYCLONE',
     title: name,
     rows,
-    footer: 'Source: GDACS',
+    sourceName: prov?.sourceName,
+    sourceUrl: prov?.sourceUrl,
     newsSearchQuery: stormNewsSearchQuery(name),
   })
 }
 
-function buildWildfirePopupHtml(props, newsSearchQuery) {
+function buildWildfirePopupHtml(props, newsSearchQuery, prov) {
   const rows = []
   if (props.frp != null && props.frp !== '' && !Number.isNaN(Number(props.frp))) {
     rows.push(['Radiative power', `${props.frp} MW`])
@@ -723,12 +820,13 @@ function buildWildfirePopupHtml(props, newsSearchQuery) {
     kicker: 'ACTIVE WILDFIRE',
     title: 'Active fire detection',
     rows,
-    footer: 'Source: NASA FIRMS (VIIRS NOAA-20)',
+    sourceName: prov?.sourceName,
+    sourceUrl: prov?.sourceUrl,
     newsSearchQuery,
   })
 }
 
-function buildAircraftPopupHtml(props, { country = null, photo = null } = {}) {
+function buildAircraftPopupHtml(props, { country = null, photo = null, prov = null } = {}) {
   const callsign = (props.callsign || '').trim()
   const titleBase = callsign || props.hex || 'Unknown aircraft'
   const title = props.type ? `${titleBase} · ${props.type}` : titleBase
@@ -757,7 +855,8 @@ function buildAircraftPopupHtml(props, { country = null, photo = null } = {}) {
     title,
     titleRows,
     rows,
-    footer: 'Source: adsb.lol',
+    sourceName: prov?.sourceName,
+    sourceUrl: prov?.sourceUrl,
     photoHtml: buildPhotoBlock(photo),
   })
 }
@@ -798,6 +897,13 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
   const aircraftGeoRef = useRef(null)
   const wildfiresGeoRef = useRef(null)
   const lastFetchRef = useRef(null)
+  const [provenance, setProvenance] = useState(createDefaultProvenance)
+  const provenanceRef = useRef(provenance)
+  provenanceRef.current = provenance
+  const [legendCollapsed, setLegendCollapsed] = useState(
+    () => (typeof window !== 'undefined' ? window.innerWidth < 360 : false),
+  )
+  const [, setLegendTick] = useState(0)
   const aircraftPhotoCacheRef = useRef(new Map())
   const countriesGeoRef = useRef(null)
   const countryBBoxesRef = useRef(null)
@@ -810,6 +916,19 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
   pausedRef.current = paused
   layersRef.current = layers
 
+  const patchProvenance = (layer, patch) => {
+    setProvenance((prev) => {
+      const next = { ...prev, [layer]: { ...prev[layer], ...patch } }
+      provenanceRef.current = next
+      return next
+    })
+  }
+
+  useEffect(() => {
+    const id = setInterval(() => setLegendTick((t) => t + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
+
   useEffect(() => {
     let intervalId = null
 
@@ -820,7 +939,12 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
         if (!res.ok) return
         const geojson = await res.json()
         quakesGeoRef.current = geojson
+        const fetchedAt = new Date().toISOString()
         lastFetchRef.current = Date.now()
+        patchProvenance('earthquakes', {
+          fetchedAt,
+          count: geojson.features?.length ?? 0,
+        })
         const map = mapRef.current
         map?.getSource('quakes')?.setData(geojson)
       } catch {
@@ -845,6 +969,10 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
         const raw = await res.json()
         const geojson = filterTcStorms(raw)
         stormsGeoRef.current = geojson
+        patchProvenance('storms', {
+          fetchedAt: new Date().toISOString(),
+          count: geojson.features?.length ?? 0,
+        })
         const map = mapRef.current
         map?.getSource('storms')?.setData(geojson)
       } catch {
@@ -866,8 +994,17 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       try {
         const res = await fetch(AIRCRAFT_GEO_URL)
         if (!res.ok) return
-        const geojson = await res.json()
+        const json = await res.json()
+        const geojson = featureCollectionFromGeoResponse(json)
         aircraftGeoRef.current = geojson
+        if (json.meta) {
+          patchProvenance('aircraft', {
+            sourceName: json.meta.sourceName ?? provenanceRef.current.aircraft.sourceName,
+            sourceUrl: json.meta.sourceUrl ?? provenanceRef.current.aircraft.sourceUrl,
+            fetchedAt: json.meta.fetchedAt ?? new Date().toISOString(),
+            count: json.meta.count ?? geojson.features.length,
+          })
+        }
         const map = mapRef.current
         map?.getSource('aircraft')?.setData(geojson)
       } catch {
@@ -889,8 +1026,17 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       try {
         const res = await fetch(WILDFIRES_GEO_URL)
         if (!res.ok) return
-        const geojson = await res.json()
+        const json = await res.json()
+        const geojson = featureCollectionFromGeoResponse(json)
         wildfiresGeoRef.current = geojson
+        if (json.meta) {
+          patchProvenance('wildfires', {
+            sourceName: json.meta.sourceName ?? provenanceRef.current.wildfires.sourceName,
+            sourceUrl: json.meta.sourceUrl ?? provenanceRef.current.wildfires.sourceUrl,
+            fetchedAt: json.meta.fetchedAt ?? new Date().toISOString(),
+            count: json.meta.count ?? geojson.features.length,
+          })
+        }
         const map = mapRef.current
         map?.getSource('wildfires')?.setData(geojson)
       } catch {
@@ -1134,8 +1280,9 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
           popup?.remove()
           popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
             .setLngLat(e.lngLat)
-            .setHTML(buildEarthquakePopupHtml(feature, lastFetchRef.current))
+            .setHTML(buildEarthquakePopupHtml(feature, provenanceRef.current.earthquakes))
             .addTo(map)
+          wirePopupDismiss(popup, map)
           attachPopupNewsSearchButton(popup)
         })
 
@@ -1188,8 +1335,9 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
           popup?.remove()
           popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
             .setLngLat(e.lngLat)
-            .setHTML(buildStormPopupHtml(props))
+            .setHTML(buildStormPopupHtml(props, provenanceRef.current.storms))
             .addTo(map)
+          wirePopupDismiss(popup, map)
           attachPopupNewsSearchButton(popup)
         })
 
@@ -1245,16 +1393,19 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
           const token = ++aircraftPopupToken
           const cache = aircraftPhotoCacheRef.current
 
+          const aircraftProv = provenanceRef.current.aircraft
+
           const renderAircraftPopup = (photo) => {
             if (token !== aircraftPopupToken || !popup) return
-            popup.setHTML(buildAircraftPopupHtml(props, { country, photo }))
+            popup.setHTML(buildAircraftPopupHtml(props, { country, photo, prov: aircraftProv }))
           }
 
           popup?.remove()
           popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
             .setLngLat(e.lngLat)
-            .setHTML(buildAircraftPopupHtml(props, { country, photo: null }))
+            .setHTML(buildAircraftPopupHtml(props, { country, photo: null, prov: aircraftProv }))
             .addTo(map)
+          wirePopupDismiss(popup, map)
 
           if (!hex) return
 
@@ -1333,8 +1484,9 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
           popup?.remove()
           popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
             .setLngLat(e.lngLat)
-            .setHTML(buildWildfirePopupHtml(props, wildfireQuery))
+            .setHTML(buildWildfirePopupHtml(props, wildfireQuery, provenanceRef.current.wildfires))
             .addTo(map)
+          wirePopupDismiss(popup, map)
           attachPopupNewsSearchButton(popup)
         })
 
@@ -1454,6 +1606,56 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
         className="atlas-country-readout"
         aria-hidden="true"
       />
+      <div className="atlas-globe-legend">
+        <button
+          type="button"
+          className="atlas-globe-legend-toggle"
+          onClick={() => setLegendCollapsed((c) => !c)}
+          aria-expanded={!legendCollapsed}
+        >
+          <span>Data layers</span>
+          <span className="atlas-globe-legend-chevron" aria-hidden="true">
+            {legendCollapsed ? '\u25B8' : '\u25BE'}
+          </span>
+        </button>
+        {!legendCollapsed && (
+          <div className="atlas-globe-legend-body">
+            {LAYER_ORDER.filter((key) => layers?.[key]).map((key) => {
+              const p = provenance[key]
+              const rel = formatRelativeTime(p.fetchedAt)
+              const count =
+                p.count != null ? p.count.toLocaleString() : '-'
+              return (
+                <div key={key} className="atlas-globe-legend-row-wrap">
+                  <div className="atlas-globe-legend-row">
+                    <span
+                      className="atlas-globe-legend-swatch"
+                      style={{ background: LAYER_COLORS[key] }}
+                      aria-hidden="true"
+                    />
+                    <span className="atlas-globe-legend-label">{p.label}</span>
+                    <span className="atlas-globe-legend-source">{p.sourceName}</span>
+                    <span className="atlas-globe-legend-count">{count}</span>
+                    {rel && (
+                      <span
+                        className="atlas-globe-legend-time"
+                        title={p.fetchedAt || undefined}
+                      >
+                        {rel}
+                      </span>
+                    )}
+                  </div>
+                  {key === 'aircraft' && (
+                    <p className="atlas-globe-legend-note">
+                      Transponder positions, an indicator, not confirmed movements.
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
