@@ -184,24 +184,42 @@ async function fetchTrends(trReq) {
     return data
   } catch { return null }
 }
+function buildGoogleTrendsUrl(trReq, termList) {
+  const q = termList.join(',')
+  const windowVal = trReq.window || 'today 12-m'
+  const withDate = `https://trends.google.com/trends/explore?q=${encodeURIComponent(q)}&date=${encodeURIComponent(windowVal)}`
+  if (isHttpUrl(withDate)) return withDate
+  const qOnly = `https://trends.google.com/trends/explore?q=${encodeURIComponent(q)}`
+  return isHttpUrl(qOnly) ? qOnly : null
+}
+
 function buildTrends(trReq, data) {
   if (!trReq || !data || !Array.isArray(data.points) || !data.points.length) return null
   const terms = (Array.isArray(data.keywords) && data.keywords.length) ? data.keywords : trReq.terms
   const out = []
   terms.forEach((term, ki) => {
     let first = null, last = null
+    const series = []
     for (const p of data.points) {
       const v = p?.values?.[ki]
       if (v == null) continue
+      series.push(v)
       if (first == null) first = v
       last = v
     }
     if (last == null) return
     const dir = first == null ? 'flat' : (last > first ? 'up' : last < first ? 'down' : 'flat')
-    out.push({ term: String(term), value: last, dir })
+    out.push({ term: String(term), value: last, dir, series })
   })
   if (!out.length) return null
-  return { window: trReq.window || 'today 12-m', windowLabel: trReq.windowLabel || '', asOf: new Date().toISOString(), terms: out }
+  const googleTrendsUrl = buildGoogleTrendsUrl(trReq, out.map((t) => t.term))
+  return {
+    window: trReq.window || 'today 12-m',
+    windowLabel: trReq.windowLabel || '',
+    asOf: new Date().toISOString(),
+    terms: out,
+    googleTrendsUrl: googleTrendsUrl || undefined,
+  }
 }
 
 function hasMarketsData(mkReq) {

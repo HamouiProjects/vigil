@@ -7,6 +7,119 @@ import GlobeGlyph from '../brand/GlobeGlyph.jsx'
 
 function fmtPct(p) { const n = Number(p); if (!Number.isFinite(n)) return ''; return (n > 0 ? '+' : '') + n.toFixed(2) + '%' }
 function trendGlyph(dir) { return dir === 'up' ? '↑' : dir === 'down' ? '↓' : '→' }
+function isHttpUrl(u) {
+  if (typeof u !== 'string') return false
+  try { const p = new URL(u); return p.protocol === 'http:' || p.protocol === 'https:' } catch { return false }
+}
+
+const TRENDS_CHART_W = 280
+const TRENDS_CHART_H = 72
+const TRENDS_CHART_PAD = 4
+const TRENDS_SERIES_COLORS = [
+  'var(--color-brand)',
+  'var(--color-info)',
+  'var(--color-warning)',
+  'var(--color-error)',
+  'var(--color-success)',
+]
+const TRENDS_PDF_STROKES = ['#0A6B61', '#155E86', '#6F4D08', '#AE2E27', '#0A6B43']
+
+function trendsChartY(v) {
+  return TRENDS_CHART_PAD + (TRENDS_CHART_H - 2 * TRENDS_CHART_PAD) * (1 - v / 100)
+}
+
+function buildTrendsPolylines(terms) {
+  return (terms ?? []).map((t) => {
+    const series = t.series
+    if (!Array.isArray(series) || series.length < 2) return null
+    const n = series.length
+    return series.map((v, idx) => {
+      const x = n <= 1 ? TRENDS_CHART_W / 2 : (idx / (n - 1)) * TRENDS_CHART_W
+      return `${x},${trendsChartY(v)}`
+    }).join(' ')
+  })
+}
+
+function BriefTrendsChart({ terms, chartRef, strokeColors }) {
+  const polylines = buildTrendsPolylines(terms)
+  const hasLine = polylines.some(Boolean)
+  if (!hasLine) return null
+  const colors = strokeColors ?? TRENDS_SERIES_COLORS
+  return (
+    <svg
+      ref={chartRef}
+      width={TRENDS_CHART_W}
+      height={TRENDS_CHART_H}
+      viewBox={`0 0 ${TRENDS_CHART_W} ${TRENDS_CHART_H}`}
+      className="brief-trends-chart"
+      style={{ display: 'block', width: '100%', maxWidth: TRENDS_CHART_W, marginBottom: 8 }}
+      aria-hidden
+    >
+      {[100, 50, 0].map((v) => {
+        const y = trendsChartY(v)
+        return (
+          <line
+            key={v}
+            x1={0}
+            y1={y}
+            x2={TRENDS_CHART_W}
+            y2={y}
+            stroke="var(--color-border)"
+            strokeWidth={1}
+          />
+        )
+      })}
+      {polylines.map((pts, i) => (
+        pts ? (
+          <polyline
+            key={(terms[i]?.term) ?? i}
+            points={pts}
+            fill="none"
+            stroke={colors[i % colors.length]}
+            strokeWidth={2}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        ) : null
+      ))}
+    </svg>
+  )
+}
+
+function svgToPngDataUrl(svgEl, strokeOverrides) {
+  return new Promise((resolve) => {
+    try {
+      const clone = svgEl.cloneNode(true)
+      const origLines = svgEl.querySelectorAll('polyline')
+      const cloneLines = clone.querySelectorAll('polyline')
+      origLines.forEach((el, i) => {
+        const stroke = strokeOverrides?.[i] || getComputedStyle(el).stroke
+        if (stroke && cloneLines[i]) cloneLines[i].setAttribute('stroke', stroke)
+      })
+      svgEl.querySelectorAll('line').forEach((orig, i) => {
+        const el = clone.querySelectorAll('line')[i]
+        if (el) {
+          const stroke = getComputedStyle(orig).stroke
+          if (stroke) el.setAttribute('stroke', stroke)
+        }
+      })
+      if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+      const src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone))
+      const img = new Image()
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = TRENDS_CHART_W
+          canvas.height = TRENDS_CHART_H
+          canvas.getContext('2d').drawImage(img, 0, 0)
+          resolve({ dataUrl: canvas.toDataURL('image/png'), width: TRENDS_CHART_W, height: TRENDS_CHART_H })
+        } catch { resolve(null) }
+      }
+      img.onerror = () => resolve(null)
+      img.src = src
+    } catch { resolve(null) }
+  })
+}
 
 // Load a same-origin PNG into a dataURL (with natural dimensions) for jsPDF.
 // Resolves null on any failure so the PDF export can fall back gracefully.
@@ -65,6 +178,7 @@ function briefToPlainText(brief) {
   if (tr && (tr.terms?.length)) {
     lines.push(`Search interest (relative, not volume${tr.windowLabel ? `, last ${tr.windowLabel}` : ''})`, '')
     for (const t of (tr.terms ?? [])) lines.push(`- ${t.term}  ${t.value}  ${trendGlyph(t.dir)}`)
+    if (isHttpUrl(tr.googleTrendsUrl)) lines.push(`Google Trends: ${tr.googleTrendsUrl}`)
     lines.push('')
   }
   return lines.join('\n').trim()
@@ -96,6 +210,7 @@ export default function BriefPanel({ onClose }) {
   const [briefEmailEnabled, setBriefEmailEnabled] = useState(true)
   const menuRef = useRef(null)
   const modalRef = useRef(null)
+  const trendsChartRef = useRef(null)
   useFocusTrap(modalRef)
 
   useEffect(() => {
@@ -412,13 +527,43 @@ export default function BriefPanel({ onClose }) {
       if (trp && (trp.terms?.length)) {
         writeWrapped('Search Interest', { size: 11, style: 'bold', gap: 1 })
         writeWrapped(`relative search interest${trp.windowLabel ? ` over the last ${trp.windowLabel}` : ''}, not volume`, { size: 8, color: [120, 120, 120], gap: 1.5 })
-        for (const t of (trp.terms ?? [])) {
+        let trendsChartAdded = false
+        try {
+          const svgEl = trendsChartRef.current
+          if (svgEl) {
+            const strokeOverrides = []
+            ;(trp.terms ?? []).forEach((t, i) => {
+              if (Array.isArray(t.series) && t.series.length >= 2) {
+                strokeOverrides.push(TRENDS_PDF_STROKES[i % TRENDS_PDF_STROKES.length])
+              }
+            })
+            const chart = await svgToPngDataUrl(svgEl, strokeOverrides.length ? strokeOverrides : null)
+            if (chart && chart.width && chart.height) {
+              const chartH = 28
+              const chartW = Math.min(contentW, chartH * (chart.width / chart.height))
+              ensure(chartH + 2)
+              doc.addImage(chart.dataUrl, 'PNG', margin, y, chartW, chartH)
+              y += chartH + 3
+              trendsChartAdded = true
+            }
+          }
+        } catch { /* text rows fallback below */ }
+        if (!trendsChartAdded) {
+          for (const t of (trp.terms ?? [])) {
+            ensure(5)
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(33, 33, 33)
+            doc.text(String(t.term), margin, y)
+            doc.text(String(t.value), margin + 78, y)
+            doc.setTextColor(80, 80, 80); doc.text(trendGlyph(t.dir), margin + 108, y)
+            y += 5
+          }
+        }
+        if (isHttpUrl(trp.googleTrendsUrl)) {
           ensure(5)
-          doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(33, 33, 33)
-          doc.text(String(t.term), margin, y)
-          doc.text(String(t.value), margin + 78, y)
-          doc.setTextColor(80, 80, 80); doc.text(trendGlyph(t.dir), margin + 108, y)
-          y += 5
+          doc.setFontSize(9)
+          doc.setTextColor(20, 90, 160)
+          doc.textWithLink('Google Trends', margin, y, { url: trp.googleTrendsUrl })
+          y += 6
         }
         y += 2
       }
@@ -628,6 +773,7 @@ export default function BriefPanel({ onClose }) {
                 <section className="brief-section brief-markets">
                   <h3 className="brief-section-title">Search Interest</h3>
                   <div className="brief-markets-caption">relative search interest{brief.trends.windowLabel ? ` over the last ${brief.trends.windowLabel}` : ''}, not volume</div>
+                  <BriefTrendsChart terms={brief.trends.terms} chartRef={trendsChartRef} />
                   <ul className="brief-markets-list">
                     {(brief.trends.terms ?? []).map((t) => (
                       <li key={t.term} className="brief-markets-row">
@@ -638,6 +784,17 @@ export default function BriefPanel({ onClose }) {
                       </li>
                     ))}
                   </ul>
+                  {isHttpUrl(brief.trends.googleTrendsUrl) && (
+                    <a
+                      className="brief-source"
+                      href={brief.trends.googleTrendsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Google Trends
+                      {' ↗'}
+                    </a>
+                  )}
                 </section>
               ) : null}
               {usage && (() => {
