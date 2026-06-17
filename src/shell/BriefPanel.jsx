@@ -38,22 +38,21 @@ const PARSE_MSG = 'The brief came back in an unexpected format. Please try gener
 
 const STAGE_LABELS = [
   (count) => (count ? `Gathering ${count} headlines` : 'Gathering headlines'),
-  () => 'Grouping into themes',
+  () => 'Summarizing by widget',
   () => 'Writing the brief',
 ]
 
 function briefToPlainText(brief) {
   const lines = [brief.headline, '']
   for (const section of brief.sections ?? []) {
-    if (section.title?.trim()) {
-      lines.push(section.title)
-      lines.push('')
+    const label = section.label?.trim() || 'Source'
+    if (section.status === 'no_update') {
+      lines.push(`No update from ${label}`)
+    } else if (section.summary?.trim()) {
+      lines.push(label)
+      lines.push(section.summary)
     }
-    for (const bullet of section.bullets ?? []) {
-      const label = bullet.source?.label
-      lines.push(`- ${bullet.text}${label ? ` (${label})` : ''}`)
-    }
-    if ((section.bullets ?? []).length) lines.push('')
+    lines.push('')
   }
   const mk = brief.markets
   if (mk && ((mk.rows?.length) || (mk.heatmaps?.length))) {
@@ -168,14 +167,21 @@ export default function BriefPanel({ onClose }) {
 
     setPreparedFor(session.user?.user_metadata?.username || null)
 
-    const items = await gatherRoomItems(ws)
-    if (!items.length) {
+    const widgetGroups = await gatherRoomItems(ws)
+    const markets = gatherMarketSymbols(ws)
+    const trends = gatherTrendsRequest(ws)
+    const includedGroups = widgetGroups.filter((g) => g.includeInBrief !== false)
+    const totalItems = includedGroups.reduce((n, g) => n + g.items.length, 0)
+    const hasMarkets = markets && (markets.symbols?.length || markets.heatmaps?.length)
+    const hasTrends = trends && trends.terms?.length
+
+    if (totalItems === 0 && !hasMarkets && !hasTrends) {
       setPhase('error')
       setErrorMsg(NO_ITEMS_MSG)
       return
     }
 
-    setSourceCount(Math.min(items.length, 18))
+    setSourceCount(includedGroups.filter((g) => g.items.length).reduce((n, g) => n + g.items.length, 0))
 
     try {
       const res = await fetch('/api/brief', {
@@ -184,7 +190,7 @@ export default function BriefPanel({ onClose }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ workspaceId: ws?.id, items, period: 'on_demand', markets: gatherMarketSymbols(ws), trends: gatherTrendsRequest(ws) }),
+        body: JSON.stringify({ workspaceId: ws?.id, widgetGroups, period: 'on_demand', markets, trends }),
       })
 
       const data = await res.json().catch(() => ({}))
@@ -367,26 +373,20 @@ export default function BriefPanel({ onClose }) {
       y += 5
       writeWrapped(brief.headline, { size: 13, style: 'bold', gap: 3 })
       for (const section of brief.sections ?? []) {
-        if (section.title?.trim()) writeWrapped(section.title, { size: 11, style: 'bold', gap: 1.5 })
-        for (const bullet of section.bullets ?? []) {
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(10)
-          doc.setTextColor(33, 33, 33)
-          for (const ln of doc.splitTextToSize('- ' + bullet.text, contentW)) {
-            ensure(5)
-            doc.text(ln, margin, y)
-            y += 5
-          }
-          const url = bullet.source?.url
-          if (url && url.startsWith('http')) {
-            ensure(5)
-            doc.setFontSize(9)
-            doc.setTextColor(20, 90, 160)
-            doc.textWithLink(bullet.source?.label || 'Source', margin + 4, y, { url })
-            y += 6
-          } else {
-            y += 1.5
-          }
+        const label = section.label?.trim() || 'Source'
+        writeWrapped(label, { size: 11, style: 'bold', gap: 1 })
+        if (section.status === 'no_update') {
+          writeWrapped(`No update from ${label}`, { size: 10, gap: 1.5 })
+        } else if (section.summary?.trim()) {
+          writeWrapped(section.summary, { size: 10, gap: 1 })
+        }
+        const url = section.sourceUrl
+        if (url && url.startsWith('http')) {
+          ensure(5)
+          doc.setFontSize(9)
+          doc.setTextColor(20, 90, 160)
+          doc.textWithLink(label, margin, y, { url })
+          y += 6
         }
         y += 2
       }
@@ -575,33 +575,29 @@ export default function BriefPanel({ onClose }) {
               </header>
               <h2 className="brief-headline">{brief.headline}</h2>
               {(brief.sections ?? []).map((section, si) => (
-                <section key={si} className="brief-section">
-                  {section.title?.trim() ? (
-                    <h3 className="brief-section-title">{section.title}</h3>
+                <section key={section.widgetId || si} className="brief-section">
+                  <h3 className="brief-section-title">{section.label}</h3>
+                  {section.status === 'no_update' ? (
+                    <p className="brief-bullet-text">No update from {section.label}</p>
+                  ) : section.summary?.trim() ? (
+                    <p className="brief-bullet-text">
+                      {section.summary}
+                      {section.sourceUrl?.startsWith('http') && (
+                        <>
+                          {' '}
+                          <a
+                            className="brief-source"
+                            href={section.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {section.label}
+                            {' ↗'}
+                          </a>
+                        </>
+                      )}
+                    </p>
                   ) : null}
-                  <ul className="brief-bullets">
-                    {(section.bullets ?? []).map((bullet, bi) => (
-                      <li key={bi} className="brief-bullet">
-                        <span className="brief-bullet-text">
-                          {bullet.text}
-                          {bullet.source?.url?.startsWith('http') && (
-                            <>
-                              {' '}
-                              <a
-                                className="brief-source"
-                                href={bullet.source.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {bullet.source.label || 'Source'}
-                                {' ↗'}
-                              </a>
-                            </>
-                          )}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
                 </section>
               ))}
               {brief.markets && ((brief.markets.rows?.length) || (brief.markets.heatmaps?.length)) ? (

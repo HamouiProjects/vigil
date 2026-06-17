@@ -64,31 +64,25 @@ function sanitizeBrief(brief) {
   return {
     headline: clamp(brief.headline, 300),
     sections: (brief.sections ?? []).slice(0, 20).map((section) => ({
-      title: String(section?.title ?? ''),
-      bullets: (section?.bullets ?? []).slice(0, 30).map((bullet) => ({
-        text: clamp(bullet?.text, 500),
-        source: bullet?.source
-          ? {
-              label: String(bullet.source.label ?? ''),
-              url: String(bullet.source.url ?? ''),
-            }
-          : null,
-      })),
+      label: clamp(section?.label, 120),
+      status: section?.status === 'no_update' ? 'no_update' : 'update',
+      summary: clamp(section?.summary, 2000),
+      sourceUrl: isHttpUrl(section?.sourceUrl) ? section.sourceUrl : null,
     })),
     markets,
     trends,
   }
 }
 
-function countBullets(sections) {
-  return sections.reduce((n, s) => n + (s.bullets?.length ?? 0), 0)
+function countUpdateSections(sections) {
+  return sections.filter((s) => s.status === 'update').length
 }
 
 function renderEmailHtml({ brief, roomName, preparedFor, generatedAt }) {
   const room = esc(clamp(roomName, 120) || 'Risk Room')
   const prep = clamp(preparedFor, 120)
   const genAt = generatedAt ? new Date(generatedAt).toLocaleString() : new Date().toLocaleString()
-  const n = countBullets(brief.sections)
+  const n = countUpdateSections(brief.sections)
   const nWord = n === 1 ? 'source' : 'sources'
 
   let html = `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;line-height:1.5;max-width:640px;">
@@ -103,21 +97,16 @@ function renderEmailHtml({ brief, roomName, preparedFor, generatedAt }) {
 <h1 style="font-size:16px;font-weight:bold;color:#1a1a1a;margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;">${esc(brief.headline)}</h1>`
 
   for (const section of brief.sections) {
-    if (section.title?.trim()) {
-      html += `<h2 style="font-size:13px;font-weight:bold;color:#1a1a1a;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.06em;">${esc(section.title)}</h2>`
-    }
-    html += '<ul style="margin:0 0 12px;padding-left:20px;">'
-    for (const bullet of section.bullets) {
-      const label = bullet.source?.label || 'Source'
-      html += `<li style="margin-bottom:8px;font-size:14px;">${esc(bullet.text)} `
-      if (isHttpUrl(bullet.source?.url)) {
-        html += `<a href="${esc(bullet.source.url)}" style="color:#1d4ed8;text-decoration:none;">${esc(label)}</a>`
-      } else {
-        html += `(${esc(label)})`
+    html += `<h2 style="font-size:13px;font-weight:bold;color:#1a1a1a;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.06em;">${esc(section.label)}</h2>`
+    if (section.status === 'no_update') {
+      html += `<p style="margin:0 0 12px;font-size:14px;">No update from ${esc(section.label)}</p>`
+    } else {
+      html += `<p style="margin:0 0 12px;font-size:14px;">${esc(section.summary)} `
+      if (isHttpUrl(section.sourceUrl)) {
+        html += `<a href="${esc(section.sourceUrl)}" style="color:#1d4ed8;text-decoration:none;">${esc(section.label)}</a>`
       }
-      html += '</li>'
+      html += '</p>'
     }
-    html += '</ul>'
   }
 
   if (brief.markets && (brief.markets.rows.length || brief.markets.heatmaps.length)) {
@@ -149,19 +138,20 @@ function renderEmailText({ brief, roomName, preparedFor, generatedAt }) {
   const room = clamp(roomName, 120) || 'Risk Room'
   const prep = clamp(preparedFor, 120)
   const genAt = generatedAt ? new Date(generatedAt).toLocaleString() : new Date().toLocaleString()
-  const n = countBullets(brief.sections)
+  const n = countUpdateSections(brief.sections)
   const nWord = n === 1 ? 'source' : 'sources'
   const lines = [room, `Generated ${genAt} . ${n} ${nWord}`]
   if (prep) lines.push(`Prepared for ${prep}`)
   lines.push('', brief.headline, '')
 
   for (const section of brief.sections) {
-    if (section.title?.trim()) lines.push(section.title)
-    for (const bullet of section.bullets) {
-      const label = bullet.source?.label || 'Source'
-      lines.push(`- ${bullet.text} (${label})`)
+    lines.push(section.label)
+    if (section.status === 'no_update') {
+      lines.push(`No update from ${section.label}`)
+    } else if (section.summary?.trim()) {
+      lines.push(section.summary)
     }
-    if (section.bullets?.length) lines.push('')
+    lines.push('')
   }
 
   if (brief.markets && (brief.markets.rows.length || brief.markets.heatmaps.length)) {
