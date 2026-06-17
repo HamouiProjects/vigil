@@ -1,5 +1,7 @@
 import supabase from './_supabase.js'
 import { applyCors } from './_cors.js'
+import { buildFeedBrief, normalizeWidgetGroups } from './_brief_core.js'
+import { gatherRoomFeedGroups } from './_brief_gather.js'
 import { resolveEntitlements } from '../src/entitlements/resolve.js'
 import { safeFetch } from './_ssrf.js'
 import { rateLimit } from './_ratelimit.js'
@@ -428,9 +430,11 @@ async function handleAlertDispatch(req, res) {
 
   console.log('[alert-dispatch]', JSON.stringify({ rules: (rules || []).length, matched, emailed, posted }))
 
+  const sched = await dispatchScheduledBriefs().catch((e) => { console.error('[scheduled-brief] dispatch threw', e?.message); return { due: 0, sent: 0, capped: 0, skipped: 0 } })
+
   await cleanupStaleRows()
 
-  return res.status(200).json({ ok: true, rules: (rules || []).length, matched, emailed, posted })
+  return res.status(200).json({ ok: true, rules: (rules || []).length, matched, emailed, posted, scheduledBriefs: sched })
 }
 
 async function handleDeleteAccount(req, res) {
@@ -464,7 +468,7 @@ async function handleDeleteAccount(req, res) {
 
   const stripeCustomerId = sub?.stripe_customer_id || null
 
-  const tables = ['alert_events', 'alerts', 'briefs', 'sources', 'workspaces', 'subscriptions']
+  const tables = ['brief_schedules', 'alert_events', 'alerts', 'briefs', 'sources', 'workspaces', 'subscriptions']
   for (const table of tables) {
     const { error } = await supabase.from(table).delete().eq('user_id', uid)
     if (error) {
@@ -581,6 +585,120 @@ async function cleanupStaleRows() {
   } catch (err) {
     console.error('[cleanup] feed_cache delete threw', err?.message)
   }
+}
+
+const SCHED_WINDOW_MS = {
+  daily: 24 * 60 * 60 * 1000,
+  weekly: 7 * 24 * 60 * 60 * 1000,
+  monthly: 31 * 24 * 60 * 60 * 1000,
+  quarterly: 92 * 24 * 60 * 60 * 1000,
+  annually: 366 * 24 * 60 * 60 * 1000,
+}
+function addUtcMonths(d, n) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()))
+}
+function nextRunAtFrom(cadence, from) {
+  const f = from instanceof Date ? from : new Date(from)
+  if (cadence === 'weekly') return new Date(f.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  if (cadence === 'monthly') return addUtcMonths(f, 1).toISOString()
+  if (cadence === 'quarterly') return addUtcMonths(f, 3).toISOString()
+  if (cadence === 'annually') return addUtcMonths(f, 12).toISOString()
+  return new Date(f.getTime() + 24 * 60 * 60 * 1000).toISOString()
+}
+async function sendScheduledBriefEmail(to, roomName, html, text) {
+  const key = process.env.RESEND_API_KEY
+  if (!key) return false
+  const subject = roomName ? `Your Vigil brief: ${roomName}` : 'Your Vigil brief'
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'Vigil <brief@thevigilroom.com>', to: [to], subject, html, text }),
+      signal: AbortSignal.timeout(30000),
+    })
+    if (!resp.ok) { console.error('[scheduled-brief] resend non-2xx', resp.status); return false }
+    return true
+  } catch (e) { console.error('[scheduled-brief] resend threw', e?.message); return false }
+}
+async function dispatchScheduledBriefs() {
+  if (!supabase) return { due: 0, sent: 0, capped: 0, skipped: 0 }
+  const nowIso = new Date().toISOString()
+  const { data: schedules, error: schErr } = await supabase
+    .from('brief_schedules')
+    .select('id, user_id, workspace_id, cadence, channel')
+    .eq('active', true)
+    .lte('next_run_at', nowIso)
+    .limit(50)
+  if (schErr) { console.error('[scheduled-brief] schedules query error', schErr.message); return { due: 0, sent: 0, capped: 0, skipped: 0 } }
+
+  const userCache = new Map()
+  let sent = 0, capped = 0, skipped = 0
+  const due = (schedules || []).length
+
+  for (const s of (schedules || [])) {
+    let u = userCache.get(s.user_id)
+    if (!u) {
+      const { data: ud } = await supabase.auth.admin.getUserById(s.user_id)
+      const { data: sub } = await supabase.from('subscriptions').select('plan, status, add_ons').eq('user_id', s.user_id).maybeSingle()
+      const ent = resolveEntitlements(sub?.plan ?? 'free', sub?.add_ons ?? [], sub?.status ?? null)
+      u = {
+        email: ud?.user?.email || '',
+        canSchedule: ent.capabilities.has('scheduled_briefs'),
+        cap: ent.limits.briefsPerMonth ?? resolveEntitlements('free').limits.briefsPerMonth,
+        notifyBriefEmail: ud?.user?.user_metadata?.notify_brief_email !== false,
+      }
+      userCache.set(s.user_id, u)
+    }
+    if (!u.canSchedule) { skipped += 1; continue }
+
+    const { data: ws, error: wsErr } = await supabase
+      .from('workspaces').select('id, name, widgets').eq('id', s.workspace_id).maybeSingle()
+    if (wsErr || !ws) { skipped += 1; continue }
+
+    let cleaned
+    try {
+      const windowMs = SCHED_WINDOW_MS[s.cadence] ?? SCHED_WINDOW_MS.daily
+      const raw = await gatherRoomFeedGroups({ widgets: ws.widgets }, { windowMs })
+      const normalized = normalizeWidgetGroups(raw)
+      const included = normalized.filter((g) => g.includeInBrief !== false)
+      const contentGroups = included.filter((g) => g.items.length > 0)
+      cleaned = await buildFeedBrief({ included, contentGroups })
+    } catch (e) {
+      console.error('[scheduled-brief] build failed', s.id, e?.code || e?.message)
+      skipped += 1
+      continue
+    }
+
+    const { data: briefId, error: insErr } = await supabase.rpc('brief_insert_capped', {
+      p_user: s.user_id,
+      p_workspace: s.workspace_id,
+      p_content: cleaned,
+      p_period: s.cadence,
+      p_cap: u.cap,
+    })
+    if (insErr) { console.error('[scheduled-brief] insert error', s.id, insErr.message); skipped += 1; continue }
+
+    const advance = nextRunAtFrom(s.cadence, new Date())
+
+    if (!briefId) {
+      capped += 1
+      await supabase.from('brief_schedules').update({ last_run_at: nowIso, next_run_at: advance }).eq('id', s.id)
+      continue
+    }
+
+    if (s.channel === 'email' && u.email && u.notifyBriefEmail) {
+      const safeBrief = sanitizeBrief(cleaned)
+      const html = renderEmailHtml({ brief: safeBrief, roomName: ws.name, preparedFor: '', generatedAt: nowIso })
+      const text = renderEmailText({ brief: safeBrief, roomName: ws.name, preparedFor: '', generatedAt: nowIso })
+      const ok = await sendScheduledBriefEmail(u.email, clamp(ws.name, 120), html, text)
+      if (ok) sent += 1
+    }
+
+    await supabase.from('brief_schedules').update({ last_run_at: nowIso, next_run_at: advance }).eq('id', s.id)
+  }
+
+  console.log('[scheduled-brief]', JSON.stringify({ due, sent, capped, skipped }))
+  return { due, sent, capped, skipped }
 }
 
 export default async function handler(req, res) {

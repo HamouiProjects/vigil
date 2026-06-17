@@ -7,12 +7,12 @@ const PLAN_BASE = {
   pro: {
     // TODO pricing-refurb: final per-tier alert caps
     limits: { workspaces: 3, widgetsPerWorkspace: Infinity, alertRules: 10, briefsPerMonth: 40 },
-    capabilities: ['realtime_news', 'realtime_prices', 'full_widget_library', 'alerts'],
+    capabilities: ['realtime_news', 'realtime_prices', 'full_widget_library', 'alerts', 'scheduled_briefs'],
     priceMode: 'realtime',
   },
   team: {
     limits: { workspaces: 10, widgetsPerWorkspace: Infinity, alertRules: 25, briefsPerMonth: 120 },
-    capabilities: ['realtime_news', 'realtime_prices', 'full_widget_library', 'white_label', 'alerts', 'alerts_webhook'],
+    capabilities: ['realtime_news', 'realtime_prices', 'full_widget_library', 'white_label', 'alerts', 'alerts_webhook', 'scheduled_briefs'],
     priceMode: 'realtime',
   },
 }
