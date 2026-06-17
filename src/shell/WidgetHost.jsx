@@ -8,6 +8,8 @@ export default function WidgetHost({
   widgetPaused,
   collapsed = false,
   onToggleCollapse,
+  includeInBrief = true,
+  onToggleIncludeInBrief,
   onTogglePause,
   entitlements,
   onSaveConfig,
@@ -91,6 +93,19 @@ export default function WidgetHost({
                 title={collapsed ? 'Expand' : 'Collapse'}
               >
                 {collapsed ? '+' : '−'}
+              </button>
+            )}
+            {!readOnly && onToggleIncludeInBrief && (
+              <button
+                type="button"
+                className="widget-btn"
+                onClick={onToggleIncludeInBrief}
+                aria-pressed={includeInBrief}
+                title={includeInBrief ? 'In the brief. Click to exclude.' : 'Excluded from the brief. Click to include.'}
+                aria-label={includeInBrief ? 'In the brief. Click to exclude.' : 'Excluded from the brief. Click to include.'}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: includeInBrief ? 1 : 0.35 }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h8l4 4v16H6z" opacity="0.9"/><rect x="9" y="12" width="6" height="1.6"/><rect x="9" y="15.5" width="6" height="1.6"/></svg>
               </button>
             )}
             {widgetActions}

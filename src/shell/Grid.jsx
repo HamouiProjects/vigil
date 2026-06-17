@@ -74,6 +74,8 @@ export default function Grid() {
               widgetPaused={widget.paused === true}
               collapsed={collapsed}
               onToggleCollapse={() => toggleCollapse(widget, gridItem)}
+              includeInBrief={widget.config?.includeInBrief !== false}
+              onToggleIncludeInBrief={() => updateWidgetConfig(activeWs, widget.id, { ...widget.config, includeInBrief: !(widget.config?.includeInBrief !== false) })}
               onTogglePause={() => toggleWidgetPause(activeWs, widget.id)}
               entitlements={entitlements}
               onSaveConfig={config => updateWidgetConfig(activeWs, widget.id, config)}
