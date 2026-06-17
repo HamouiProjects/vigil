@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import usePageVisibility from '../hooks/usePageVisibility'
 import { SkeletonFeedItems } from '../components/shared/SkeletonLoader'
 import { InfoTooltip } from '../components/shared/WHeader'
+import { GN_SEARCH_URL, nsExtractSource, nsCleanTitle, KF_DEFAULT_TABS } from '../lib/feedSources.js'
 
-export const GN_SEARCH_URL = q =>
-  `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`
+export { GN_SEARCH_URL, nsExtractSource, nsCleanTitle, KF_DEFAULT_TABS }
 
 function relTime(pubDate) {
   if (!pubDate) return ''
@@ -32,15 +32,6 @@ async function fetchNewsSearch(q) {
     description: (it.description ?? '').replace(/<[^>]*>/g, ''),
   }))
 }
-
-export function nsExtractSource(title) { const p = (title ?? '').split(' - '); return p.length > 1 ? p[p.length - 1].trim() : '' }
-export function nsCleanTitle(title) { const p = (title ?? '').split(' - '); return p.length > 1 ? p.slice(0, -1).join(' - ').trim() : (title ?? '') }
-
-export const KF_DEFAULT_TABS = [
-  { id: 'world',     keyword: 'World'     },
-  { id: 'conflicts', keyword: 'Conflicts' },
-  { id: 'economy',   keyword: 'Economy'   },
-]
 
 export default function NewsSearchWidget({ paused, config, onSaveConfig, setActions }) {
   const tabs = config.tabs ?? KF_DEFAULT_TABS
