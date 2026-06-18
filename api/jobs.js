@@ -701,6 +701,125 @@ async function dispatchScheduledBriefs() {
   return { due, sent, capped, skipped }
 }
 
+// --- Suggest Sources (slice 1a: RSS Google News floor) ---
+const SUGGEST_CACHE_TTL_MS = 86_400_000 // 24h
+const SUGGEST_MAX_REGIONS = 6
+const SUGGEST_MAX_RSS = 8
+const SUGGEST_DISCLAIMER = 'These are suggestions of publicly available sources, not verified or endorsed by Vigil, and not a substitute for your own due diligence.'
+
+// Region to (Google News hl language, gl country). Localized floor only where we have a confident pair.
+// EU/Europe and any unmapped region fall through to the English umbrella feed below. Promote to feedSources.js when a second consumer needs it.
+const REGION_MAP = {
+  'congo': { hl: 'fr', gl: 'CD' }, 'drc': { hl: 'fr', gl: 'CD' }, 'dr congo': { hl: 'fr', gl: 'CD' },
+  'eastern congo': { hl: 'fr', gl: 'CD' }, 'goma': { hl: 'fr', gl: 'CD' }, 'kivu': { hl: 'fr', gl: 'CD' }, 'm23': { hl: 'fr', gl: 'CD' },
+  'mali': { hl: 'fr', gl: 'ML' }, 'burkina faso': { hl: 'fr', gl: 'BF' }, 'niger': { hl: 'fr', gl: 'NE' }, 'sahel': { hl: 'fr', gl: 'ML' },
+  'taiwan': { hl: 'zh-TW', gl: 'TW' }, 'taiwan strait': { hl: 'zh-TW', gl: 'TW' }, 'china': { hl: 'zh-CN', gl: 'CN' },
+  'ukraine': { hl: 'uk', gl: 'UA' }, 'russia': { hl: 'ru', gl: 'RU' }, 'germany': { hl: 'de', gl: 'DE' }, 'france': { hl: 'fr', gl: 'FR' },
+}
+
+function gnCeid(hl, gl) { return gl + ':' + hl.split('-')[0] }
+function gnRssUrl(q, hl, gl) {
+  return 'https://news.google.com/rss/search?q=' + encodeURIComponent(q) + '&hl=' + hl + '&gl=' + gl + '&ceid=' + encodeURIComponent(gnCeid(hl, gl))
+}
+function gnHtmlUrl(q, hl, gl) {
+  return 'https://news.google.com/search?q=' + encodeURIComponent(q) + '&hl=' + hl + '&gl=' + gl + '&ceid=' + encodeURIComponent(gnCeid(hl, gl))
+}
+
+function suggestCacheKey(topics, regions, widgetTypes) {
+  const norm = arr => [...new Set((arr || []).map(s => String(s).trim().toLowerCase()).filter(Boolean))].sort()
+  const payload = JSON.stringify({ t: norm(topics), r: norm(regions), w: norm(widgetTypes) })
+  return 'suggest:' + crypto.createHash('sha256').update(payload).digest('hex').slice(0, 40)
+}
+async function suggestCacheRead(key) {
+  if (!supabase) return null
+  try {
+    const { data } = await supabase.from('feed_cache').select('*').eq('feed_url', key).maybeSingle()
+    if (!data) return null
+    const age = Date.now() - new Date(data.updated_at).getTime()
+    if (age >= 0 && age < SUGGEST_CACHE_TTL_MS) return data.items
+    return null
+  } catch { return null }
+}
+async function suggestCacheWrite(key, payload) {
+  if (!supabase) return
+  try {
+    await supabase.from('feed_cache').upsert(
+      { feed_url: key, title: 'suggest-sources', items: payload, updated_at: new Date().toISOString() },
+      { onConflict: 'feed_url' },
+    )
+  } catch { /* best-effort */ }
+}
+
+// Validate a feed through our own rss proxy (the same path the live widgets use), so validate-time matches run-time.
+async function suggestFeedHasItems(feedUrl) {
+  try {
+    const res = await fetch('https://thevigilroom.com/api/rss?url=' + encodeURIComponent(feedUrl), { signal: AbortSignal.timeout(12000) })
+    if (!res.ok) return false
+    const data = await res.json()
+    return Array.isArray(data?.items) && data.items.length > 0
+  } catch { return false }
+}
+
+async function buildRssFloor(topics, regions) {
+  const topicQ = (topics || []).map(s => String(s).trim()).filter(Boolean).join(' ')
+  const regionList = (regions || []).map(s => String(s).trim()).filter(Boolean)
+  const candidates = []
+  for (const region of regionList.slice(0, SUGGEST_MAX_REGIONS)) {
+    const loc = REGION_MAP[region.toLowerCase()]
+    if (!loc) continue
+    const q = [topicQ, region].filter(Boolean).join(' ')
+    candidates.push({
+      tier: 'manufactured', verificationBasis: 'none',
+      label: 'Google News: ' + q + ' (' + loc.hl + '/' + loc.gl + ')',
+      value: gnRssUrl(q, loc.hl, loc.gl), sourceLink: gnHtmlUrl(q, loc.hl, loc.gl),
+    })
+  }
+  const umbrellaQ = [topicQ, regionList.join(' ')].filter(Boolean).join(' ').trim()
+  if (umbrellaQ) {
+    candidates.push({
+      tier: 'manufactured', verificationBasis: 'none',
+      label: 'Google News: ' + umbrellaQ + ' (en/US)',
+      value: gnRssUrl(umbrellaQ, 'en-US', 'US'), sourceLink: gnHtmlUrl(umbrellaQ, 'en-US', 'US'),
+    })
+  }
+  const checked = await Promise.allSettled(candidates.map(async c => (await suggestFeedHasItems(c.value)) ? c : null))
+  const valid = checked.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
+  const seen = new Set()
+  const out = []
+  for (const c of valid) {
+    if (seen.has(c.value)) continue
+    seen.add(c.value)
+    out.push({ widgetType: 'rss', ...c })
+    if (out.length >= SUGGEST_MAX_RSS) break
+  }
+  return out
+}
+
+async function handleSuggestSources(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' })
+  const rl = await rateLimit(req, 'suggest-sources', 10, 60)
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', String(rl.retryAfter))
+    return res.status(429).json({ error: 'RATE_LIMITED' })
+  }
+  const body = readBody(req) || {}
+  const topics = Array.isArray(body.topics) ? body.topics : []
+  const regions = Array.isArray(body.regions) ? body.regions : []
+  const widgetTypes = Array.isArray(body.widgetTypes) ? body.widgetTypes : []
+  const key = suggestCacheKey(topics, regions, widgetTypes)
+  const cached = await suggestCacheRead(key)
+  if (cached) return res.status(200).json({ ...cached, cached: true })
+  const suggestions = []
+  // Slice 1a: RSS Google News floor only. Discovery, social, prices, livestream, news-keywords land in later slices.
+  if (widgetTypes.includes('rss')) {
+    const rssFloor = await buildRssFloor(topics, regions)
+    suggestions.push(...rssFloor)
+  }
+  const result = { suggestions, disclaimer: SUGGEST_DISCLAIMER, terms: { topics, regions } }
+  await suggestCacheWrite(key, result)
+  return res.status(200).json({ ...result, cached: false })
+}
+
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
@@ -717,6 +836,8 @@ export default async function handler(req, res) {
       return handleDeleteAccount(req, res)
     case 'email-signup':
       return handleEmailSignup(req, res)
+    case 'suggest-sources':
+      return handleSuggestSources(req, res)
     default:
       return res.status(400).json({ error: 'UNKNOWN_ACTION' })
   }
