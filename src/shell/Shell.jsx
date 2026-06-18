@@ -10,6 +10,7 @@ import EntitlementDebug from './EntitlementDebug.jsx'
 import UpgradeModal from './UpgradeModal.jsx'
 import WidgetPicker from './WidgetPicker.jsx'
 import BriefPanel from './BriefPanel.jsx'
+import SuggestSourcesPanel from './SuggestSourcesPanel.jsx'
 import AlertsDrawer from './AlertsDrawer.jsx'
 import { Bell } from 'lucide-react'
 import AccountMenu from './AccountMenu.jsx'
@@ -124,6 +125,7 @@ export default function Shell() {
   const [roomCapOpen, setRoomCapOpen] = useState(false)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
   const [showBrief, setShowBrief] = useState(false)
+  const [showSuggest, setShowSuggest] = useState(false)
   const [showAlerts, setShowAlerts] = useState(false)
   const [unreadAlerts, setUnreadAlerts] = useState(0)
   const [account, setAccount] = useState(null)
@@ -550,6 +552,9 @@ export default function Shell() {
           <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowBrief(true)}>
             Brief
           </button>
+          <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowSuggest(true)}>
+            Suggest sources
+          </button>
           <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowWidgetPicker(true)}>
             + Add Widget
           </button>
@@ -591,6 +596,7 @@ export default function Shell() {
         <WidgetPicker onPick={handleAddWidget} onClose={() => setShowWidgetPicker(false)} />
       )}
       {showBrief && <BriefPanel onClose={() => setShowBrief(false)} />}
+      {showSuggest && <SuggestSourcesPanel onClose={() => setShowSuggest(false)} />}
       <AlertsDrawer
         open={showAlerts}
         onClose={() => setShowAlerts(false)}
