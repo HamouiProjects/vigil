@@ -1,4 +1,4 @@
--- 0008_brief_cadence_daily_weekly.sql — restrict scheduled-brief cadences to daily/weekly
+-- 0008_brief_cadence_daily_weekly.sql: restrict scheduled-brief cadences to daily/weekly
 -- Longer cadences cannot be honestly served from live feeds: the rss proxy caps at 30 items
 -- per source and Vigil stores no item history, so monthly+ would need an item archive.
 begin;
