@@ -37,19 +37,27 @@ function normForCompare(s) {
   return String(s || '').toLowerCase().replace(NORM_RE, '')
 }
 
-// Clean a raw excerpt into a short plain-text paragraph, or null when there is
-// nothing worth showing. Decodes common entities, strips tags, drops the excerpt
-// when it merely repeats the title, and truncates on a word boundary.
-export function cleanExcerpt(raw, title) {
-  let s = String(raw || '')
-  s = s
+function decodeEntities(str) {
+  return String(str || '')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
-  s = s.replace(/<[^>]*>/g, ' ')
+}
+
+// Clean a raw excerpt into a short plain-text paragraph, or null when there is
+// nothing worth showing. Decodes entities and strips tags in a loop for
+// double-encoded HTML, drops the excerpt when it merely repeats the title, and
+// truncates on a word boundary.
+export function cleanExcerpt(raw, title) {
+  let s = String(raw || '')
+  let prev
+  do {
+    prev = s
+    s = decodeEntities(s).replace(/<[^>]*>/g, ' ')
+  } while (s !== prev)
   s = s.replace(/\s+/g, ' ').trim()
   if (!s) return null
 
