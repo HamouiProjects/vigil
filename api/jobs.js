@@ -591,19 +591,10 @@ async function cleanupStaleRows() {
 const SCHED_WINDOW_MS = {
   daily: 24 * 60 * 60 * 1000,
   weekly: 7 * 24 * 60 * 60 * 1000,
-  monthly: 31 * 24 * 60 * 60 * 1000,
-  quarterly: 92 * 24 * 60 * 60 * 1000,
-  annually: 366 * 24 * 60 * 60 * 1000,
-}
-function addUtcMonths(d, n) {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()))
 }
 function nextRunAtFrom(cadence, from) {
   const f = from instanceof Date ? from : new Date(from)
   if (cadence === 'weekly') return new Date(f.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
-  if (cadence === 'monthly') return addUtcMonths(f, 1).toISOString()
-  if (cadence === 'quarterly') return addUtcMonths(f, 3).toISOString()
-  if (cadence === 'annually') return addUtcMonths(f, 12).toISOString()
   return new Date(f.getTime() + 24 * 60 * 60 * 1000).toISOString()
 }
 async function sendScheduledBriefEmail(to, roomName, html, text) {

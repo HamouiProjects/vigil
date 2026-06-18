@@ -271,7 +271,7 @@ export default function BriefPanel({ onClose, onUpgrade }) {
         .eq('workspace_id', uuid)
         .maybeSingle()
       if (cancelled) return
-      setCadence(sched?.cadence || 'weekly')
+      setCadence(sched?.cadence === 'daily' ? 'daily' : 'weekly')
       setScheduleEnabled(sched?.active === true)
     }
     loadSchedule()
@@ -669,7 +669,7 @@ export default function BriefPanel({ onClose, onUpgrade }) {
         <div className="brief-schedule brief-schedule-locked">
           <span className="brief-schedule-label">Scheduled delivery</span>
           <p className="brief-schedule-note">
-            Scheduled delivery is a paid feature. Upgrade to get this brief by email on a daily, weekly, or monthly cadence.
+            Scheduled delivery is a paid feature. Upgrade to get this brief by email on a daily or weekly cadence.
           </p>
           <button type="button" className="brief-schedule-upgrade" onClick={() => onUpgrade?.()}>
             Upgrade
@@ -697,9 +697,6 @@ export default function BriefPanel({ onClose, onUpgrade }) {
         >
           <option value="daily">Daily</option>
           <option value="weekly">Weekly</option>
-          <option value="monthly">Monthly</option>
-          <option value="quarterly">Quarterly</option>
-          <option value="annually">Annually</option>
         </select>
         <button
           type="button"

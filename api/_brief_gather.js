@@ -4,6 +4,7 @@
 import { GN_SEARCH_URL, KF_DEFAULT_TABS, nsExtractSource, nsCleanTitle, SUGGESTIONS } from '../src/lib/feedSources.js'
 
 const RSS_BASE = 'https://thevigilroom.com'
+const MAX_ITEMS_PER_WIDGET = 40
 
 async function fetchSourceItems(sources, perSource) {
   const results = await Promise.allSettled(
@@ -32,7 +33,7 @@ function withinWindow(items, windowMs) {
   })
 }
 
-export async function gatherRoomFeedGroups(workspace, { windowMs = 0, maxSources = 6, perSource = 6 } = {}) {
+export async function gatherRoomFeedGroups(workspace, { windowMs = 0, maxSources = 6, perSource = 30 } = {}) {
   if (!workspace?.widgets?.length) return []
   const groups = []
   for (const w of workspace.widgets) {
@@ -75,6 +76,19 @@ export async function gatherRoomFeedGroups(workspace, { windowMs = 0, maxSources
       }
       groups.push({ widgetId: w.id, widgetType: w.type, label: 'Reader', sourceUrl: null, includeInBrief, items: withinWindow(items, windowMs) })
     }
+  }
+  for (const group of groups) {
+    group.items.sort((a, b) => {
+      const ta = a.publishedAt ? new Date(a.publishedAt).getTime() : NaN
+      const tb = b.publishedAt ? new Date(b.publishedAt).getTime() : NaN
+      const aFront = Number.isNaN(ta)
+      const bFront = Number.isNaN(tb)
+      if (aFront && !bFront) return -1
+      if (!aFront && bFront) return 1
+      if (aFront && bFront) return 0
+      return tb - ta
+    })
+    group.items = group.items.slice(0, MAX_ITEMS_PER_WIDGET)
   }
   return groups
 }
