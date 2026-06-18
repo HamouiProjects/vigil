@@ -5,6 +5,7 @@ import { gatherRoomFeedGroups } from './_brief_gather.js'
 import { resolveEntitlements } from '../src/entitlements/resolve.js'
 import { safeFetch } from './_ssrf.js'
 import { rateLimit } from './_ratelimit.js'
+import { fetchBriefLLM } from './_brief_llm.js'
 import crypto from 'node:crypto'
 function safeEqual(a, b) {
   const ah = crypto.createHash('sha256').update(String(a)).digest()
@@ -706,6 +707,16 @@ const SUGGEST_CACHE_TTL_MS = 86_400_000 // 24h
 const SUGGEST_MAX_REGIONS = 6
 const SUGGEST_MAX_RSS = 8
 const SUGGEST_DISCLAIMER = 'These are suggestions of publicly available sources, not verified or endorsed by Vigil, and not a substitute for your own due diligence.'
+const DISCOVERY_MAX_OUTBOUND = 36
+const DISCOVERY_MAINSTREAM_ATTEMPT = 4
+const DISCOVERY_LOCAL_ATTEMPT = 4
+const DISCOVERY_OUTLET_CONCURRENCY = 3
+const DISCOVERY_HOMEPAGE_TIMEOUT_MS = 8000
+const DISCOVERY_PROBE_TIMEOUT_MS = 6000
+const DISCOVERY_HTML_CAP_BYTES = 524288
+const DISCOVERY_LLM_DOMAINS = 6
+const DISCOVERY_LLM_GLOBAL_MAX = 60
+const COMMON_FEED_PATHS = ['/feed', '/feed/', '/rss', '/rss.xml', '/atom.xml', '/feed.xml', '/feeds/posts/default']
 
 // Region to (Google News hl language, gl country). Localized floor only where we have a confident pair.
 // EU/Europe and any unmapped region fall through to the English umbrella feed below. Promote to feedSources.js when a second consumer needs it.
@@ -715,6 +726,26 @@ const REGION_MAP = {
   'mali': { hl: 'fr', gl: 'ML' }, 'burkina faso': { hl: 'fr', gl: 'BF' }, 'niger': { hl: 'fr', gl: 'NE' }, 'sahel': { hl: 'fr', gl: 'ML' },
   'taiwan': { hl: 'zh-TW', gl: 'TW' }, 'taiwan strait': { hl: 'zh-TW', gl: 'TW' }, 'china': { hl: 'zh-CN', gl: 'CN' },
   'ukraine': { hl: 'uk', gl: 'UA' }, 'russia': { hl: 'ru', gl: 'RU' }, 'germany': { hl: 'de', gl: 'DE' }, 'france': { hl: 'fr', gl: 'FR' },
+}
+
+// starter seeds, swap for spec Appendix B
+const SEED_MAINSTREAM = ['reuters.com', 'apnews.com', 'bbc.com', 'aljazeera.com', 'theguardian.com', 'france24.com', 'dw.com']
+const SEED_LOCAL_CONGO = ['actualite.cd', 'radiookapi.net', 'rfi.fr', 'jeuneafrique.com']
+const SEED_LOCAL_SAHEL = ['rfi.fr', 'jeuneafrique.com', 'africanews.com']
+const SEED_LOCAL_TAIWAN = ['taipeitimes.com', 'focustaiwan.tw', 'taiwannews.com.tw']
+const SEED_LOCAL_CHINA = ['scmp.com', 'caixinglobal.com', 'chinadaily.com.cn']
+const SEED_LOCAL_UKRAINE = ['kyivindependent.com', 'pravda.com.ua']
+const SEED_LOCAL_GERMANY = ['dw.com', 'spiegel.de']
+const SEED_LOCAL_FRANCE = ['lemonde.fr', 'france24.com']
+const SEED_LOCAL = {
+  'congo': SEED_LOCAL_CONGO, 'drc': SEED_LOCAL_CONGO, 'dr congo': SEED_LOCAL_CONGO,
+  'eastern congo': SEED_LOCAL_CONGO, 'goma': SEED_LOCAL_CONGO, 'kivu': SEED_LOCAL_CONGO, 'm23': SEED_LOCAL_CONGO,
+  'mali': SEED_LOCAL_SAHEL, 'burkina faso': SEED_LOCAL_SAHEL, 'niger': SEED_LOCAL_SAHEL, 'sahel': SEED_LOCAL_SAHEL,
+  'taiwan': SEED_LOCAL_TAIWAN, 'taiwan strait': SEED_LOCAL_TAIWAN,
+  'china': SEED_LOCAL_CHINA,
+  'ukraine': SEED_LOCAL_UKRAINE,
+  'germany': SEED_LOCAL_GERMANY,
+  'france': SEED_LOCAL_FRANCE,
 }
 
 function gnCeid(hl, gl) { return gl + ':' + hl.split('-')[0] }
@@ -758,6 +789,232 @@ async function suggestFeedHasItems(feedUrl) {
     const data = await res.json()
     return Array.isArray(data?.items) && data.items.length > 0
   } catch { return false }
+}
+
+const DOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/
+
+function sanitizeDomain(raw) {
+  if (raw == null) return null
+  let s = String(raw).trim().toLowerCase()
+  if (!s) return null
+  s = s.replace(/^https?:\/\//, '')
+  const slash = s.indexOf('/')
+  if (slash >= 0) s = s.slice(0, slash)
+  const q = s.indexOf('?')
+  if (q >= 0) s = s.slice(0, q)
+  const hash = s.indexOf('#')
+  if (hash >= 0) s = s.slice(0, hash)
+  s = s.trim()
+  if (!s || s.includes(' ')) return null
+  return DOMAIN_RE.test(s) ? s : null
+}
+
+function dedupDomains(domains) {
+  const seen = new Set()
+  const out = []
+  for (const d of domains) {
+    if (!d || seen.has(d)) continue
+    seen.add(d)
+    out.push(d)
+  }
+  return out
+}
+
+async function budgetedFeedCheck(feedUrl, budget) {
+  if (budget.left <= 0) return false
+  budget.left -= 1
+  return suggestFeedHasItems(feedUrl)
+}
+
+function extractFeedLinkCandidates(html, homepage) {
+  const headMatch = html.match(/<head[\s\S]*?<\/head>/i)
+  const searchIn = headMatch ? headMatch[0] : html
+  const candidates = []
+  const linkRe = /<link\b[^>]*>/gi
+  let m
+  while ((m = linkRe.exec(searchIn)) !== null) {
+    const tag = m[0]
+    const relMatch = tag.match(/\brel\s*=\s*["']([^"']+)["']/i)
+    const typeMatch = tag.match(/\btype\s*=\s*["']([^"']+)["']/i)
+    const hrefMatch = tag.match(/\bhref\s*=\s*["']([^"']+)["']/i)
+    if (!hrefMatch) continue
+    const rel = (relMatch?.[1] || '').toLowerCase()
+    const type = (typeMatch?.[1] || '').toLowerCase()
+    const isFeed = rel.includes('feed')
+      || (rel.includes('alternate') && (type.includes('rss') || type.includes('atom')))
+    if (!isFeed) continue
+    try {
+      candidates.push(new URL(hrefMatch[1], homepage).href)
+    } catch { /* skip invalid href */ }
+    if (candidates.length >= 3) break
+  }
+  return candidates
+}
+
+async function discoverOutletFeed(domain, budget) {
+  const homepage = 'https://' + domain + '/'
+  try {
+    if (budget.left > 0) {
+      budget.left -= 1
+      const res = await safeFetch(homepage, { signal: AbortSignal.timeout(DISCOVERY_HOMEPAGE_TIMEOUT_MS) })
+      const html = (await res.text()).slice(0, DISCOVERY_HTML_CAP_BYTES)
+      const candidates = extractFeedLinkCandidates(html, homepage)
+      for (const feedUrl of candidates) {
+        if (await budgetedFeedCheck(feedUrl, budget)) return feedUrl
+      }
+    }
+  } catch { /* homepage fetch failure, continue to path probes */ }
+
+  for (const path of COMMON_FEED_PATHS) {
+    if (budget.left <= 0) break
+    const feedUrl = 'https://' + domain + path
+    if (await budgetedFeedCheck(feedUrl, budget)) return feedUrl
+  }
+  return null
+}
+
+async function mapWithConcurrency(items, concurrency, fn) {
+  const results = new Array(items.length)
+  let next = 0
+  async function worker() {
+    while (next < items.length) {
+      const idx = next++
+      results[idx] = await fn(items[idx], idx)
+    }
+  }
+  const n = Math.min(concurrency, items.length)
+  if (n > 0) await Promise.all(Array.from({ length: n }, () => worker()))
+  return results
+}
+
+function collectMatchedRegionKeys(regions) {
+  const regionList = (regions || []).map(s => String(s).trim()).filter(Boolean)
+  const matched = []
+  for (const region of regionList.slice(0, SUGGEST_MAX_REGIONS)) {
+    const key = region.toLowerCase()
+    if (REGION_MAP[key] && !matched.includes(key)) matched.push(key)
+  }
+  return matched
+}
+
+async function buildRssDiscovery(topics, regions, req) {
+  const topicQ = (topics || []).map(s => String(s).trim()).filter(Boolean).join(' ')
+  const matchedKeys = collectMatchedRegionKeys(regions)
+  const budget = { left: DISCOVERY_MAX_OUTBOUND }
+
+  let llmMainstream = []
+  let llmLocal = []
+  const llm = await rateLimit(req, 'suggest-llm', DISCOVERY_LLM_GLOBAL_MAX, 3600, 'global')
+  if (llm.allowed) {
+    try {
+      const topicStr = (topics || []).map(s => String(s).trim()).filter(Boolean).join(', ')
+      const regionStr = (regions || []).map(s => String(s).trim()).filter(Boolean).join(', ')
+      const raw = await fetchBriefLLM({
+        system: 'You suggest news outlet domains for risk monitoring. Given topics and regions, return well-known international mainstream outlet domains and credible local or regional outlet domains. Return STRICT JSON exactly {"mainstream":["domain.tld",...],"local":["domain.tld",...]}. Bare domains only, no protocol, no paths, no prose, no markdown.',
+        user: 'Topics: ' + topicStr + '\nRegions: ' + regionStr,
+      })
+      const parsed = JSON.parse(raw)
+      llmMainstream = Array.isArray(parsed?.mainstream) ? parsed.mainstream : []
+      llmLocal = Array.isArray(parsed?.local) ? parsed.local : []
+    } catch {
+      llmMainstream = []
+      llmLocal = []
+    }
+  }
+
+  const llmMainSan = llmMainstream.map(sanitizeDomain).filter(Boolean)
+  const llmLocSan = llmLocal.map(sanitizeDomain).filter(Boolean)
+  let llmSlots = DISCOVERY_LLM_DOMAINS
+  const llmMainTaken = llmMainSan.slice(0, llmSlots)
+  llmSlots -= llmMainTaken.length
+  const llmLocTaken = llmLocSan.slice(0, llmSlots)
+
+  const mainstreamDomains = dedupDomains([
+    ...SEED_MAINSTREAM.map(sanitizeDomain).filter(Boolean),
+    ...llmMainTaken,
+  ]).slice(0, DISCOVERY_MAINSTREAM_ATTEMPT)
+
+  const localSeedDomains = []
+  for (const key of matchedKeys) {
+    const seeds = SEED_LOCAL[key]
+    if (seeds) localSeedDomains.push(...seeds)
+  }
+  const localDomains = dedupDomains([
+    ...localSeedDomains.map(sanitizeDomain).filter(Boolean),
+    ...llmLocTaken,
+  ]).slice(0, DISCOVERY_LOCAL_ATTEMPT)
+
+  const firstMatched = matchedKeys[0]
+  const gnLoc = firstMatched ? REGION_MAP[firstMatched] : null
+  const gnHl = gnLoc?.hl ?? 'en-US'
+  const gnGl = gnLoc?.gl ?? 'US'
+
+  const mainstreamRows = []
+  const mainstreamResults = await mapWithConcurrency(mainstreamDomains, DISCOVERY_OUTLET_CONCURRENCY, async (domain) => {
+    const feedUrl = await discoverOutletFeed(domain, budget)
+    if (!feedUrl) return null
+    return {
+      widgetType: 'rss', tier: 'mainstream', verificationBasis: 'none',
+      label: domain, value: feedUrl, sourceLink: 'https://' + domain + '/',
+    }
+  })
+  for (const row of mainstreamResults) {
+    if (row) mainstreamRows.push(row)
+  }
+
+  const localNativeRows = []
+  const localManufacturedRows = []
+  const localResults = await mapWithConcurrency(localDomains, DISCOVERY_OUTLET_CONCURRENCY, async (domain) => {
+    const feedUrl = await discoverOutletFeed(domain, budget)
+    if (feedUrl) {
+      return {
+        kind: 'native',
+        row: {
+          widgetType: 'rss', tier: 'local', verificationBasis: 'none',
+          label: domain, value: feedUrl, sourceLink: 'https://' + domain + '/',
+        },
+      }
+    }
+    if (budget.left <= 0) return null
+    const q = 'site:' + domain + (topicQ ? ' ' + topicQ : '')
+    const gnFeed = gnRssUrl(q, gnHl, gnGl)
+    if (await budgetedFeedCheck(gnFeed, budget)) {
+      return {
+        kind: 'manufactured',
+        row: {
+          widgetType: 'rss', tier: 'manufactured', verificationBasis: 'none',
+          label: domain + ' (via Google News)', value: gnFeed, sourceLink: gnHtmlUrl(q, gnHl, gnGl),
+        },
+      }
+    }
+    return null
+  })
+  for (const result of localResults) {
+    if (!result) continue
+    if (result.kind === 'native') localNativeRows.push(result.row)
+    else if (result.kind === 'manufactured') localManufacturedRows.push(result.row)
+  }
+
+  return [...mainstreamRows, ...localNativeRows, ...localManufacturedRows]
+}
+
+async function buildRssGroup(topics, regions, req) {
+  let discovered = []
+  try {
+    discovered = await buildRssDiscovery(topics, regions, req)
+  } catch {
+    discovered = []
+  }
+  const floor = await buildRssFloor(topics, regions)
+  const seen = new Set()
+  const out = []
+  for (const row of [...discovered, ...floor]) {
+    if (seen.has(row.value)) continue
+    seen.add(row.value)
+    out.push(row)
+    if (out.length >= SUGGEST_MAX_RSS) break
+  }
+  return out
 }
 
 async function buildRssFloor(topics, regions) {
@@ -810,10 +1067,9 @@ async function handleSuggestSources(req, res) {
   const cached = await suggestCacheRead(key)
   if (cached) return res.status(200).json({ ...cached, cached: true })
   const suggestions = []
-  // Slice 1a: RSS Google News floor only. Discovery, social, prices, livestream, news-keywords land in later slices.
   if (widgetTypes.includes('rss')) {
-    const rssFloor = await buildRssFloor(topics, regions)
-    suggestions.push(...rssFloor)
+    const rssGroup = await buildRssGroup(topics, regions, req)
+    suggestions.push(...rssGroup)
   }
   const result = { suggestions, disclaimer: SUGGEST_DISCLAIMER, terms: { topics, regions } }
   await suggestCacheWrite(key, result)
