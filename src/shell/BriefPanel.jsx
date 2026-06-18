@@ -3,6 +3,7 @@ import { useShellStore } from '../state/shellStore.js'
 import { supabase } from '../lib/supabase.js'
 import { gatherRoomItems, gatherMarketSymbols, gatherTrendsRequest } from '../lib/gatherRoomItems.js'
 import { useFocusTrap } from '../hooks/useFocusTrap.js'
+import { relativeTime, cleanExcerpt } from '../lib/briefFormat.js'
 import GlobeGlyph from '../brand/GlobeGlyph.jsx'
 
 function fmtPct(p) { const n = Number(p); if (!Number.isFinite(n)) return ''; return (n > 0 ? '+' : '') + n.toFixed(2) + '%' }
@@ -10,6 +11,9 @@ function trendGlyph(dir) { return dir === 'up' ? '↑' : dir === 'down' ? '↓' 
 function isHttpUrl(u) {
   if (typeof u !== 'string') return false
   try { const p = new URL(u); return p.protocol === 'http:' || p.protocol === 'https:' } catch { return false }
+}
+function hostnameOf(u) {
+  try { return new URL(u).hostname.replace(/^www\./, '') } catch { return '' }
 }
 
 const TRENDS_CHART_W = 280
@@ -159,6 +163,24 @@ function briefToPlainText(brief) {
   const lines = [brief.headline, '']
   for (const section of brief.sections ?? []) {
     const label = section.label?.trim() || 'Source'
+    if (section.widgetType === 'browser' && section.items?.length) {
+      lines.push(label)
+      for (const item of section.items) {
+        const title = String(item.title || '').trim()
+        if (title) lines.push(title)
+        const excerpt = cleanExcerpt(item.excerpt, item.title)
+        if (excerpt) lines.push(excerpt)
+        const outlet = (item.source || '').trim() || hostnameOf(item.url)
+        const date = relativeTime(item.publishedAt)
+        const metaBits = []
+        if (outlet) metaBits.push(outlet)
+        if (date) metaBits.push(date)
+        if (typeof item.url === 'string' && item.url) metaBits.push(item.url)
+        if (metaBits.length) lines.push(metaBits.join('  '))
+        lines.push('')
+      }
+      continue
+    }
     if (section.status === 'no_update') {
       lines.push(`No update from ${label}`)
     } else if (section.summary?.trim()) {
@@ -548,6 +570,37 @@ export default function BriefPanel({ onClose, onUpgrade }) {
       for (const section of brief.sections ?? []) {
         const label = section.label?.trim() || 'Source'
         writeWrapped(label, { size: 11, style: 'bold', gap: 1 })
+        if (section.widgetType === 'browser' && section.items?.length) {
+          for (const item of section.items) {
+            const title = String(item.title || '').trim()
+            if (title) writeWrapped(title, { size: 10.5, style: 'bold', gap: 0.5 })
+            const excerpt = cleanExcerpt(item.excerpt, item.title)
+            if (excerpt) writeWrapped(excerpt, { size: 9.5, color: [80, 80, 80], gap: 0.5 })
+            const outlet = (item.source || '').trim() || hostnameOf(item.url)
+            const date = relativeTime(item.publishedAt)
+            ensure(5)
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(9)
+            let x = margin
+            if (outlet) {
+              if (isHttpUrl(item.url)) {
+                doc.setTextColor(20, 90, 160)
+                doc.textWithLink(outlet, x, y, { url: item.url })
+              } else {
+                doc.setTextColor(80, 80, 80)
+                doc.text(outlet, x, y)
+              }
+              x += doc.getTextWidth(outlet) + 3
+            }
+            if (date) {
+              doc.setTextColor(120, 120, 120)
+              doc.text(date, x, y)
+            }
+            y += 6
+          }
+          y += 2
+          continue
+        }
         if (section.status === 'no_update') {
           writeWrapped(`No update from ${label}`, { size: 10, gap: 1.5 })
         } else if (section.summary?.trim()) {
@@ -876,7 +929,36 @@ export default function BriefPanel({ onClose, onUpgrade }) {
               {(brief.sections ?? []).map((section, si) => (
                 <section key={section.widgetId || si} className="brief-section">
                   <h3 className="brief-section-title">{section.label}</h3>
-                  {section.status === 'no_update' ? (
+                  {section.widgetType === 'browser' && section.items?.length ? (
+                    <div className="brief-items">
+                      {section.items.map((item, ii) => {
+                        const excerpt = cleanExcerpt(item.excerpt, item.title)
+                        const date = relativeTime(item.publishedAt)
+                        const outlet = (item.source || '').trim() || hostnameOf(item.url)
+                        return (
+                          <div key={item.url || ii} className="brief-item">
+                            <div className="brief-item-title">{item.title}</div>
+                            {excerpt && <p className="brief-item-excerpt">{excerpt}</p>}
+                            <div className="brief-item-meta">
+                              {isHttpUrl(item.url) ? (
+                                <a
+                                  className="brief-item-source"
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  {outlet}
+                                </a>
+                              ) : outlet ? (
+                                <span className="brief-item-source">{outlet}</span>
+                              ) : null}
+                              {date && <span className="brief-item-date">{date}</span>}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : section.status === 'no_update' ? (
                     <p className="brief-bullet-text">No update from {section.label}</p>
                   ) : section.summary?.trim() ? (
                     <p className="brief-bullet-text">

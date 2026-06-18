@@ -73,7 +73,7 @@ export async function gatherRoomItems(workspace, { maxSources = 6, perSource = 6
       for (const a of (w.config?.saved ?? [])) {
         if (!a?.url || !a?.title || directSeen.has(a.url)) continue
         directSeen.add(a.url)
-        items.push({ source: a.source || '', title: a.title, url: a.url, publishedAt: a.publishedAt ?? null })
+        items.push({ source: a.source || '', title: a.title, url: a.url, publishedAt: a.publishedAt ?? null, excerpt: a.excerpt || '' })
       }
       groups.push({ widgetId: w.id, widgetType: w.type, label: 'Reader', sourceUrl: null, includeInBrief, items })
     }

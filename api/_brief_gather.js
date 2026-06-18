@@ -72,7 +72,7 @@ export async function gatherRoomFeedGroups(workspace, { windowMs = 0, maxSources
       for (const a of (w.config?.saved ?? [])) {
         if (!a?.url || !a?.title || seen.has(a.url)) continue
         seen.add(a.url)
-        items.push({ source: a.source || '', title: a.title, url: a.url, publishedAt: a.publishedAt ?? null })
+        items.push({ source: a.source || '', title: a.title, url: a.url, publishedAt: a.publishedAt ?? null, excerpt: a.excerpt || '' })
       }
       groups.push({ widgetId: w.id, widgetType: w.type, label: 'Reader', sourceUrl: null, includeInBrief, items: withinWindow(items, windowMs) })
     }

@@ -28,6 +28,7 @@ function normalizeItems(items) {
       title: String(i.title).trim().slice(0, 200),
       url: String(i.url ?? '').trim(),
       publishedAt: i.publishedAt,
+      excerpt: String(i.excerpt ?? '').slice(0, 300),
     }))
     .sort((a, b) => new Date(b.publishedAt || 0).getTime() - new Date(a.publishedAt || 0).getTime())
     .slice(0, 18)
@@ -86,6 +87,7 @@ function assembleBrief(includedGroups, modelParsed) {
         sourceUrl: group.sourceUrl,
         status: 'no_update',
         summary: '',
+        items: group.items,
       }
     }
     contentIdx += 1
@@ -96,6 +98,7 @@ function assembleBrief(includedGroups, modelParsed) {
       sourceUrl: group.sourceUrl,
       status: 'update',
       summary: summaryByIndex.get(contentIdx) || '',
+      items: group.items,
     }
   })
 

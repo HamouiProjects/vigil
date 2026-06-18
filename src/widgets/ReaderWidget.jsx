@@ -43,7 +43,7 @@ export default function ReaderWidget({ config, onSaveConfig, setActions }) {
         try { hostname = new URL(u).hostname.replace(/^www\./, '') } catch { hostname = '' }
         const list = configRef.current.saved ?? []
         if (!list.some(s => s.url === u)) {
-          patch({ url: u, saved: [...list, { url: u, title: data.title || u, source: data.siteName || hostname }] })
+          patch({ url: u, saved: [...list, { url: u, title: data.title || u, source: data.siteName || hostname, excerpt: data.excerpt || '', publishedAt: data.publishedTime || null }] })
         }
       }
     } catch {
