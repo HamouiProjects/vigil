@@ -190,10 +190,14 @@ function daysUntilReset() {
   return Math.max(1, Math.ceil((next - now) / 86400000))
 }
 
-export default function BriefPanel({ onClose }) {
+export default function BriefPanel({ onClose, onUpgrade }) {
   const workspaces = useShellStore((s) => s.workspaces)
   const activeWs = useShellStore((s) => s.activeWs)
+  const uid = useShellStore((s) => s.uid)
+  const entitlements = useShellStore((s) => s.entitlements)
   const ws = workspaces.find((w) => w.id === activeWs)
+
+  const canSchedule = entitlements?.capabilities?.has('scheduled_briefs') === true
 
   const [phase, setPhase] = useState('idle')
   const [errorMsg, setErrorMsg] = useState(null)
@@ -208,6 +212,13 @@ export default function BriefPanel({ onClose }) {
   const [emailState, setEmailState] = useState('idle')
   const [emailError, setEmailError] = useState('')
   const [briefEmailEnabled, setBriefEmailEnabled] = useState(true)
+  const [cadence, setCadence] = useState('weekly')
+  const [scheduleEnabled, setScheduleEnabled] = useState(false)
+  const [wsUuid, setWsUuid] = useState(null)
+  const [wsResolved, setWsResolved] = useState(false)
+  const [scheduleStatus, setScheduleStatus] = useState('idle')
+  const [scheduleError, setScheduleError] = useState('')
+  const [saveBusy, setSaveBusy] = useState(false)
   const menuRef = useRef(null)
   const modalRef = useRef(null)
   const trendsChartRef = useRef(null)
@@ -219,6 +230,53 @@ export default function BriefPanel({ onClose }) {
       setBriefEmailEnabled(meta.notify_brief_email !== false)
     })
   }, [])
+
+  useEffect(() => {
+    if (scheduleStatus !== 'saved' && scheduleStatus !== 'error') return undefined
+    const t = setTimeout(() => {
+      setScheduleStatus('idle')
+      setScheduleError('')
+    }, 4000)
+    return () => clearTimeout(t)
+  }, [scheduleStatus])
+
+  useEffect(() => {
+    if (!canSchedule || !uid || !activeWs) {
+      setWsUuid(null)
+      setWsResolved(false)
+      return undefined
+    }
+    let cancelled = false
+    async function loadSchedule() {
+      setWsResolved(false)
+      const { data: wsRow } = await supabase
+        .from('workspaces')
+        .select('id')
+        .eq('user_id', uid)
+        .eq('local_id', activeWs)
+        .maybeSingle()
+      if (cancelled) return
+      const uuid = wsRow?.id ?? null
+      setWsUuid(uuid)
+      setWsResolved(true)
+      if (!uuid) {
+        setCadence('weekly')
+        setScheduleEnabled(false)
+        return
+      }
+      const { data: sched } = await supabase
+        .from('brief_schedules')
+        .select('cadence, active')
+        .eq('user_id', uid)
+        .eq('workspace_id', uuid)
+        .maybeSingle()
+      if (cancelled) return
+      setCadence(sched?.cadence || 'weekly')
+      setScheduleEnabled(sched?.active === true)
+    }
+    loadSchedule()
+    return () => { cancelled = true }
+  }, [canSchedule, uid, activeWs])
 
   useEffect(() => {
     function onKey(e) {
@@ -577,6 +635,103 @@ export default function BriefPanel({ onClose }) {
     }
   }
 
+  async function handleSaveSchedule() {
+    if (!wsUuid || !uid) return
+    setSaveBusy(true)
+    setScheduleStatus('idle')
+    setScheduleError('')
+    const next = new Date()
+    next.setUTCHours(6, 0, 0, 0)
+    if (next <= new Date()) next.setUTCDate(next.getUTCDate() + 1)
+    const { error } = await supabase.from('brief_schedules').upsert(
+      {
+        user_id: uid,
+        workspace_id: wsUuid,
+        cadence,
+        channel: 'email',
+        active: scheduleEnabled,
+        next_run_at: next.toISOString(),
+      },
+      { onConflict: 'user_id,workspace_id' },
+    )
+    setSaveBusy(false)
+    if (error) {
+      setScheduleStatus('error')
+      setScheduleError('Could not save schedule.')
+      return
+    }
+    setScheduleStatus('saved')
+  }
+
+  function renderScheduleStrip() {
+    if (!canSchedule) {
+      return (
+        <div className="brief-schedule brief-schedule-locked">
+          <span className="brief-schedule-label">Scheduled delivery</span>
+          <p className="brief-schedule-note">
+            Scheduled delivery is a paid feature. Upgrade to get this brief by email on a daily, weekly, or monthly cadence.
+          </p>
+          <button type="button" className="brief-schedule-upgrade" onClick={() => onUpgrade?.()}>
+            Upgrade
+          </button>
+        </div>
+      )
+    }
+    if (wsResolved && !wsUuid) {
+      return (
+        <div className="brief-schedule">
+          <span className="brief-schedule-label">Scheduled delivery</span>
+          <p className="brief-schedule-note">Available once your room is saved</p>
+        </div>
+      )
+    }
+    return (
+      <div className="brief-schedule">
+        <span className="brief-schedule-label">Scheduled delivery</span>
+        <select
+          aria-label="Cadence"
+          className="brief-schedule-select"
+          value={cadence}
+          onChange={(e) => setCadence(e.target.value)}
+          disabled={!wsUuid}
+        >
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="quarterly">Quarterly</option>
+          <option value="annually">Annually</option>
+        </select>
+        <button
+          type="button"
+          className={`brief-schedule-toggle${scheduleEnabled ? ' is-on' : ''}`}
+          onClick={() => setScheduleEnabled((on) => !on)}
+          disabled={!wsUuid}
+          aria-pressed={scheduleEnabled}
+        >
+          {scheduleEnabled ? 'On' : 'Off'}
+        </button>
+        <button
+          type="button"
+          className="brief-schedule-save"
+          onClick={handleSaveSchedule}
+          disabled={!wsUuid || saveBusy}
+        >
+          Save
+        </button>
+        <span className="brief-schedule-channel">Sent by email.</span>
+        {scheduleStatus === 'saved' && (
+          <span className="brief-schedule-status">Saved.</span>
+        )}
+        {scheduleStatus === 'error' && scheduleError && (
+          <span className="brief-schedule-status is-error">{scheduleError}</span>
+        )}
+        <p className="brief-schedule-note">
+          Scheduled briefs cover your news and feed sections.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div ref={modalRef} className="modal brief-panel-modal" onClick={(e) => e.stopPropagation()}>
@@ -664,6 +819,8 @@ export default function BriefPanel({ onClose }) {
             </button>
           </div>
         </div>
+
+        {renderScheduleStrip()}
 
         <div className={`modal-body brief-panel-body${menuOpen ? ' brief-body-dimmed' : ''}`}>
           {phase === 'idle' && (

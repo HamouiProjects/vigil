@@ -595,7 +595,12 @@ export default function Shell() {
       {showWidgetPicker && (
         <WidgetPicker onPick={handleAddWidget} onClose={() => setShowWidgetPicker(false)} />
       )}
-      {showBrief && <BriefPanel onClose={() => setShowBrief(false)} />}
+      {showBrief && (
+        <BriefPanel
+          onClose={() => setShowBrief(false)}
+          onUpgrade={() => setShowUpgrade(true)}
+        />
+      )}
       {showSuggest && <SuggestSourcesPanel onClose={() => setShowSuggest(false)} />}
       <AlertsDrawer
         open={showAlerts}

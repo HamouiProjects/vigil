@@ -674,3 +674,134 @@ body {
   text-transform: uppercase;
   color: var(--color-brand);
 }
+
+.brief-schedule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 16px;
+  background: var(--color-surface-1);
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+}
+
+.brief-schedule-locked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.brief-schedule-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.brief-schedule-select {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-primary);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.brief-schedule-select:focus {
+  outline: none;
+  border-color: var(--color-brand);
+}
+
+.brief-schedule-toggle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-primary);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.brief-schedule-toggle.is-on {
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+  border-color: var(--color-brand);
+}
+
+.brief-schedule-save {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+  border: 1px solid var(--color-brand);
+  border-radius: 3px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.brief-schedule-save:hover:not(:disabled) {
+  background: var(--color-brand-hover);
+  border-color: var(--color-brand-hover);
+}
+
+.brief-schedule-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.brief-schedule-note {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+  margin: 0;
+  flex: 1 1 100%;
+}
+
+.brief-schedule-channel {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.brief-schedule-locked .brief-schedule-note {
+  color: var(--color-text-secondary);
+}
+
+.brief-schedule-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-secondary);
+}
+
+.brief-schedule-status.is-error {
+  color: var(--color-error);
+}
+
+.brief-schedule-upgrade {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-brand);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.brief-schedule-upgrade:hover {
+  color: var(--color-brand-hover);
+}

@@ -207,7 +207,7 @@ export default function Landing() {
               matters.
             </p>
             <p className="lp-sub">
-              Then Vigil does the watching with you. Ask for a brief whenever you need one: a short, cited
+              Then Vigil does the watching with you. Ask for a brief whenever you need one, or have it arrive on a schedule: a short, cited
               summary of what your own room is saying, sent to your screen or your inbox. Set alerts on the
               places, people, and keywords you cannot afford to miss, and Vigil flags what landed, in the app,
               by email, or in Slack.
