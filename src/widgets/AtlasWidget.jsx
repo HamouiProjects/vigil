@@ -18,24 +18,6 @@ function layerChipColor(def, on) {
   return def.chipColor ?? def.color
 }
 
-const COMING_SOON = [
-  {
-    label: 'Conflict',
-    tag: 'SOON',
-    tooltip: 'Verified conflict feed (coming soon)',
-  },
-  {
-    label: 'Your sources on the map',
-    tag: 'SOON',
-    tooltip: 'Your own feeds and sources plotted on the globe (coming soon)',
-  },
-  {
-    label: 'Military ships',
-    tag: 'SOON',
-    tooltip: 'Live military vessel tracking (coming soon)',
-  },
-]
-
 const IFRAME_URLS = {
   conflict: 'https://liveuamap.com/',
   marine:   'https://www.shipfinder.com/?mmsi=&imo=',
@@ -52,15 +34,15 @@ const IFRAME_CREDIT = {
 
 const EMBEDDED_SOURCE_LABELS = {
   conflict: 'Conflict',
-  marine: 'Marine',
+  marine: 'Ships',
   flights: 'Flights',
   cyber: 'Cyber',
 }
 
 const TABS = [
-  { key: 'world',    label: 'WORLD' },
+  { key: 'world',    label: 'GLOBE' },
   { key: 'conflict', label: 'CONFLICT' },
-  { key: 'marine',   label: 'MARINE' },
+  { key: 'marine',   label: 'SHIPS' },
   { key: 'flights',  label: 'FLIGHTS' },
   { key: 'cyber',    label: 'CYBER' },
 ]
@@ -242,45 +224,6 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
               </button>
             )
           })}
-          {COMING_SOON.map(({ label, tag, tooltip }) => (
-            <span
-              key={label}
-              title={tooltip}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '3px 6px',
-                border: '1px solid var(--color-border-muted, rgba(255,255,255,0.1))',
-                borderRadius: 2,
-                background: 'transparent',
-                color: 'var(--color-text-muted, #484f58)',
-                fontFamily: 'var(--font-mono, JetBrains Mono)',
-                fontSize: 11,
-                textTransform: 'uppercase',
-                cursor: 'default',
-                lineHeight: 1,
-                letterSpacing: '0.5px',
-                opacity: 0.55,
-                flexShrink: 0,
-              }}
-            >
-              <span style={{ fontSize: 9 }}>○</span>
-              {label}
-              <span
-                style={{
-                  fontSize: 8,
-                  padding: '1px 3px',
-                  border: '1px solid var(--color-border-muted, rgba(255,255,255,0.12))',
-                  borderRadius: 2,
-                  letterSpacing: '0.08em',
-                  opacity: 0.9,
-                }}
-              >
-                {tag}
-              </span>
-            </span>
-          ))}
         </div>
       )}
 
