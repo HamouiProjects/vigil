@@ -163,7 +163,7 @@ function briefToPlainText(brief) {
   const lines = [brief.headline, '']
   for (const section of brief.sections ?? []) {
     const label = section.label?.trim() || 'Source'
-    if (section.widgetType === 'browser' && section.items?.length) {
+    if (section.items?.length) {
       lines.push(label)
       for (const item of section.items) {
         const title = String(item.title || '').trim()
@@ -570,7 +570,7 @@ export default function BriefPanel({ onClose, onUpgrade }) {
       for (const section of brief.sections ?? []) {
         const label = section.label?.trim() || 'Source'
         writeWrapped(label, { size: 11, style: 'bold', gap: 1 })
-        if (section.widgetType === 'browser' && section.items?.length) {
+        if (section.items?.length) {
           for (const item of section.items) {
             const title = String(item.title || '').trim()
             if (title) writeWrapped(title, { size: 10.5, style: 'bold', gap: 0.5 })
@@ -929,7 +929,7 @@ export default function BriefPanel({ onClose, onUpgrade }) {
               {(brief.sections ?? []).map((section, si) => (
                 <section key={section.widgetId || si} className="brief-section">
                   <h3 className="brief-section-title">{section.label}</h3>
-                  {section.widgetType === 'browser' && section.items?.length ? (
+                  {section.items?.length ? (
                     <div className="brief-items">
                       {section.items.map((item, ii) => {
                         const excerpt = cleanExcerpt(item.excerpt, item.title)

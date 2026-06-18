@@ -7,7 +7,7 @@ export class BriefParseError extends Error {
   }
 }
 
-const SYSTEM_PROMPT = 'You write a calm operational news brief. Summarize ONLY the provided items for each labeled group. Do not add any fact, context, or analysis not present in the items. Do not assert anything as verified or true. Output ONLY valid minified JSON, no markdown and no code fences, exactly: {"headline":string,"sections":[{"index":number,"summary":string}]}. The headline is a one-line room summary across all groups. For each section, set index to the [i] number of the group it covers and write one concise summary of ONLY that group\'s items. Include one summary per content-bearing group. Never use em-dashes; use periods, commas, or parentheses.'
+const SYSTEM_PROMPT = 'You write a calm operational news brief headline. Summarize ONLY the provided items into one calm one-line operational headline across all groups. Do not add any fact, context, or analysis not present in the items. Do not assert anything as verified or true. Output ONLY valid minified JSON, no markdown and no code fences, exactly: {"headline":string}. Never use em-dashes; use periods, commas, or parentheses.'
 
 const BRIEF_PARSE_FALLBACK = {
   headline: 'Brief unavailable',
@@ -63,21 +63,12 @@ function parseBriefContent(raw) {
   text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
   try {
     const parsed = JSON.parse(text)
-    if (parsed?.headline != null && Array.isArray(parsed?.sections)) return parsed
+    if (parsed?.headline != null) return parsed
   } catch { /* fallback below */ }
   return BRIEF_PARSE_FALLBACK
 }
 
 function assembleBrief(includedGroups, modelParsed) {
-  const summaryByIndex = new Map()
-  for (const s of (modelParsed.sections ?? [])) {
-    const idx = Number(s?.index)
-    if (Number.isFinite(idx) && idx >= 1) {
-      summaryByIndex.set(idx, String(s?.summary ?? ''))
-    }
-  }
-
-  let contentIdx = 0
   const sections = includedGroups.map((group) => {
     if (!group.items.length) {
       return {
@@ -90,14 +81,13 @@ function assembleBrief(includedGroups, modelParsed) {
         items: group.items,
       }
     }
-    contentIdx += 1
     return {
       widgetId: group.widgetId,
       widgetType: group.widgetType,
       label: group.label,
       sourceUrl: group.sourceUrl,
       status: 'update',
-      summary: summaryByIndex.get(contentIdx) || '',
+      summary: '',
       items: group.items,
     }
   })

@@ -16,7 +16,7 @@ async function fetchSourceItems(sources, perSource) {
         const isFeed = src.kind === 'feed'
         const outlet = isFeed ? (nsExtractSource(it.title) || src.label) : src.label
         const title = isFeed ? nsCleanTitle(it.title) : it.title
-        return { source: outlet, title, url: it.link, publishedAt: it.pubDate }
+        return { source: outlet, title, url: it.link, publishedAt: it.pubDate, excerpt: it.description }
       })
     }),
   )

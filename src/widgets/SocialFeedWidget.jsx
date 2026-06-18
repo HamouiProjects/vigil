@@ -10,7 +10,7 @@ const DEFAULT_ACCOUNTS = [
 
 const ACTIVE_PLATFORMS = ['reddit', 'youtube', 'mastodon', 'bluesky', 'telegram']
 
-const PLATFORMS = {
+export const PLATFORMS = {
   reddit: {
     label: 'Reddit',
     placeholder: 'subreddit, or u/username',

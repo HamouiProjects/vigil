@@ -1,5 +1,6 @@
 import { GN_SEARCH_URL, KF_DEFAULT_TABS, nsExtractSource, nsCleanTitle } from '../widgets/NewsSearchWidget.jsx'
 import { SUGGESTIONS } from '../widgets/RssFeedWidget.jsx'
+import { PLATFORMS } from '../widgets/SocialFeedWidget.jsx'
 
 async function fetchSourceItems(sources, perSource) {
   const results = await Promise.allSettled(
@@ -18,6 +19,7 @@ async function fetchSourceItems(sources, perSource) {
           title,
           url: it.link,
           publishedAt: it.pubDate,
+          excerpt: it.description,
         }
       })
     }),
@@ -66,6 +68,22 @@ export async function gatherRoomItems(workspace, { maxSources = 6, perSource = 6
 
       const items = await fetchSourceItems(sources, perSource)
       groups.push({ widgetId: w.id, widgetType: w.type, label: 'RSS', sourceUrl: null, includeInBrief, items })
+    } else if (w.type === 'social') {
+      const includeInBrief = w.config?.includeInBrief !== false
+      const accounts = w.config?.accounts ?? []
+      const sources = []
+      const seen = new Set()
+      for (const account of accounts) {
+        if (account.enabled === false) continue
+        const platform = PLATFORMS[account.platform]
+        if (!platform) continue
+        const url = platform.feedUrl(account.value)
+        if (!url || seen.has(url)) continue
+        seen.add(url)
+        sources.push({ label: account.value, url, kind: 'rss' })
+      }
+      const items = await fetchSourceItems(sources, perSource)
+      groups.push({ widgetId: w.id, widgetType: w.type, label: 'Social', sourceUrl: null, includeInBrief, items })
     } else if (w.type === 'browser') {
       const includeInBrief = w.config?.includeInBrief !== false
       const items = []

@@ -113,7 +113,7 @@ function renderEmailHtml({ brief, roomName, preparedFor, generatedAt }) {
 
   for (const section of brief.sections) {
     html += `<h2 style="font-size:13px;font-weight:bold;color:#1a1a1a;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.06em;">${esc(section.label)}</h2>`
-    if (section.widgetType === 'browser' && section.items?.length) {
+    if (section.items?.length) {
       for (const item of section.items) {
         const title = String(item.title || '').trim()
         const excerpt = cleanExcerpt(item.excerpt, item.title)
@@ -185,7 +185,7 @@ function renderEmailText({ brief, roomName, preparedFor, generatedAt }) {
 
   for (const section of brief.sections) {
     lines.push(section.label)
-    if (section.widgetType === 'browser' && section.items?.length) {
+    if (section.items?.length) {
       for (const item of section.items) {
         const title = String(item.title || '').trim()
         if (title) lines.push(title)
