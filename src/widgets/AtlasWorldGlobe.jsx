@@ -119,6 +119,9 @@ function applyGlobeTheme(theme, map, { wrapEl, mapContainerEl } = {}) {
 
 const PLACE_LABEL_LAYER_RE =
   /(?:^|[-_])(?:country|countries|city|cities|town|towns|village|hamlet|suburb|neighbour|neighbor|locality|metropolis|settlement|municipal|state|province|region|county|district|capital|adm0|admin-0|admin0|adm1|admin-1|admin1|sovereign|nation|place-country|place_country|place-2|place-3|place_2|place_3|label_city|label_town|label_country|place-label)(?:$|[-_])/i
+const COUNTRY_MIN_ZOOM = 3
+const COUNTRY_LABEL_RE =
+  /(?:^|[-_])(?:country|countries|adm0|admin-0|admin0|sovereign|nation|place-country|place_country|label_country)(?:$|[-_])/i
 const NON_PLACE_LABEL_LAYER_RE =
   /(?:^|[-_])(?:road|street|highway|motorway|waterway|poi|shield|ref-|housenumber|house-number|airport|rail|ferry|marine|ocean|transit|barrier|tunnel|bridge|building|entrance|aeroway)(?:$|[-_])/i
 
@@ -141,6 +144,14 @@ function isPlaceLabelLayer(layer) {
     return true
   }
   return false
+}
+
+function isCountryLabelLayer(layer) {
+  if (!isPlaceLabelLayer(layer)) return false
+  const lid = layer.id.toLowerCase()
+  if (COUNTRY_LABEL_RE.test(lid)) return true
+  const filterStr = JSON.stringify(layer.filter ?? null)
+  return /"class"[^\]]*"country"/.test(filterStr)
 }
 
 function countryNameFromProps(props) {
@@ -217,6 +228,15 @@ function calmBasemapLabels(map) {
       map.setPaintProperty(layer.id, 'text-halo-color', 'rgba(0,0,0,0)')
     } catch {
       /* layer not ready */
+    }
+    if (isCountryLabelLayer(layer)) {
+      try {
+        map.setLayerZoomRange(
+          layer.id,
+          Math.max(layer.minzoom ?? 0, COUNTRY_MIN_ZOOM),
+          layer.maxzoom ?? 24,
+        )
+      } catch {}
     }
   }
 }
@@ -943,9 +963,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
   const [provenance, setProvenance] = useState(createDefaultProvenance)
   const provenanceRef = useRef(provenance)
   provenanceRef.current = provenance
-  const [legendCollapsed, setLegendCollapsed] = useState(
-    () => (typeof window !== 'undefined' ? window.innerWidth < 360 : false),
-  )
+  const [legendCollapsed, setLegendCollapsed] = useState(true)
   const [, setLegendTick] = useState(0)
   const aircraftPhotoCacheRef = useRef(new Map())
   const countriesGeoRef = useRef(null)
@@ -1299,10 +1317,14 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
               'interpolate',
               ['linear'],
               ['coalesce', ['get', 'mag'], 2],
+              2.5,
               2,
-              3,
+              5,
+              4,
               7,
-              14,
+              6,
+              9,
+              7,
             ],
             'circle-color': markerColors.earthquakes,
             'circle-opacity': 0.85,
@@ -1661,7 +1683,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
           onClick={() => setLegendCollapsed((c) => !c)}
           aria-expanded={!legendCollapsed}
         >
-          <span>Data layers</span>
+          <span>Sources</span>
           <span className="atlas-globe-legend-chevron" aria-hidden="true">
             {legendCollapsed ? '\u25B8' : '\u25BE'}
           </span>
