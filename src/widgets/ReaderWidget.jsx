@@ -8,6 +8,7 @@ export default function ReaderWidget({ config, onSaveConfig, setActions }) {
   const [article, setArticle] = useState(null)
   const [error, setError] = useState(null)
   const [devOffline, setDevOffline] = useState(false)
+  const [editMode, setEditMode] = useState(false)
 
   const saved = config.saved ?? []
 
@@ -72,16 +73,25 @@ export default function ReaderWidget({ config, onSaveConfig, setActions }) {
         {url && (
           <button type="button" className="widget-btn" onClick={() => window.open(url, '_blank', 'noopener')} title="Open in new tab">↗</button>
         )}
+        <button
+          type="button"
+          className="widget-btn"
+          onClick={() => setEditMode(v => !v)}
+          title={editMode ? 'Done editing' : 'Manage reading list'}
+          style={editMode ? { color: 'var(--accent)' } : undefined}
+        >✏</button>
       </>
     )
-  }, [setActions, url])
+  }, [setActions, url, editMode])
 
   return (
     <div className="widget" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <form className="browser-bar" onSubmit={e => { e.preventDefault(); doFetch(input) }} onPointerDownCapture={e => e.stopPropagation()}>
-        <input className="rss-input" value={input} onChange={e => setInput(e.target.value)} placeholder="Paste article URL…" spellCheck={false} />
-        <button className="rss-go-btn" type="submit" disabled={loading}>{loading ? '…' : 'GO'}</button>
-      </form>
+      {editMode && (
+        <form className="browser-bar" onSubmit={e => { e.preventDefault(); doFetch(input) }} onPointerDownCapture={e => e.stopPropagation()}>
+          <input className="rss-input" value={input} onChange={e => setInput(e.target.value)} placeholder="Paste article URL…" spellCheck={false} />
+          <button className="rss-go-btn" type="submit" disabled={loading}>{loading ? '…' : 'GO'}</button>
+        </form>
+      )}
 
       {saved.length > 0 && (
         <div className="rss-filters-strip" style={{ flexShrink: 0 }} onPointerDownCapture={e => e.stopPropagation()}>
@@ -94,7 +104,9 @@ export default function ReaderWidget({ config, onSaveConfig, setActions }) {
                 <div className={`rss-filter-chip${s.url === url ? ' active' : ''}`} onClick={() => doFetch(s.url)} title={s.title || s.url}>
                   <span className="rss-filter-chip-text" style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || s.source || s.url}</span>
                 </div>
-                <button className="rss-filter-chip-del" style={{ position: 'static', opacity: 0.6 }} onClick={() => removeSaved(s.url)} title="Remove">✕</button>
+                {editMode && (
+                  <button className="rss-filter-chip-del" style={{ position: 'static', opacity: 0.6 }} onClick={() => removeSaved(s.url)} title="Remove">✕</button>
+                )}
               </div>
             ))}
           </div>
