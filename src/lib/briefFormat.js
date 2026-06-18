@@ -38,11 +38,10 @@ function normForCompare(s) {
 }
 
 // Clean a raw excerpt into a short plain-text paragraph, or null when there is
-// nothing worth showing. Strips tags, decodes common entities, drops the excerpt
+// nothing worth showing. Decodes common entities, strips tags, drops the excerpt
 // when it merely repeats the title, and truncates on a word boundary.
 export function cleanExcerpt(raw, title) {
   let s = String(raw || '')
-  s = s.replace(/<[^>]*>/g, ' ')
   s = s
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -50,6 +49,7 @@ export function cleanExcerpt(raw, title) {
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
+  s = s.replace(/<[^>]*>/g, ' ')
   s = s.replace(/\s+/g, ' ').trim()
   if (!s) return null
 

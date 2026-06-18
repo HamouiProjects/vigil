@@ -36,14 +36,23 @@ function normalizeItems(items) {
 
 export function normalizeWidgetGroups(widgetGroups) {
   if (!Array.isArray(widgetGroups)) return []
-  return widgetGroups.map((g) => ({
-    widgetId: String(g?.widgetId ?? ''),
-    widgetType: String(g?.widgetType ?? ''),
-    label: String(g?.label ?? '').trim() || 'Source',
-    sourceUrl: isHttpUrl(g?.sourceUrl) ? g.sourceUrl : null,
-    includeInBrief: g?.includeInBrief !== false,
-    items: normalizeItems(g?.items),
-  }))
+  return widgetGroups.map((g) => {
+    const base = {
+      widgetId: String(g?.widgetId ?? ''),
+      widgetType: String(g?.widgetType ?? ''),
+      label: String(g?.label ?? '').trim() || 'Source',
+      sourceUrl: isHttpUrl(g?.sourceUrl) ? g.sourceUrl : null,
+      includeInBrief: g?.includeInBrief !== false,
+    }
+    if (Array.isArray(g.parts)) {
+      const parts = g.parts.map((p) => ({
+        label: String(p?.label ?? '').trim() || 'Source',
+        items: normalizeItems(p?.items),
+      }))
+      return { ...base, parts, items: parts.flatMap((p) => p.items) }
+    }
+    return { ...base, items: normalizeItems(g?.items) }
+  })
 }
 
 function buildUserContent(contentGroups) {
@@ -70,6 +79,18 @@ function parseBriefContent(raw) {
 
 function assembleBrief(includedGroups, modelParsed) {
   const sections = includedGroups.map((group) => {
+    if (Array.isArray(group.parts)) {
+      const hasUpdate = group.parts.some((p) => p.items.length)
+      return {
+        widgetId: group.widgetId,
+        widgetType: group.widgetType,
+        label: group.label,
+        sourceUrl: group.sourceUrl,
+        status: hasUpdate ? 'update' : 'no_update',
+        parts: group.parts,
+        summary: '',
+      }
+    }
     if (!group.items.length) {
       return {
         widgetId: group.widgetId,

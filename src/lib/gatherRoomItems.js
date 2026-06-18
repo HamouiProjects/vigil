@@ -2,7 +2,7 @@ import { GN_SEARCH_URL, KF_DEFAULT_TABS, nsExtractSource, nsCleanTitle } from '.
 import { SUGGESTIONS } from '../widgets/RssFeedWidget.jsx'
 import { PLATFORMS } from '../widgets/SocialFeedWidget.jsx'
 
-async function fetchSourceItems(sources, perSource) {
+async function fetchSourceParts(sources, perSource) {
   const results = await Promise.allSettled(
     sources.map(async (src) => {
       const res = await fetch(`/api/rss?url=${encodeURIComponent(src.url)}`, {
@@ -19,15 +19,17 @@ async function fetchSourceItems(sources, perSource) {
           title,
           url: it.link,
           publishedAt: it.pubDate,
-          excerpt: it.description,
+          excerpt: isFeed ? '' : (it.description || ''),
         }
       })
     }),
   )
 
-  return results
-    .filter((r) => r.status === 'fulfilled')
-    .flatMap((r) => r.value)
+  return sources.map((src, i) => {
+    const r = results[i]
+    const items = r.status === 'fulfilled' ? r.value : []
+    return { label: src.label, items }
+  })
 }
 
 export async function gatherRoomItems(workspace, { maxSources = 6, perSource = 6 } = {}) {
@@ -39,7 +41,6 @@ export async function gatherRoomItems(workspace, { maxSources = 6, perSource = 6
     if (w.type === 'feed') {
       const tabs = w.config?.tabs ?? KF_DEFAULT_TABS
       const keywords = tabs.map((t) => t.keyword).filter(Boolean)
-      const label = keywords.length ? keywords.join(', ') : 'News Search'
       const primaryKeyword = keywords[0] || 'World'
       const sourceUrl = GN_SEARCH_URL(primaryKeyword)
       const includeInBrief = w.config?.includeInBrief !== false
@@ -54,8 +55,8 @@ export async function gatherRoomItems(workspace, { maxSources = 6, perSource = 6
       }
 
       const capped = sources.slice(0, maxSources)
-      const items = await fetchSourceItems(capped, perSource)
-      groups.push({ widgetId: w.id, widgetType: w.type, label, sourceUrl, includeInBrief, items })
+      const parts = await fetchSourceParts(capped, perSource)
+      groups.push({ widgetId: w.id, widgetType: w.type, label: 'News Search', sourceUrl, includeInBrief, parts })
     } else if (w.type === 'rss') {
       const includeInBrief = w.config?.includeInBrief !== false
       const sources = []
@@ -66,8 +67,8 @@ export async function gatherRoomItems(workspace, { maxSources = 6, perSource = 6
         sources.push({ label: f.name, url: f.url, kind: 'rss' })
       }
 
-      const items = await fetchSourceItems(sources, perSource)
-      groups.push({ widgetId: w.id, widgetType: w.type, label: 'RSS', sourceUrl: null, includeInBrief, items })
+      const parts = await fetchSourceParts(sources, perSource)
+      groups.push({ widgetId: w.id, widgetType: w.type, label: 'RSS', sourceUrl: null, includeInBrief, parts })
     } else if (w.type === 'social') {
       const includeInBrief = w.config?.includeInBrief !== false
       const accounts = w.config?.accounts ?? []
@@ -82,8 +83,8 @@ export async function gatherRoomItems(workspace, { maxSources = 6, perSource = 6
         seen.add(url)
         sources.push({ label: account.value, url, kind: 'rss' })
       }
-      const items = await fetchSourceItems(sources, perSource)
-      groups.push({ widgetId: w.id, widgetType: w.type, label: 'Social', sourceUrl: null, includeInBrief, items })
+      const parts = await fetchSourceParts(sources, perSource)
+      groups.push({ widgetId: w.id, widgetType: w.type, label: 'Social', sourceUrl: null, includeInBrief, parts })
     } else if (w.type === 'browser') {
       const includeInBrief = w.config?.includeInBrief !== false
       const items = []

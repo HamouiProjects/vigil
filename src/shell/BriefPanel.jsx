@@ -16,6 +16,128 @@ function hostnameOf(u) {
   try { return new URL(u).hostname.replace(/^www\./, '') } catch { return '' }
 }
 
+function countGroupItems(g) {
+  if (Array.isArray(g.parts)) return g.parts.reduce((n, p) => n + (p.items?.length ?? 0), 0)
+  return g.items?.length ?? 0
+}
+
+function appendBriefItemPlaintext(lines, item, indent = '  ') {
+  const title = String(item.title || '').trim()
+  if (title) lines.push(indent + title)
+  const excerpt = cleanExcerpt(item.excerpt, item.title)
+  if (excerpt) lines.push(indent + excerpt)
+  const outlet = (item.source || '').trim() || hostnameOf(item.url)
+  const date = relativeTime(item.publishedAt)
+  const metaBits = []
+  if (outlet) metaBits.push(outlet)
+  if (date) metaBits.push(date)
+  if (typeof item.url === 'string' && item.url) metaBits.push(item.url)
+  if (metaBits.length) lines.push(indent + metaBits.join('  '))
+  lines.push('')
+}
+
+function renderBriefItemJsx(item, key) {
+  const excerpt = cleanExcerpt(item.excerpt, item.title)
+  const date = relativeTime(item.publishedAt)
+  const outlet = (item.source || '').trim() || hostnameOf(item.url)
+  return (
+    <div key={key} className="brief-item">
+      <div className="brief-item-title">{item.title}</div>
+      {excerpt && <p className="brief-item-excerpt">{excerpt}</p>}
+      <div className="brief-item-meta">
+        {isHttpUrl(item.url) ? (
+          <a
+            className="brief-item-source"
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {outlet}
+          </a>
+        ) : outlet ? (
+          <span className="brief-item-source">{outlet}</span>
+        ) : null}
+        {date && <span className="brief-item-date">{date}</span>}
+      </div>
+    </div>
+  )
+}
+
+function appendBriefSectionPlaintext(lines, section) {
+  const label = section.label?.trim() || 'Source'
+  lines.push(label)
+  if (section.parts?.length) {
+    for (const part of section.parts) {
+      lines.push(`  ${part.label}`)
+      if (part.items?.length) {
+        for (const item of part.items) appendBriefItemPlaintext(lines, item, '    ')
+      } else {
+        lines.push('    No update this round')
+        lines.push('')
+      }
+    }
+    return
+  }
+  if (section.items?.length) {
+    for (const item of section.items) appendBriefItemPlaintext(lines, item, '  ')
+    return
+  }
+  if (section.status === 'no_update') {
+    lines.push(`No update from ${label}`)
+  } else if (section.summary?.trim()) {
+    lines.push(section.summary)
+  }
+  lines.push('')
+}
+
+function writeBriefItemPdf(doc, item, margin, yRef, contentW, ensure) {
+  const title = String(item.title || '').trim()
+  if (title) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10.5)
+    doc.setTextColor(33, 33, 33)
+    for (const ln of doc.splitTextToSize(title, contentW)) {
+      ensure(5)
+      doc.text(ln, margin, yRef.y)
+      yRef.y += 5
+    }
+    yRef.y += 0.5
+  }
+  const excerpt = cleanExcerpt(item.excerpt, item.title)
+  if (excerpt) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9.5)
+    doc.setTextColor(80, 80, 80)
+    for (const ln of doc.splitTextToSize(excerpt, contentW)) {
+      ensure(5)
+      doc.text(ln, margin, yRef.y)
+      yRef.y += 5
+    }
+    yRef.y += 0.5
+  }
+  const outlet = (item.source || '').trim() || hostnameOf(item.url)
+  const date = relativeTime(item.publishedAt)
+  ensure(5)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  let x = margin
+  if (outlet) {
+    if (isHttpUrl(item.url)) {
+      doc.setTextColor(20, 90, 160)
+      doc.textWithLink(outlet, x, yRef.y, { url: item.url })
+    } else {
+      doc.setTextColor(80, 80, 80)
+      doc.text(outlet, x, yRef.y)
+    }
+    x += doc.getTextWidth(outlet) + 3
+  }
+  if (date) {
+    doc.setTextColor(120, 120, 120)
+    doc.text(date, x, yRef.y)
+  }
+  yRef.y += 6
+}
+
 const TRENDS_CHART_W = 280
 const TRENDS_CHART_H = 72
 const TRENDS_CHART_PAD = 4
@@ -162,32 +284,7 @@ const STAGE_LABELS = [
 function briefToPlainText(brief) {
   const lines = [brief.headline, '']
   for (const section of brief.sections ?? []) {
-    const label = section.label?.trim() || 'Source'
-    if (section.items?.length) {
-      lines.push(label)
-      for (const item of section.items) {
-        const title = String(item.title || '').trim()
-        if (title) lines.push(title)
-        const excerpt = cleanExcerpt(item.excerpt, item.title)
-        if (excerpt) lines.push(excerpt)
-        const outlet = (item.source || '').trim() || hostnameOf(item.url)
-        const date = relativeTime(item.publishedAt)
-        const metaBits = []
-        if (outlet) metaBits.push(outlet)
-        if (date) metaBits.push(date)
-        if (typeof item.url === 'string' && item.url) metaBits.push(item.url)
-        if (metaBits.length) lines.push(metaBits.join('  '))
-        lines.push('')
-      }
-      continue
-    }
-    if (section.status === 'no_update') {
-      lines.push(`No update from ${label}`)
-    } else if (section.summary?.trim()) {
-      lines.push(label)
-      lines.push(section.summary)
-    }
-    lines.push('')
+    appendBriefSectionPlaintext(lines, section)
   }
   const mk = brief.markets
   if (mk && ((mk.rows?.length) || (mk.heatmaps?.length))) {
@@ -366,7 +463,7 @@ export default function BriefPanel({ onClose, onUpgrade }) {
     const markets = gatherMarketSymbols(ws)
     const trends = gatherTrendsRequest(ws)
     const includedGroups = widgetGroups.filter((g) => g.includeInBrief !== false)
-    const totalItems = includedGroups.reduce((n, g) => n + g.items.length, 0)
+    const totalItems = includedGroups.reduce((n, g) => n + countGroupItems(g), 0)
     const hasMarkets = markets && (markets.symbols?.length || markets.heatmaps?.length)
     const hasTrends = trends && trends.terms?.length
 
@@ -376,7 +473,7 @@ export default function BriefPanel({ onClose, onUpgrade }) {
       return
     }
 
-    setSourceCount(includedGroups.filter((g) => g.items.length).reduce((n, g) => n + g.items.length, 0))
+    setSourceCount(includedGroups.reduce((n, g) => n + countGroupItems(g), 0))
 
     try {
       const res = await fetch('/api/brief', {
@@ -567,38 +664,51 @@ export default function BriefPanel({ onClose, onUpgrade }) {
       doc.line(margin, y, pageW - margin, y)
       y += 5
       writeWrapped(brief.headline, { size: 13, style: 'bold', gap: 3 })
+      const partIndent = margin + 4
+      const writePartLabel = (text) => {
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9.5)
+        doc.setTextColor(80, 80, 80)
+        for (const ln of doc.splitTextToSize(text, contentW - 4)) {
+          ensure(4.5)
+          doc.text(ln, partIndent, y)
+          y += 4.5
+        }
+        y += 0.5
+      }
+      const writePartEmpty = () => {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.setTextColor(120, 120, 120)
+        ensure(4.5)
+        doc.text('No update this round', partIndent, y)
+        y += 5
+      }
       for (const section of brief.sections ?? []) {
         const label = section.label?.trim() || 'Source'
         writeWrapped(label, { size: 11, style: 'bold', gap: 1 })
-        if (section.items?.length) {
-          for (const item of section.items) {
-            const title = String(item.title || '').trim()
-            if (title) writeWrapped(title, { size: 10.5, style: 'bold', gap: 0.5 })
-            const excerpt = cleanExcerpt(item.excerpt, item.title)
-            if (excerpt) writeWrapped(excerpt, { size: 9.5, color: [80, 80, 80], gap: 0.5 })
-            const outlet = (item.source || '').trim() || hostnameOf(item.url)
-            const date = relativeTime(item.publishedAt)
-            ensure(5)
-            doc.setFont('helvetica', 'normal')
-            doc.setFontSize(9)
-            let x = margin
-            if (outlet) {
-              if (isHttpUrl(item.url)) {
-                doc.setTextColor(20, 90, 160)
-                doc.textWithLink(outlet, x, y, { url: item.url })
-              } else {
-                doc.setTextColor(80, 80, 80)
-                doc.text(outlet, x, y)
+        if (section.parts?.length) {
+          for (const part of section.parts) {
+            writePartLabel(part.label)
+            if (part.items?.length) {
+              const yRef = { y }
+              for (const item of part.items) {
+                writeBriefItemPdf(doc, item, partIndent, yRef, contentW - 4, ensure)
               }
-              x += doc.getTextWidth(outlet) + 3
+              y = yRef.y
+            } else {
+              writePartEmpty()
             }
-            if (date) {
-              doc.setTextColor(120, 120, 120)
-              doc.text(date, x, y)
-            }
-            y += 6
           }
           y += 2
+          continue
+        }
+        if (section.items?.length) {
+          const yRef = { y }
+          for (const item of section.items) {
+            writeBriefItemPdf(doc, item, margin, yRef, contentW, ensure)
+          }
+          y = yRef.y + 2
           continue
         }
         if (section.status === 'no_update') {
@@ -929,34 +1039,22 @@ export default function BriefPanel({ onClose, onUpgrade }) {
               {(brief.sections ?? []).map((section, si) => (
                 <section key={section.widgetId || si} className="brief-section">
                   <h3 className="brief-section-title">{section.label}</h3>
-                  {section.items?.length ? (
-                    <div className="brief-items">
-                      {section.items.map((item, ii) => {
-                        const excerpt = cleanExcerpt(item.excerpt, item.title)
-                        const date = relativeTime(item.publishedAt)
-                        const outlet = (item.source || '').trim() || hostnameOf(item.url)
-                        return (
-                          <div key={item.url || ii} className="brief-item">
-                            <div className="brief-item-title">{item.title}</div>
-                            {excerpt && <p className="brief-item-excerpt">{excerpt}</p>}
-                            <div className="brief-item-meta">
-                              {isHttpUrl(item.url) ? (
-                                <a
-                                  className="brief-item-source"
-                                  href={item.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  {outlet}
-                                </a>
-                              ) : outlet ? (
-                                <span className="brief-item-source">{outlet}</span>
-                              ) : null}
-                              {date && <span className="brief-item-date">{date}</span>}
-                            </div>
+                  {section.parts?.length ? (
+                    section.parts.map((part, pi) => (
+                      <div key={part.label || pi} className="brief-part">
+                        <div className="brief-part-title">{part.label}</div>
+                        {part.items?.length ? (
+                          <div className="brief-items">
+                            {part.items.map((item, ii) => renderBriefItemJsx(item, item.url || `${pi}-${ii}`))}
                           </div>
-                        )
-                      })}
+                        ) : (
+                          <p className="brief-part-empty">No update this round</p>
+                        )}
+                      </div>
+                    ))
+                  ) : section.items?.length ? (
+                    <div className="brief-items">
+                      {section.items.map((item, ii) => renderBriefItemJsx(item, item.url || ii))}
                     </div>
                   ) : section.status === 'no_update' ? (
                     <p className="brief-bullet-text">No update from {section.label}</p>

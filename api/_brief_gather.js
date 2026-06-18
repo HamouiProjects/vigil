@@ -6,7 +6,7 @@ import { GN_SEARCH_URL, KF_DEFAULT_TABS, nsExtractSource, nsCleanTitle, SUGGESTI
 const RSS_BASE = 'https://thevigilroom.com'
 const MAX_ITEMS_PER_WIDGET = 40
 
-async function fetchSourceItems(sources, perSource) {
+async function fetchSourceParts(sources, perSource) {
   const results = await Promise.allSettled(
     sources.map(async (src) => {
       const res = await fetch(`${RSS_BASE}/api/rss?url=${encodeURIComponent(src.url)}`, { signal: AbortSignal.timeout(12000) })
@@ -16,11 +16,15 @@ async function fetchSourceItems(sources, perSource) {
         const isFeed = src.kind === 'feed'
         const outlet = isFeed ? (nsExtractSource(it.title) || src.label) : src.label
         const title = isFeed ? nsCleanTitle(it.title) : it.title
-        return { source: outlet, title, url: it.link, publishedAt: it.pubDate, excerpt: it.description }
+        return { source: outlet, title, url: it.link, publishedAt: it.pubDate, excerpt: isFeed ? '' : (it.description || '') }
       })
     }),
   )
-  return results.filter((r) => r.status === 'fulfilled').flatMap((r) => r.value)
+  return sources.map((src, i) => {
+    const r = results[i]
+    const items = r.status === 'fulfilled' ? r.value : []
+    return { label: src.label, items }
+  })
 }
 
 function withinWindow(items, windowMs) {
@@ -33,6 +37,19 @@ function withinWindow(items, windowMs) {
   })
 }
 
+function sortItemsRecentFirst(items) {
+  items.sort((a, b) => {
+    const ta = a.publishedAt ? new Date(a.publishedAt).getTime() : NaN
+    const tb = b.publishedAt ? new Date(b.publishedAt).getTime() : NaN
+    const aFront = Number.isNaN(ta)
+    const bFront = Number.isNaN(tb)
+    if (aFront && !bFront) return -1
+    if (!aFront && bFront) return 1
+    if (aFront && bFront) return 0
+    return tb - ta
+  })
+}
+
 export async function gatherRoomFeedGroups(workspace, { windowMs = 0, maxSources = 6, perSource = 30 } = {}) {
   if (!workspace?.widgets?.length) return []
   const groups = []
@@ -40,7 +57,6 @@ export async function gatherRoomFeedGroups(workspace, { windowMs = 0, maxSources
     if (w.type === 'feed') {
       const tabs = w.config?.tabs ?? KF_DEFAULT_TABS
       const keywords = tabs.map((t) => t.keyword).filter(Boolean)
-      const label = keywords.length ? keywords.join(', ') : 'News Search'
       const primaryKeyword = keywords[0] || 'World'
       const sourceUrl = GN_SEARCH_URL(primaryKeyword)
       const includeInBrief = w.config?.includeInBrief !== false
@@ -52,8 +68,9 @@ export async function gatherRoomFeedGroups(workspace, { windowMs = 0, maxSources
         seen.add(url)
         sources.push({ label: tab.keyword, url, kind: 'feed' })
       }
-      const items = withinWindow(await fetchSourceItems(sources.slice(0, maxSources), perSource), windowMs)
-      groups.push({ widgetId: w.id, widgetType: w.type, label, sourceUrl, includeInBrief, items })
+      const parts = (await fetchSourceParts(sources.slice(0, maxSources), perSource))
+        .map((p) => ({ ...p, items: withinWindow(p.items, windowMs) }))
+      groups.push({ widgetId: w.id, widgetType: w.type, label: 'News Search', sourceUrl, includeInBrief, parts })
     } else if (w.type === 'rss') {
       const includeInBrief = w.config?.includeInBrief !== false
       const sources = []
@@ -63,8 +80,9 @@ export async function gatherRoomFeedGroups(workspace, { windowMs = 0, maxSources
         seen.add(f.url)
         sources.push({ label: f.name, url: f.url, kind: 'rss' })
       }
-      const items = withinWindow(await fetchSourceItems(sources, perSource), windowMs)
-      groups.push({ widgetId: w.id, widgetType: w.type, label: 'RSS', sourceUrl: null, includeInBrief, items })
+      const parts = (await fetchSourceParts(sources, perSource))
+        .map((p) => ({ ...p, items: withinWindow(p.items, windowMs) }))
+      groups.push({ widgetId: w.id, widgetType: w.type, label: 'RSS', sourceUrl: null, includeInBrief, parts })
     } else if (w.type === 'browser') {
       const includeInBrief = w.config?.includeInBrief !== false
       const items = []
@@ -78,17 +96,15 @@ export async function gatherRoomFeedGroups(workspace, { windowMs = 0, maxSources
     }
   }
   for (const group of groups) {
-    group.items.sort((a, b) => {
-      const ta = a.publishedAt ? new Date(a.publishedAt).getTime() : NaN
-      const tb = b.publishedAt ? new Date(b.publishedAt).getTime() : NaN
-      const aFront = Number.isNaN(ta)
-      const bFront = Number.isNaN(tb)
-      if (aFront && !bFront) return -1
-      if (!aFront && bFront) return 1
-      if (aFront && bFront) return 0
-      return tb - ta
-    })
-    group.items = group.items.slice(0, MAX_ITEMS_PER_WIDGET)
+    if (Array.isArray(group.parts)) {
+      for (const part of group.parts) {
+        sortItemsRecentFirst(part.items)
+        part.items = part.items.slice(0, MAX_ITEMS_PER_WIDGET)
+      }
+    } else if (Array.isArray(group.items)) {
+      sortItemsRecentFirst(group.items)
+      group.items = group.items.slice(0, MAX_ITEMS_PER_WIDGET)
+    }
   }
   return groups
 }

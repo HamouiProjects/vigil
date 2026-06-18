@@ -52,6 +52,16 @@ function isValidSignupEmail(email) {
   return e.length >= 3 && e.length <= 254 && e.includes('@') && e.indexOf('@') > 0
 }
 
+function sanitizeBriefItem(it) {
+  return {
+    source: clamp(it?.source, 80),
+    title: clamp(it?.title, 200),
+    url: isHttpUrl(it?.url) ? it.url : null,
+    publishedAt: typeof it?.publishedAt === 'string' ? it.publishedAt : null,
+    excerpt: clamp(it?.excerpt, 300),
+  }
+}
+
 function sanitizeBrief(brief) {
   const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null }
   const dirOk = (d) => (d === 'up' || d === 'down' || d === 'flat') ? d : 'flat'
@@ -76,13 +86,11 @@ function sanitizeBrief(brief) {
       summary: clamp(section?.summary, 2000),
       sourceUrl: isHttpUrl(section?.sourceUrl) ? section.sourceUrl : null,
       widgetType: String(section?.widgetType ?? ''),
-      items: Array.isArray(section?.items) ? section.items.slice(0, 18).map((it) => ({
-        source: clamp(it?.source, 80),
-        title: clamp(it?.title, 200),
-        url: isHttpUrl(it?.url) ? it.url : null,
-        publishedAt: typeof it?.publishedAt === 'string' ? it.publishedAt : null,
-        excerpt: clamp(it?.excerpt, 300),
-      })) : [],
+      parts: Array.isArray(section?.parts) ? section.parts.slice(0, 12).map((p) => ({
+        label: clamp(p?.label, 120),
+        items: Array.isArray(p?.items) ? p.items.slice(0, 18).map(sanitizeBriefItem) : [],
+      })) : undefined,
+      items: Array.isArray(section?.items) ? section.items.slice(0, 18).map(sanitizeBriefItem) : [],
     })),
     markets,
     trends,
@@ -91,6 +99,44 @@ function sanitizeBrief(brief) {
 
 function countUpdateSections(sections) {
   return sections.filter((s) => s.status === 'update').length
+}
+
+function renderEmailItemHtml(item) {
+  const title = String(item.title || '').trim()
+  const excerpt = cleanExcerpt(item.excerpt, item.title)
+  const outlet = (item.source || '').trim() || hostnameOf(item.url)
+  const date = relativeTime(item.publishedAt)
+  let html = `<div style="margin:0 0 14px;">`
+  if (title) html += `<div style="font-size:14px;font-weight:bold;color:#1a1a1a;margin:0 0 3px;">${esc(title)}</div>`
+  if (excerpt) html += `<p style="margin:0 0 4px;font-size:14px;color:#6b7280;line-height:1.5;">${esc(excerpt)}</p>`
+  let meta = ''
+  if (isHttpUrl(item.url)) {
+    meta += `<a href="${esc(item.url)}" style="color:#1d4ed8;text-decoration:none;">${esc(outlet)}</a>`
+  } else if (outlet) {
+    meta += `<span style="color:#6b7280;">${esc(outlet)}</span>`
+  }
+  if (date) {
+    if (meta) meta += `<span style="color:#9ca3af;">&nbsp;&middot;&nbsp;</span>`
+    meta += `<span style="color:#6b7280;">${esc(date)}</span>`
+  }
+  if (meta) html += `<div style="font-size:13px;">${meta}</div>`
+  html += `</div>`
+  return html
+}
+
+function appendEmailItemTextLines(lines, item, indent = '  ') {
+  const title = String(item.title || '').trim()
+  if (title) lines.push(indent + title)
+  const excerpt = cleanExcerpt(item.excerpt, item.title)
+  if (excerpt) lines.push(indent + excerpt)
+  const outlet = (item.source || '').trim() || hostnameOf(item.url)
+  const date = relativeTime(item.publishedAt)
+  const metaBits = []
+  if (outlet) metaBits.push(outlet)
+  if (date) metaBits.push(date)
+  if (typeof item.url === 'string' && item.url) metaBits.push(item.url)
+  if (metaBits.length) lines.push(indent + metaBits.join('  '))
+  lines.push('')
 }
 
 function renderEmailHtml({ brief, roomName, preparedFor, generatedAt }) {
@@ -113,28 +159,19 @@ function renderEmailHtml({ brief, roomName, preparedFor, generatedAt }) {
 
   for (const section of brief.sections) {
     html += `<h2 style="font-size:13px;font-weight:bold;color:#1a1a1a;margin:16px 0 8px;text-transform:uppercase;letter-spacing:0.06em;">${esc(section.label)}</h2>`
-    if (section.items?.length) {
-      for (const item of section.items) {
-        const title = String(item.title || '').trim()
-        const excerpt = cleanExcerpt(item.excerpt, item.title)
-        const outlet = (item.source || '').trim() || hostnameOf(item.url)
-        const date = relativeTime(item.publishedAt)
-        html += `<div style="margin:0 0 14px;">`
-        if (title) html += `<div style="font-size:14px;font-weight:bold;color:#1a1a1a;margin:0 0 3px;">${esc(title)}</div>`
-        if (excerpt) html += `<p style="margin:0 0 4px;font-size:14px;color:#6b7280;line-height:1.5;">${esc(excerpt)}</p>`
-        let meta = ''
-        if (isHttpUrl(item.url)) {
-          meta += `<a href="${esc(item.url)}" style="color:#1d4ed8;text-decoration:none;">${esc(outlet)}</a>`
-        } else if (outlet) {
-          meta += `<span style="color:#6b7280;">${esc(outlet)}</span>`
+    if (section.parts?.length) {
+      for (const part of section.parts) {
+        html += `<div style="font-size:12px;font-weight:bold;color:#374151;margin:10px 0 6px;">${esc(part.label)}</div>`
+        if (part.items?.length) {
+          for (const item of part.items) html += renderEmailItemHtml(item)
+        } else {
+          html += `<p style="margin:0 0 10px;font-size:13px;color:#9ca3af;">No update this round</p>`
         }
-        if (date) {
-          if (meta) meta += `<span style="color:#9ca3af;">&nbsp;&middot;&nbsp;</span>`
-          meta += `<span style="color:#6b7280;">${esc(date)}</span>`
-        }
-        if (meta) html += `<div style="font-size:13px;">${meta}</div>`
-        html += `</div>`
       }
+      continue
+    }
+    if (section.items?.length) {
+      for (const item of section.items) html += renderEmailItemHtml(item)
       continue
     }
     if (section.status === 'no_update') {
@@ -185,21 +222,20 @@ function renderEmailText({ brief, roomName, preparedFor, generatedAt }) {
 
   for (const section of brief.sections) {
     lines.push(section.label)
-    if (section.items?.length) {
-      for (const item of section.items) {
-        const title = String(item.title || '').trim()
-        if (title) lines.push(title)
-        const excerpt = cleanExcerpt(item.excerpt, item.title)
-        if (excerpt) lines.push(excerpt)
-        const outlet = (item.source || '').trim() || hostnameOf(item.url)
-        const date = relativeTime(item.publishedAt)
-        const metaBits = []
-        if (outlet) metaBits.push(outlet)
-        if (date) metaBits.push(date)
-        if (typeof item.url === 'string' && item.url) metaBits.push(item.url)
-        if (metaBits.length) lines.push(metaBits.join('  '))
-        lines.push('')
+    if (section.parts?.length) {
+      for (const part of section.parts) {
+        lines.push(`  ${part.label}`)
+        if (part.items?.length) {
+          for (const item of part.items) appendEmailItemTextLines(lines, item, '    ')
+        } else {
+          lines.push('    No update this round')
+          lines.push('')
+        }
       }
+      continue
+    }
+    if (section.items?.length) {
+      for (const item of section.items) appendEmailItemTextLines(lines, item, '  ')
       continue
     }
     if (section.status === 'no_update') {
