@@ -4,6 +4,7 @@ import 'react-resizable/css/styles.css'
 import { useShellStore, isWorkspacePaused } from '../state/shellStore.js'
 import { useSources } from '../data/useSources.js'
 import WidgetHost from './WidgetHost.jsx'
+import { BRIEF_ELIGIBLE_TYPES } from './widgetRegistry.js'
 
 const SizedGridLayout = WidthProvider(GridLayout)
 
@@ -75,7 +76,7 @@ export default function Grid() {
               collapsed={collapsed}
               onToggleCollapse={() => toggleCollapse(widget, gridItem)}
               includeInBrief={widget.config?.includeInBrief !== false}
-              onToggleIncludeInBrief={() => updateWidgetConfig(activeWs, widget.id, { ...widget.config, includeInBrief: !(widget.config?.includeInBrief !== false) })}
+              onToggleIncludeInBrief={BRIEF_ELIGIBLE_TYPES.has(widget.type) ? () => updateWidgetConfig(activeWs, widget.id, { ...widget.config, includeInBrief: !(widget.config?.includeInBrief !== false) }) : undefined}
               onTogglePause={() => toggleWidgetPause(activeWs, widget.id)}
               entitlements={entitlements}
               onSaveConfig={config => updateWidgetConfig(activeWs, widget.id, config)}
