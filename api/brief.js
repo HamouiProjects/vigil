@@ -49,15 +49,32 @@ async function countBriefsThisMonth(userId) {
 function buildMarkets(mkReq, quotes) {
   if (!mkReq || typeof mkReq !== 'object') return null
   const r2 = (n) => Math.round(Number(n) * 100) / 100
+  // Adaptive precision: 2 decimals at or above 1, up to 6 decimals below 1 so small crypto and
+  // FX prices do not round to noise. Returns a number, not a string, so no render type changes.
+  const roundPrice = (n) => {
+    const x = Number(n)
+    if (!Number.isFinite(x)) return null
+    return Math.abs(x) >= 1 ? Math.round(x * 100) / 100 : Math.round(x * 1e6) / 1e6
+  }
   const dirOf = (p) => (p > 0 ? 'up' : p < 0 ? 'down' : 'flat')
-  const valid = (q) => q && q.country === 'us' && (q.asset_type === 'EQUITY' || q.asset_type === 'ETF') && q.price != null
+  // Honest guard only: any instrument Yahoo can price is allowed (crypto, indices, FX, non-US
+  // equities). An unmappable or bad symbol has no price and is dropped, never shown wrong.
+  const valid = (q) => q && q.price != null && Number.isFinite(Number(q.price))
+  // Show a currency code only for genuinely money denominated, non-USD instruments (foreign
+  // listed equities and ETFs). Crypto maps to USD pairs, FX is a rate, and indices are points,
+  // so none of those carry a code.
+  const ccyOf = (q) => {
+    const t = String(q.asset_type || '').toUpperCase()
+    const c = String(q.currency || '').toUpperCase()
+    return (t === 'EQUITY' || t === 'ETF') && c && c !== 'USD' ? c : null
+  }
   const map = new Map()
   for (const q of quotes) if (valid(q)) map.set(String(q.symbol).toUpperCase(), q)
   const rows = []
   for (const s of (mkReq.symbols || [])) {
     const q = map.get(String(s).toUpperCase()); if (!q) continue
     const pct = r2(q.change_pct ?? 0)
-    rows.push({ symbol: q.symbol, name: q.name || q.symbol, price: r2(q.price), changePct: pct, dir: dirOf(pct) })
+    rows.push({ symbol: q.symbol, name: q.name || q.symbol, price: roundPrice(q.price), changePct: pct, dir: dirOf(pct), currency: ccyOf(q) })
   }
   const heatmaps = []
   for (const h of (mkReq.heatmaps || [])) {

@@ -107,14 +107,74 @@ const HEATMAP_PROXY = {
   nasdaq: { label: 'Nasdaq',  symbol: 'QQQ' },
   dow:    { label: 'Dow',     symbol: 'DIA' },
 }
-function bareUsTicker(tvSymbol) {
+const CRYPTO_TV_PREFIXES = new Set(['BINANCE', 'BINANCEUS', 'COINBASE', 'BITSTAMP', 'KRAKEN', 'BYBIT', 'OKX', 'BITFINEX', 'GEMINI', 'KUCOIN', 'HUOBI', 'BITFLYER', 'CRYPTO', 'CRYPTOCAP'])
+const FX_TV_PREFIXES = new Set(['FX', 'FX_IDC', 'OANDA', 'FOREXCOM', 'SAXO', 'FXCM', 'ICEUS', 'PEPPERSTONE'])
+
+// Curated map: a known TradingView index ticker to its Yahoo Finance symbol. Applied only when
+// the symbol carries a non-US exchange or quote prefix, so a US listed ETF that happens to share
+// a ticker (read through a US prefix) is left as the equity, not turned into an index.
+const INDEX_YAHOO = {
+  SPX: '^GSPC', SP500: '^GSPC', US500: '^GSPC',
+  NDX: '^NDX', US100: '^NDX', IXIC: '^IXIC',
+  DJI: '^DJI', US30: '^DJI', DOWJONES: '^DJI',
+  DAX: '^GDAXI', DE40: '^GDAXI', DEU40: '^GDAXI', GER40: '^GDAXI',
+  UKX: '^FTSE', FTSE: '^FTSE', UK100: '^FTSE',
+  CAC: '^FCHI', CAC40: '^FCHI', FR40: '^FCHI', FRA40: '^FCHI',
+  NI225: '^N225', NIKKEI: '^N225', JP225: '^N225', NKY: '^N225',
+  HSI: '^HSI', HK50: '^HSI',
+  SX5E: '^STOXX50E', STOXX50E: '^STOXX50E',
+  IBEX: '^IBEX', ES35: '^IBEX',
+  AEX: '^AEX', SSMI: '^SSMI', SMI: '^SSMI',
+  KOSPI: '^KS11', SENSEX: '^BSESN', NIFTY: '^NSEI', NIFTY50: '^NSEI',
+  XJO: '^AXJO', AU200: '^AXJO', ASX200: '^AXJO',
+  TSX: '^GSPTSE', VIX: '^VIX',
+}
+
+const FIAT_CCY = new Set(['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD', 'NZD', 'HKD', 'SGD', 'CNY', 'CNH', 'KRW', 'INR', 'BRL', 'MXN', 'ZAR', 'TRY', 'PLN', 'SEK', 'NOK', 'DKK', 'THB', 'TWD', 'ILS', 'HUF', 'CZK'])
+const USD_STABLES = ['USDT', 'USDC', 'BUSD', 'FDUSD', 'TUSD', 'USDD', 'DAI', 'USD']
+
+function isFiatPair(t) {
+  return /^[A-Z]{6}$/.test(t) && FIAT_CCY.has(t.slice(0, 3)) && FIAT_CCY.has(t.slice(3))
+}
+function cryptoPairToYahoo(ticker) {
+  // BTCUSDT to BTC-USD, ETHUSD to ETH-USD. Only when the quote leg is USD or a USD stablecoin.
+  const t = String(ticker || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+  for (const q of USD_STABLES) {
+    if (t.length > q.length && t.endsWith(q)) {
+      const base = t.slice(0, t.length - q.length)
+      if (/^[A-Z0-9]{2,6}$/.test(base)) return `${base}-USD`
+    }
+  }
+  return null
+}
+function fxPairToYahoo(ticker) {
+  const t = String(ticker || '').toUpperCase()
+  return isFiatPair(t) ? `${t}=X` : null
+}
+function usSymbol(ticker) {
+  const t = String(ticker || '').toUpperCase()
+  if (isFiatPair(t)) return `${t}=X`           // a bare fiat pair stored without a venue prefix
+  const c = cryptoPairToYahoo(t)                // a bare crypto pair, e.g. BTCUSD
+  if (c) return c
+  return /^[A-Z.\-]{1,8}$/.test(t) ? t : null   // a plain US ticker
+}
+
+// Map a stored TradingView symbol (what the prices and chart widgets hold) to a Yahoo Finance
+// symbol (what the brief queries). Covers US equities, crypto, FX, and major global indices.
+// Anything that cannot be mapped confidently returns null and is dropped from the brief, so the
+// brief never shows a wrong or unverified quote.
+function tvToYahoo(tvSymbol) {
   const s = String(tvSymbol || '').trim().toUpperCase()
   if (!s) return null
-  if (!s.includes(':')) return /^[A-Z.\-]{1,8}$/.test(s) ? s : null
-  const [prefix, ...rest] = s.split(':')
-  const ticker = rest.join(':')
-  if (!US_TV_PREFIXES.has(prefix)) return null
-  return /^[A-Z.\-]{1,8}$/.test(ticker) ? ticker : null
+  let prefix = '', ticker = s
+  const colon = s.indexOf(':')
+  if (colon >= 0) { prefix = s.slice(0, colon); ticker = s.slice(colon + 1) }
+  if (!ticker) return null
+  if (prefix === '' || US_TV_PREFIXES.has(prefix)) return usSymbol(ticker)
+  if (CRYPTO_TV_PREFIXES.has(prefix)) return cryptoPairToYahoo(ticker)
+  if (FX_TV_PREFIXES.has(prefix)) return fxPairToYahoo(ticker)
+  if (INDEX_YAHOO[ticker]) return INDEX_YAHOO[ticker]
+  return null
 }
 export function gatherMarketSymbols(workspace) {
   const out = { symbols: [], heatmaps: [] }
@@ -123,11 +183,11 @@ export function gatherMarketSymbols(workspace) {
   for (const w of workspace.widgets) {
     if (w.config?.includeInBrief === false) continue
     if (w.type === 'chart') {
-      const t = bareUsTicker(w.config?.symbol)
+      const t = tvToYahoo(w.config?.symbol)
       if (t && !seen.has(t)) { seen.add(t); out.symbols.push(t) }
     } else if (w.type === 'prices') {
       for (const s of (w.config?.symbols ?? [])) {
-        const t = bareUsTicker(s?.tvSymbol)
+        const t = tvToYahoo(s?.tvSymbol)
         if (t && !seen.has(t)) { seen.add(t); out.symbols.push(t) }
       }
     } else if (w.type === 'heatmap') {

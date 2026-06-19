@@ -69,7 +69,7 @@ function sanitizeBrief(brief) {
   const m = brief.markets
   const markets = (m && typeof m === 'object') ? {
     asOf: String(m.asOf ?? ''),
-    rows: Array.isArray(m.rows) ? m.rows.slice(0, 40).map((r) => ({ symbol: clamp(r.symbol, 16), name: clamp(r.name, 80), price: num(r.price), changePct: num(r.changePct), dir: dirOk(r.dir) })) : [],
+    rows: Array.isArray(m.rows) ? m.rows.slice(0, 40).map((r) => ({ symbol: clamp(r.symbol, 16), name: clamp(r.name, 80), price: num(r.price), changePct: num(r.changePct), dir: dirOk(r.dir), currency: r.currency ? clamp(String(r.currency), 8) : null })) : [],
     heatmaps: Array.isArray(m.heatmaps) ? m.heatmaps.slice(0, 10).map((h) => ({ label: clamp(h.label, 40), symbol: clamp(h.symbol, 16), changePct: num(h.changePct), dir: dirOk(h.dir) })) : [],
   } : null
   const tr = brief.trends
@@ -208,7 +208,7 @@ function renderEmailHtml({ brief, roomName, preparedFor, generatedAt }) {
     html += `<h2 style="font-size:13px;font-weight:bold;color:#1a1a1a;margin:16px 0 4px;text-transform:uppercase;letter-spacing:0.06em;">Markets</h2>`
     html += `<div style="font-size:12px;color:#6b7280;margin-bottom:8px;">as of last refresh</div>`
     html += `<table style="border-collapse:collapse;font-size:14px;margin-bottom:12px;">`
-    for (const row of brief.markets.rows) html += `<tr><td style="padding:2px 14px 2px 0;font-weight:bold;">${esc(row.symbol)}</td><td style="padding:2px 14px 2px 0;color:#4b5563;">${esc(row.name)}</td><td style="padding:2px 14px 2px 0;">${esc(String(row.price))}</td><td style="padding:2px 0;">${cell(row.changePct, row.dir)}</td></tr>`
+    for (const row of brief.markets.rows) html += `<tr><td style="padding:2px 14px 2px 0;font-weight:bold;">${esc(row.symbol)}</td><td style="padding:2px 14px 2px 0;color:#4b5563;">${esc(row.name)}</td><td style="padding:2px 14px 2px 0;">${esc(String(row.price))}${row.currency ? ' ' + esc(row.currency) : ''}</td><td style="padding:2px 0;">${cell(row.changePct, row.dir)}</td></tr>`
     for (const h of brief.markets.heatmaps) html += `<tr><td style="padding:2px 14px 2px 0;font-weight:bold;">${esc(h.label)}</td><td style="padding:2px 14px 2px 0;color:#4b5563;">(${esc(h.symbol)})</td><td></td><td style="padding:2px 0;">${cell(h.changePct, h.dir)}</td></tr>`
     html += `</table>`
   }
@@ -276,7 +276,7 @@ function renderEmailText({ brief, roomName, preparedFor, generatedAt }) {
 
   if (brief.markets && (brief.markets.rows.length || brief.markets.heatmaps.length)) {
     lines.push('Markets (as of last refresh)', '')
-    for (const row of brief.markets.rows) lines.push(`- ${row.symbol}  ${row.price}  ${row.changePct > 0 ? '+' : ''}${Number(row.changePct).toFixed(2)}%`)
+    for (const row of brief.markets.rows) lines.push(`- ${row.symbol}  ${row.price}${row.currency ? ' ' + row.currency : ''}  ${row.changePct > 0 ? '+' : ''}${Number(row.changePct).toFixed(2)}%`)
     for (const h of brief.markets.heatmaps) lines.push(`- ${h.label} (${h.symbol})  ${h.changePct > 0 ? '+' : ''}${Number(h.changePct).toFixed(2)}%`)
     lines.push('')
   }

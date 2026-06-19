@@ -224,7 +224,7 @@ function briefToPlainText(brief) {
   const mk = brief.markets
   if (mk && ((mk.rows?.length) || (mk.heatmaps?.length))) {
     lines.push('Markets (as of last refresh)', '')
-    for (const r of (mk.rows ?? [])) lines.push(`- ${r.symbol}  ${r.price}  ${fmtPct(r.changePct)}`)
+    for (const r of (mk.rows ?? [])) lines.push(`- ${r.symbol}  ${r.price}${r.currency ? ' ' + r.currency : ''}  ${fmtPct(r.changePct)}`)
     for (const h of (mk.heatmaps ?? [])) lines.push(`- ${h.label} (${h.symbol})  ${fmtPct(h.changePct)}`)
     lines.push('')
   }
@@ -686,7 +686,7 @@ export default function BriefPanel({ onClose, onUpgrade }) {
           doc.setTextColor(...col); doc.text(fmtPct(pct), margin + 108, y)
           y += 5
         }
-        for (const r of (mkp.rows ?? [])) pdfRow(`${r.symbol}  ${r.name}`, r.price, r.changePct, r.dir)
+        for (const r of (mkp.rows ?? [])) pdfRow(`${r.symbol}  ${r.name}`, r.currency ? `${r.price} ${r.currency}` : r.price, r.changePct, r.dir)
         for (const h of (mkp.heatmaps ?? [])) pdfRow(`${h.label} (${h.symbol})`, null, h.changePct, h.dir)
         y += 2
       }
@@ -1044,7 +1044,7 @@ export default function BriefPanel({ onClose, onUpgrade }) {
                       <li key={r.symbol} className="brief-markets-row">
                         <span className="bm-sym">{r.symbol}</span>
                         <span className="bm-name">{r.name}</span>
-                        <span className="bm-price">{r.price}</span>
+                        <span className="bm-price">{r.price}{r.currency ? ' ' + r.currency : ''}</span>
                         <span className={`bm-chg bm-${r.dir}`}>{fmtPct(r.changePct)}</span>
                       </li>
                     ))}
