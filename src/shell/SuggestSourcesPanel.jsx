@@ -98,6 +98,9 @@ export default function SuggestSourcesPanel({ onClose }) {
             <label className="suggest-field">Regions
               <input type="text" value={regions} onChange={e => setRegions(e.target.value)} placeholder="e.g. Congo" />
             </label>
+            {regions.trim() === '' && (
+              <p className="suggest-hint">Add a region for local sources.</p>
+            )}
             <button type="button" className="nav-add-btn btn-primary" onClick={runSuggest} disabled={loading}>
               {loading ? 'Finding sources...' : 'Suggest sources'}
             </button>

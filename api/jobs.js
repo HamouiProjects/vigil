@@ -824,7 +824,7 @@ const SUGGEST_MAX_REGIONS = 6
 const SUGGEST_MAX_RSS = 8
 const SUGGEST_DISCLAIMER = 'These are suggestions of publicly available sources, not verified or endorsed by Vigil, and not a substitute for your own due diligence.'
 const DISCOVERY_MAX_OUTBOUND = 36
-const DISCOVERY_MAINSTREAM_ATTEMPT = 4
+const DISCOVERY_MAINSTREAM_ATTEMPT = 7
 const DISCOVERY_LOCAL_ATTEMPT = 4
 const DISCOVERY_OUTLET_CONCURRENCY = 3
 const DISCOVERY_HOMEPAGE_TIMEOUT_MS = 8000
@@ -1068,11 +1068,22 @@ async function buildRssDiscovery(topics, regions, req) {
   const mainstreamRows = []
   const mainstreamResults = await mapWithConcurrency(mainstreamDomains, DISCOVERY_OUTLET_CONCURRENCY, async (domain) => {
     const feedUrl = await discoverOutletFeed(domain, budget)
-    if (!feedUrl) return null
-    return {
-      widgetType: 'rss', tier: 'mainstream', verificationBasis: 'none',
-      label: domain, value: feedUrl, sourceLink: 'https://' + domain + '/',
+    if (feedUrl) {
+      return {
+        widgetType: 'rss', tier: 'mainstream', verificationBasis: 'none',
+        label: domain, value: feedUrl, sourceLink: 'https://' + domain + '/',
+      }
     }
+    if (budget.left <= 0) return null
+    const q = 'site:' + domain + (topicQ ? ' ' + topicQ : '')
+    const gnFeed = gnRssUrl(q, gnHl, gnGl)
+    if (await budgetedFeedCheck(gnFeed, budget)) {
+      return {
+        widgetType: 'rss', tier: 'manufactured', verificationBasis: 'none',
+        label: domain + ' (via Google News)', value: gnFeed, sourceLink: gnHtmlUrl(q, gnHl, gnGl),
+      }
+    }
+    return null
   })
   for (const row of mainstreamResults) {
     if (row) mainstreamRows.push(row)
