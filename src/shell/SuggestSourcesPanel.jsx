@@ -12,7 +12,18 @@ function isHttpUrl(u) {
   try { const p = new URL(u); return p.protocol === 'http:' || p.protocol === 'https:' } catch { return false }
 }
 
-const sid = (s) => s.widgetType + ':' + s.value
+const sid = (s) => s.widgetType + ':' + (s.platform ? s.platform + ':' : '') + s.value
+
+// Mirrors SocialFeedWidget's account resolution so accepting a suggestion preserves existing or default accounts.
+const SOCIAL_DEFAULT_ACCOUNTS = [
+  { id: 'acc-0', platform: 'reddit', value: 'worldnews', enabled: true },
+  { id: 'acc-1', platform: 'reddit', value: 'geopolitics', enabled: true },
+]
+const socialAccountsOf = (w) =>
+  w?.config?.accounts ??
+  (Array.isArray(w?.config?.subs)
+    ? w.config.subs.map(x => ({ id: x.id, platform: 'reddit', value: x.name, enabled: x.enabled }))
+    : SOCIAL_DEFAULT_ACCOUNTS)
 
 export default function SuggestSourcesPanel({ onClose }) {
   const activeWs = useShellStore(s => s.activeWs)
@@ -47,6 +58,11 @@ export default function SuggestSourcesPanel({ onClose }) {
     const cfg = target?.config ?? {}
     const kws = (Array.isArray(cfg.keywords) && cfg.keywords.length) ? cfg.keywords : (cfg.keyword ? [cfg.keyword] : [])
     return new Set(kws.map(k => String(k || '').toLowerCase()).filter(Boolean))
+  }, [ws])
+  const existingSocialAccounts = useMemo(() => {
+    const target = (ws?.widgets ?? []).find(w => w.type === 'social')
+    if (!target) return new Set()
+    return new Set(socialAccountsOf(target).map(a => `${a.platform}:${String(a.value || '').toLowerCase()}`))
   }, [ws])
 
   const [topics, setTopics] = useState('')
@@ -132,6 +148,16 @@ export default function SuggestSourcesPanel({ onClose }) {
       updateWidgetConfig(activeWs, target.id, { ...cfg, keywords: [...kws, s.value] })
       setAccepted(prev => { const n = new Set(prev); n.add(sid(s)); return n })
     }
+    if (s.widgetType === 'social') {
+      const target = (ws?.widgets ?? []).find(w => w.type === 'social')
+      if (!target) { setError('Add a Social widget to accept this.'); return }
+      const accts = socialAccountsOf(target)
+      const dupe = accts.some(a => a.platform === s.platform && String(a.value || '').toLowerCase() === s.value.toLowerCase())
+      if (!dupe) {
+        updateWidgetConfig(activeWs, target.id, { ...target.config, accounts: [...accts, { id: `acc-${Date.now()}`, platform: s.platform, value: s.value, enabled: true }] })
+      }
+      setAccepted(prev => { const n = new Set(prev); n.add(sid(s)); return n })
+    }
   }
 
   const visible = (result?.suggestions ?? []).filter(s => !dismissed.has(sid(s)))
@@ -140,6 +166,7 @@ export default function SuggestSourcesPanel({ onClose }) {
   const chartGroup = visible.filter(s => s.widgetType === 'chart')
   const feedGroup = visible.filter(s => s.widgetType === 'feed')
   const trendsGroup = visible.filter(s => s.widgetType === 'trends')
+  const socialGroup = visible.filter(s => s.widgetType === 'social')
 
   return (
     <div className="suggest-overlay" onClick={onClose}>
@@ -288,6 +315,30 @@ export default function SuggestSourcesPanel({ onClose }) {
                       </div>
                       <div className="suggest-row-actions">
                         {(accepted.has(sid(s)) || existingTrendsKeywords.has(s.value.toLowerCase()))
+                          ? <span className="suggest-added">Added</span>
+                          : (<>
+                              <button type="button" className="nav-add-btn btn-secondary" onClick={() => acceptSuggestion(s)}>Accept</button>
+                              <button type="button" className="widget-btn" onClick={() => setDismissed(prev => { const n = new Set(prev); n.add(sid(s)); return n })} title="Dismiss">x</button>
+                            </>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {widgetTypes.includes('social') && socialGroup.length === 0 && (
+                <p className="suggest-empty">No accounts resolved for these terms.</p>
+              )}
+              {socialGroup.length > 0 && (
+                <div className="suggest-group">
+                  <h3 className="suggest-group-title">Social</h3>
+                  {socialGroup.map(s => (
+                    <div key={sid(s)} className="suggest-row">
+                      <div className="suggest-row-main">
+                        <span className="suggest-name">{s.label}</span>
+                        <span className="suggest-detail">{s.platform === 'reddit' ? 'Reddit' : 'Bluesky'}</span>
+                      </div>
+                      <div className="suggest-row-actions">
+                        {(accepted.has(sid(s)) || existingSocialAccounts.has(`${s.platform}:${s.value.toLowerCase()}`))
                           ? <span className="suggest-added">Added</span>
                           : (<>
                               <button type="button" className="nav-add-btn btn-secondary" onClick={() => acceptSuggestion(s)}>Accept</button>

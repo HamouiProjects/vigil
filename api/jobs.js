@@ -824,6 +824,7 @@ const SUGGEST_CACHE_TTL_MS = 86_400_000 // 24h
 const SUGGEST_MAX_REGIONS = 6
 const SUGGEST_MAX_RSS = 8
 const SUGGEST_MAX_SYMBOLS = 8
+const SUGGEST_MAX_SOCIAL = 8
 const SUGGEST_DISCLAIMER = 'These are suggestions of publicly available sources, not verified or endorsed by Vigil, and not a substitute for your own due diligence.'
 const DISCOVERY_MAX_OUTBOUND = 36
 const DISCOVERY_MAINSTREAM_ATTEMPT = 7
@@ -1228,6 +1229,66 @@ function buildTrendsGroup(keywords) {
   }))
 }
 
+async function proposeSocial(topics, req) {
+  let subreddits = [], bluesky = []
+  const llm = await rateLimit(req, 'suggest-llm', DISCOVERY_LLM_GLOBAL_MAX, 3600, 'global')
+  if (llm.allowed) {
+    try {
+      const topicStr = (topics || []).map(s => String(s).trim()).filter(Boolean).join(', ')
+      const raw = await fetchBriefLLM({
+        system: 'You suggest social accounts to follow for monitoring a topic, on Reddit and Bluesky only. Given topics, return real, active subreddits (without the r/ prefix) and real Bluesky handles (like name.bsky.social) relevant to the topic. Return STRICT JSON exactly {"subreddits":["..."],"bluesky":["..."]}, up to 6 each. No prose, no markdown.',
+        user: 'Topics: ' + topicStr,
+      })
+      const parsed = JSON.parse(raw)
+      subreddits = Array.isArray(parsed?.subreddits) ? parsed.subreddits : []
+      bluesky = Array.isArray(parsed?.bluesky) ? parsed.bluesky : []
+    } catch { subreddits = []; bluesky = [] }
+  }
+  return { subreddits, bluesky }
+}
+
+function normReddit(x) {
+  const v = String(x || '').trim().replace(/^\/?(r\/)?/i, '').replace(/\/+$/, '')
+  return /^[a-z0-9_]{2,21}$/i.test(v) ? v : null
+}
+
+function normBluesky(x) {
+  const v = String(x || '').trim().replace(/^@/, '').replace(/^https?:\/\/bsky\.app\/profile\//i, '').replace(/\/.*$/, '').toLowerCase()
+  return (/^[a-z0-9.-]+\.[a-z0-9.-]+$/.test(v) && !v.includes(' ')) ? v : null
+}
+
+async function buildSocialGroup(topics, req, deadlines) {
+  const { subreddits, bluesky } = await proposeSocial(topics, req)
+  const candidates = []
+  for (const s of subreddits) {
+    const v = normReddit(s)
+    if (v) candidates.push({ platform: 'reddit', value: v, feedUrl: `https://www.reddit.com/r/${v}/.rss`, label: 'r/' + v })
+  }
+  for (const b of bluesky) {
+    const v = normBluesky(b)
+    if (v) candidates.push({ platform: 'bluesky', value: v, feedUrl: `https://bsky.app/profile/${v}/rss`, label: '@' + v })
+  }
+  const seenC = new Set()
+  const uniq = []
+  for (const c of candidates) {
+    const k = c.platform + ':' + c.value.toLowerCase()
+    if (seenC.has(k)) continue
+    seenC.add(k)
+    uniq.push(c)
+  }
+  const validated = await mapWithConcurrency(uniq, DISCOVERY_OUTLET_CONCURRENCY, async (c) => {
+    if (Date.now() > deadlines.soft) return null
+    return (await suggestFeedHasItems(c.feedUrl)) ? c : null
+  })
+  const out = []
+  for (const c of validated) {
+    if (!c) continue
+    out.push({ widgetType: 'social', tier: '', verificationBasis: 'none', label: c.label, value: c.value, platform: c.platform, sourceLink: '' })
+    if (out.length >= SUGGEST_MAX_SOCIAL) break
+  }
+  return out
+}
+
 async function buildRssGroup(topics, regions, req, deadlines) {
   let discovered = []
   try {
@@ -1329,6 +1390,9 @@ async function handleSuggestSources(req, res) {
   }
   if (widgetTypes.includes('trends')) {
     suggestions.push(...buildTrendsGroup(resolvedKeywords))
+  }
+  if (widgetTypes.includes('social')) {
+    suggestions.push(...await buildSocialGroup(topics, req, deadlines))
   }
   const result = { suggestions, disclaimer: SUGGEST_DISCLAIMER, terms: { topics, regions } }
   await suggestCacheWrite(key, result)
