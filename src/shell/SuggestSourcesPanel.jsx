@@ -12,6 +12,8 @@ function isHttpUrl(u) {
   try { const p = new URL(u); return p.protocol === 'http:' || p.protocol === 'https:' } catch { return false }
 }
 
+const sid = (s) => s.widgetType + ':' + s.value
+
 export default function SuggestSourcesPanel({ onClose }) {
   const activeWs = useShellStore(s => s.activeWs)
   const workspaces = useShellStore(s => s.workspaces)
@@ -31,6 +33,10 @@ export default function SuggestSourcesPanel({ onClose }) {
     const syms = target?.config?.symbols ?? []
     return new Set(syms.map(s => s.tvSymbol).filter(Boolean))
   }, [ws])
+  const existingChartSymbol = useMemo(() => {
+    const target = (ws?.widgets ?? []).find(w => w.type === 'chart')
+    return target?.config?.symbol ?? null
+  }, [ws])
 
   const [topics, setTopics] = useState('')
   const [regions, setRegions] = useState('')
@@ -38,6 +44,7 @@ export default function SuggestSourcesPanel({ onClose }) {
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
   const [accepted, setAccepted] = useState(() => new Set())
+  const [acceptedChart, setAcceptedChart] = useState(null)
   const [dismissed, setDismissed] = useState(() => new Set())
 
   async function runSuggest() {
@@ -48,6 +55,7 @@ export default function SuggestSourcesPanel({ onClose }) {
     setLoading(true)
     setResult(null)
     setAccepted(new Set())
+    setAcceptedChart(null)
     setDismissed(new Set())
     try {
       const res = await fetch('/api/jobs?action=suggest-sources', {
@@ -74,7 +82,7 @@ export default function SuggestSourcesPanel({ onClose }) {
       if (!feeds.some(f => f.sourceId === row.id)) {
         updateWidgetConfig(activeWs, target.id, { ...target.config, feeds: [...feeds, { sourceId: row.id, enabled: true }] })
       }
-      setAccepted(prev => { const n = new Set(prev); n.add(s.value); return n })
+      setAccepted(prev => { const n = new Set(prev); n.add(sid(s)); return n })
       return
     }
     if (s.widgetType === 'prices') {
@@ -84,13 +92,20 @@ export default function SuggestSourcesPanel({ onClose }) {
       if (!syms.some(item => item.tvSymbol === s.value)) {
         updateWidgetConfig(activeWs, target.id, { ...target.config, symbols: [...syms, { tvSymbol: s.value, display: s.display, description: s.description }] })
       }
-      setAccepted(prev => { const n = new Set(prev); n.add(s.value); return n })
+      setAccepted(prev => { const n = new Set(prev); n.add(sid(s)); return n })
+    }
+    if (s.widgetType === 'chart') {
+      const target = (ws?.widgets ?? []).find(w => w.type === 'chart')
+      if (!target) { setError('Add a Chart widget to accept this.'); return }
+      updateWidgetConfig(activeWs, target.id, { ...target.config, symbol: s.value })
+      setAcceptedChart(s.value)
     }
   }
 
-  const visible = (result?.suggestions ?? []).filter(s => !dismissed.has(s.value))
+  const visible = (result?.suggestions ?? []).filter(s => !dismissed.has(sid(s)))
   const rssGroup = visible.filter(s => s.widgetType === 'rss')
   const pricesGroup = visible.filter(s => s.widgetType === 'prices')
+  const chartGroup = visible.filter(s => s.widgetType === 'chart')
 
   return (
     <div className="suggest-overlay" onClick={onClose}>
@@ -137,18 +152,18 @@ export default function SuggestSourcesPanel({ onClose }) {
                 <div className="suggest-group">
                   <h3 className="suggest-group-title">RSS</h3>
                   {rssGroup.map(s => (
-                    <div key={s.value} className="suggest-row">
+                    <div key={sid(s)} className="suggest-row">
                       <div className="suggest-row-main">
                         {isHttpUrl(s.sourceLink)
                           ? <a className="suggest-name suggest-name-link" href={s.sourceLink} target="_blank" rel="noreferrer noopener">{s.label}</a>
                           : <span className="suggest-name">{s.label}</span>}
                       </div>
                       <div className="suggest-row-actions">
-                        {(accepted.has(s.value) || existingFeedUrls.has(s.value))
+                        {(accepted.has(sid(s)) || existingFeedUrls.has(s.value))
                           ? <span className="suggest-added">Added</span>
                           : (<>
                               <button type="button" className="nav-add-btn btn-secondary" onClick={() => acceptSuggestion(s)}>Accept</button>
-                              <button type="button" className="widget-btn" onClick={() => setDismissed(prev => { const n = new Set(prev); n.add(s.value); return n })} title="Dismiss">x</button>
+                              <button type="button" className="widget-btn" onClick={() => setDismissed(prev => { const n = new Set(prev); n.add(sid(s)); return n })} title="Dismiss">x</button>
                             </>)}
                       </div>
                     </div>
@@ -162,17 +177,41 @@ export default function SuggestSourcesPanel({ onClose }) {
                 <div className="suggest-group">
                   <h3 className="suggest-group-title">Prices</h3>
                   {pricesGroup.map(s => (
-                    <div key={s.value} className="suggest-row">
+                    <div key={sid(s)} className="suggest-row">
                       <div className="suggest-row-main">
                         <span className="suggest-name">{s.label}</span>
                         <span className="suggest-detail">{s.value}</span>
                       </div>
                       <div className="suggest-row-actions">
-                        {(accepted.has(s.value) || existingSymbols.has(s.value))
+                        {(accepted.has(sid(s)) || existingSymbols.has(s.value))
                           ? <span className="suggest-added">Added</span>
                           : (<>
                               <button type="button" className="nav-add-btn btn-secondary" onClick={() => acceptSuggestion(s)}>Accept</button>
-                              <button type="button" className="widget-btn" onClick={() => setDismissed(prev => { const n = new Set(prev); n.add(s.value); return n })} title="Dismiss">x</button>
+                              <button type="button" className="widget-btn" onClick={() => setDismissed(prev => { const n = new Set(prev); n.add(sid(s)); return n })} title="Dismiss">x</button>
+                            </>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {widgetTypes.includes('chart') && chartGroup.length === 0 && (
+                <p className="suggest-empty">No instruments resolved for these terms.</p>
+              )}
+              {chartGroup.length > 0 && (
+                <div className="suggest-group">
+                  <h3 className="suggest-group-title">Chart</h3>
+                  {chartGroup.map(s => (
+                    <div key={sid(s)} className="suggest-row">
+                      <div className="suggest-row-main">
+                        <span className="suggest-name">{s.label}</span>
+                        <span className="suggest-detail">{s.value}</span>
+                      </div>
+                      <div className="suggest-row-actions">
+                        {(acceptedChart === s.value || existingChartSymbol === s.value)
+                          ? <span className="suggest-added">Added</span>
+                          : (<>
+                              <button type="button" className="nav-add-btn btn-secondary" onClick={() => acceptSuggestion(s)}>Accept</button>
+                              <button type="button" className="widget-btn" onClick={() => setDismissed(prev => { const n = new Set(prev); n.add(sid(s)); return n })} title="Dismiss">x</button>
                             </>)}
                       </div>
                     </div>

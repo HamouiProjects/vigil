@@ -1134,7 +1134,7 @@ async function buildRssDiscovery(topics, regions, req, softDeadlineAt) {
   return [...mainstreamRows, ...localNativeRows, ...localManufacturedRows]
 }
 
-async function buildPricesGroup(topics, req, deadlines) {
+async function proposeSymbols(topics, req, deadlines, max = SUGGEST_MAX_SYMBOLS) {
   let proposedQueries = []
   const llm = await rateLimit(req, 'suggest-llm', DISCOVERY_LLM_GLOBAL_MAX, 3600, 'global')
   if (llm.allowed) {
@@ -1163,18 +1163,24 @@ async function buildPricesGroup(topics, req, deadlines) {
     if (!r || seen.has(r.tvSymbol)) continue
     seen.add(r.tvSymbol)
     resolved.push(r)
-    if (resolved.length >= SUGGEST_MAX_SYMBOLS) break
+    if (resolved.length >= max) break
   }
+  return resolved
+}
 
+function buildPricesGroup(resolved) {
   return resolved.map(r => ({
-    widgetType: 'prices',
-    tier: '',
-    verificationBasis: 'none',
-    label: (r.description || r.display),
-    value: r.tvSymbol,
-    sourceLink: '',
-    display: r.display,
-    description: r.description,
+    widgetType: 'prices', tier: '', verificationBasis: 'none',
+    label: (r.description || r.display), value: r.tvSymbol, sourceLink: '',
+    display: r.display, description: r.description,
+  }))
+}
+
+function buildChartGroup(resolved) {
+  return resolved.map(r => ({
+    widgetType: 'chart', tier: '', verificationBasis: 'none',
+    label: (r.description || r.display), value: r.tvSymbol, sourceLink: '',
+    display: r.display, description: r.description,
   }))
 }
 
@@ -1264,8 +1270,13 @@ async function handleSuggestSources(req, res) {
     const rssGroup = await buildRssGroup(topics, regions, req, deadlines)
     suggestions.push(...rssGroup)
   }
+  const needSymbols = widgetTypes.includes('prices') || widgetTypes.includes('chart')
+  const resolvedSymbols = needSymbols ? await proposeSymbols(topics, req, deadlines, SUGGEST_MAX_SYMBOLS) : []
   if (widgetTypes.includes('prices')) {
-    suggestions.push(...await buildPricesGroup(topics, req, deadlines))
+    suggestions.push(...buildPricesGroup(resolvedSymbols))
+  }
+  if (widgetTypes.includes('chart')) {
+    suggestions.push(...buildChartGroup(resolvedSymbols.slice(0, 5)))
   }
   const result = { suggestions, disclaimer: SUGGEST_DISCLAIMER, terms: { topics, regions } }
   await suggestCacheWrite(key, result)

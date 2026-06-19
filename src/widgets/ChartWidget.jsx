@@ -69,6 +69,19 @@ export default function ChartWidget({ paused, config, onSaveConfig, setTitle, se
     return () => window.removeEventListener('message', onMsg)
   }, [])
 
+  // React to an external config.symbol change (e.g. a Suggest Sources accept) by re-mounting the
+  // embed on the new symbol. Guarded against the widget's own quoteUpdate persistence, which sets
+  // symRef.current first, so this fires only when the symbol changed from outside the widget.
+  useEffect(() => {
+    const cfgSym = config.symbol
+    if (cfgSym && cfgSym !== symRef.current) {
+      symRef.current = cfgSym
+      savedRef.current = cfgSym
+      setLiveSym(cfgSym)
+      setMount(m => ({ symbol: cfgSym, theme: m.theme, nonce: m.nonce + 1 }))
+    }
+  }, [config.symbol])
+
   useEffect(() => { setTitle?.('Chart · ' + shortSym(liveSym)) }, [setTitle, liveSym])
 
   useEffect(() => {
