@@ -486,12 +486,14 @@ body {
 
 .suggest-group-title {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-text-muted);
-  margin: 0 0 8px;
+  color: var(--color-info);
+  margin: 18px 0 10px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--color-info);
 }
 
 .suggest-row {
@@ -515,26 +517,11 @@ body {
   flex: 1;
 }
 
-.suggest-tier {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
 .suggest-name {
   font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.35;
   color: var(--color-text-primary);
-}
-
-.suggest-basis {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  color: var(--color-text-secondary);
 }
 
 .suggest-row-actions {
@@ -546,9 +533,10 @@ body {
 
 .suggest-link {
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: normal;
+  text-transform: none;
+  overflow-wrap: anywhere;
   color: var(--color-text-secondary);
   text-decoration: none;
 }

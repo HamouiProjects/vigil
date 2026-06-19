@@ -4,19 +4,6 @@ import { useSources } from '../data/useSources.js'
 
 const DISCLAIMER = 'These are suggestions of publicly available sources, not verified or endorsed by Vigil, and not a substitute for your own due diligence.'
 
-const TIER_LABEL = {
-  mainstream: 'Mainstream / international',
-  local: 'Credible local',
-  manufactured: 'Manufactured feed',
-  social: 'Social, unverified',
-}
-const BASIS_LABEL = {
-  domain: 'Official (domain-verified)',
-  platform: 'Platform-verified',
-  verifier: 'Official (trusted verifier)',
-  none: 'Not verified',
-}
-
 function parseTerms(text) {
   return (text || '').split(',').map(s => s.trim()).filter(Boolean)
 }
@@ -135,14 +122,12 @@ export default function SuggestSourcesPanel({ onClose }) {
                   {rssGroup.map(s => (
                     <div key={s.value} className="suggest-row">
                       <div className="suggest-row-main">
-                        <span className="suggest-tier">{TIER_LABEL[s.tier] ?? s.tier}</span>
                         <span className="suggest-name">{s.label}</span>
-                        <span className="suggest-basis">{BASIS_LABEL[s.verificationBasis] ?? 'Not verified'}</span>
+                        {isHttpUrl(s.sourceLink) && (
+                          <a className="suggest-link" href={s.sourceLink} target="_blank" rel="noreferrer noopener">{s.sourceLink}</a>
+                        )}
                       </div>
                       <div className="suggest-row-actions">
-                        {isHttpUrl(s.sourceLink) && (
-                          <a className="suggest-link" href={s.sourceLink} target="_blank" rel="noreferrer noopener">Source</a>
-                        )}
                         {(accepted.has(s.value) || existingFeedUrls.has(s.value))
                           ? <span className="suggest-added">Added</span>
                           : (<>
