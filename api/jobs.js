@@ -832,6 +832,11 @@ const DISCOVERY_PROBE_TIMEOUT_MS = 6000
 const DISCOVERY_HTML_CAP_BYTES = 524288
 const DISCOVERY_LLM_DOMAINS = 6
 const DISCOVERY_LLM_GLOBAL_MAX = 60
+// Run-deadline guard. jobs.js maxDuration is 60s. Soft: discovery stops launching new
+// outbound at this elapsed time so the function never hard-times-out. Hard: past this, the
+// floor returns its Google News rows without validating, to guarantee a never-empty result.
+const SUGGEST_RUN_BUDGET_MS = 42000
+const SUGGEST_FLOOR_DEADLINE_MS = 52000
 const COMMON_FEED_PATHS = ['/feed', '/feed/', '/rss', '/rss.xml', '/atom.xml', '/feed.xml', '/feeds/posts/default']
 
 // Region to (Google News hl language, gl country). Localized floor only where we have a confident pair.
@@ -937,6 +942,7 @@ function dedupDomains(domains) {
 }
 
 async function budgetedFeedCheck(feedUrl, budget) {
+  if (budget.deadlineAt && Date.now() >= budget.deadlineAt) return false
   if (budget.left <= 0) return false
   budget.left -= 1
   return suggestFeedHasItems(feedUrl)
@@ -970,7 +976,7 @@ function extractFeedLinkCandidates(html, homepage) {
 async function discoverOutletFeed(domain, budget) {
   const homepage = 'https://' + domain + '/'
   try {
-    if (budget.left > 0) {
+    if (budget.left > 0 && !(budget.deadlineAt && Date.now() >= budget.deadlineAt)) {
       budget.left -= 1
       const res = await safeFetch(homepage, { signal: AbortSignal.timeout(DISCOVERY_HOMEPAGE_TIMEOUT_MS) })
       const html = (await res.text()).slice(0, DISCOVERY_HTML_CAP_BYTES)
@@ -983,6 +989,7 @@ async function discoverOutletFeed(domain, budget) {
 
   for (const path of COMMON_FEED_PATHS) {
     if (budget.left <= 0) break
+    if (budget.deadlineAt && Date.now() >= budget.deadlineAt) break
     const feedUrl = 'https://' + domain + path
     if (await budgetedFeedCheck(feedUrl, budget)) return feedUrl
   }
@@ -1013,10 +1020,10 @@ function collectMatchedRegionKeys(regions) {
   return matched
 }
 
-async function buildRssDiscovery(topics, regions, req) {
+async function buildRssDiscovery(topics, regions, req, softDeadlineAt) {
   const topicQ = (topics || []).map(s => String(s).trim()).filter(Boolean).join(' ')
   const matchedKeys = collectMatchedRegionKeys(regions)
-  const budget = { left: DISCOVERY_MAX_OUTBOUND }
+  const budget = { left: DISCOVERY_MAX_OUTBOUND, deadlineAt: softDeadlineAt }
 
   let llmMainstream = []
   let llmLocal = []
@@ -1125,14 +1132,14 @@ async function buildRssDiscovery(topics, regions, req) {
   return [...mainstreamRows, ...localNativeRows, ...localManufacturedRows]
 }
 
-async function buildRssGroup(topics, regions, req) {
+async function buildRssGroup(topics, regions, req, deadlines) {
   let discovered = []
   try {
-    discovered = await buildRssDiscovery(topics, regions, req)
+    discovered = await buildRssDiscovery(topics, regions, req, deadlines?.soft)
   } catch {
     discovered = []
   }
-  const floor = await buildRssFloor(topics, regions)
+  const floor = await buildRssFloor(topics, regions, deadlines?.hard)
   const seen = new Set()
   const out = []
   for (const row of [...discovered, ...floor]) {
@@ -1144,7 +1151,7 @@ async function buildRssGroup(topics, regions, req) {
   return out
 }
 
-async function buildRssFloor(topics, regions) {
+async function buildRssFloor(topics, regions, hardDeadlineAt) {
   const topicQ = (topics || []).map(s => String(s).trim()).filter(Boolean).join(' ')
   const regionList = (regions || []).map(s => String(s).trim()).filter(Boolean)
   const candidates = []
@@ -1166,8 +1173,16 @@ async function buildRssFloor(topics, regions) {
       value: gnRssUrl(umbrellaQ, 'en-US', 'US'), sourceLink: gnHtmlUrl(umbrellaQ, 'en-US', 'US'),
     })
   }
-  const checked = await Promise.allSettled(candidates.map(async c => (await suggestFeedHasItems(c.value)) ? c : null))
-  const valid = checked.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
+  let valid
+  if (hardDeadlineAt && Date.now() >= hardDeadlineAt) {
+    // Past the hard run deadline. Skip validation so the never-empty floor still returns
+    // before the function times out. These are manufactured Google News query feeds,
+    // already tier-labeled and disclaimed, and they reliably resolve.
+    valid = candidates
+  } else {
+    const checked = await Promise.allSettled(candidates.map(async c => (await suggestFeedHasItems(c.value)) ? c : null))
+    valid = checked.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
+  }
   const seen = new Set()
   const out = []
   for (const c of valid) {
@@ -1193,9 +1208,14 @@ async function handleSuggestSources(req, res) {
   const key = suggestCacheKey(topics, regions, widgetTypes)
   const cached = await suggestCacheRead(key)
   if (cached) return res.status(200).json({ ...cached, cached: true })
+  const startedAt = Date.now()
+  const deadlines = {
+    soft: startedAt + SUGGEST_RUN_BUDGET_MS,
+    hard: startedAt + SUGGEST_FLOOR_DEADLINE_MS,
+  }
   const suggestions = []
   if (widgetTypes.includes('rss')) {
-    const rssGroup = await buildRssGroup(topics, regions, req)
+    const rssGroup = await buildRssGroup(topics, regions, req, deadlines)
     suggestions.push(...rssGroup)
   }
   const result = { suggestions, disclaimer: SUGGEST_DISCLAIMER, terms: { topics, regions } }
