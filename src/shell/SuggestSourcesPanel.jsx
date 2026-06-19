@@ -112,6 +112,14 @@ export default function SuggestSourcesPanel({ onClose }) {
             </button>
           </div>
           {error && <p className="suggest-error">{error}</p>}
+          {loading && (
+            <div className="suggest-loading" role="status" aria-live="polite">
+              <div className="suggest-progress-track" aria-hidden="true">
+                <div className="suggest-progress-bar" />
+              </div>
+              <p className="suggest-loading-note">Checking real, publicly available feeds. This usually takes around 15 to 40 seconds.</p>
+            </div>
+          )}
           {result && !loading && (
             <div className="suggest-results">
               {rssGroup.length === 0 && (

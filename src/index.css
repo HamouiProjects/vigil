@@ -567,6 +567,49 @@ body {
   color: var(--color-brand);
 }
 
+.suggest-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.suggest-progress-track {
+  position: relative;
+  height: 4px;
+  width: 100%;
+  background: var(--color-surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.suggest-progress-bar {
+  position: absolute;
+  top: 0;
+  left: -35%;
+  height: 100%;
+  width: 35%;
+  background: var(--color-brand);
+  border-radius: 3px;
+  animation: suggest-progress-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes suggest-progress-slide {
+  0% { left: -35%; }
+  100% { left: 100%; }
+}
+
+.suggest-loading-note {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .suggest-progress-track { display: none; }
+}
+
 .brief-schedule {
   display: flex;
   flex-wrap: wrap;
