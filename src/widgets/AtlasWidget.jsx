@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import AtlasWorldGlobe, { LAYER_COLORS } from './AtlasWorldGlobe'
+import AtlasWorldGlobe, { LAYER_COLORS, LAYER_ORDER, LAYER_SWATCH_CSS, formatRelativeTime } from './AtlasWorldGlobe'
 
 const DEFAULT_GLOBE_LAYERS = { wildfires: false, earthquakes: true, storms: false, aircraft: false }
 
@@ -92,6 +92,8 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
 
   const [barsCollapsed, setBarsCollapsed] = useState(false)
   const [showSources, setShowSources] = useState(false)
+  const [provenance, setProvenance] = useState(null)
+  const [, setProvTick] = useState(0)
   const [refreshNonce, setRefreshNonce] = useState(0)
   const [refreshSpinning, setRefreshSpinning] = useState(false)
   const [homeNonce, setHomeNonce] = useState(0)
@@ -114,6 +116,12 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
     setRefreshSpinning(true)
     window.setTimeout(() => setRefreshSpinning(false), 800)
   }
+
+  useEffect(() => {
+    if (!showSources) return
+    const id = setInterval(() => setProvTick((t) => t + 1), 60_000)
+    return () => clearInterval(id)
+  }, [showSources])
 
   useEffect(() => {
     if (!showSources) return
@@ -262,7 +270,32 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
               <div style={{ color: 'var(--color-text-muted)', marginBottom: 4, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                 Globe layers
               </div>
-              <div>Earthquakes via USGS · Storms via GDACS · Aircraft via adsb.lol · Wildfires via NASA FIRMS</div>
+              {LAYER_ORDER.filter((key) => layers?.[key]).map((key) => {
+                const p = provenance?.[key]
+                if (!p) return null
+                const rel = formatRelativeTime(p.fetchedAt)
+                const count = p.count != null ? p.count.toLocaleString() : '-'
+                return (
+                  <div key={key} style={{ marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span
+                        aria-hidden="true"
+                        style={{ width: 8, height: 8, borderRadius: 2, background: LAYER_SWATCH_CSS[key], flexShrink: 0 }}
+                      />
+                      <span style={{ flex: 1, color: 'var(--color-text-secondary)' }}>{p.label}</span>
+                      <span style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+                    </div>
+                    <div style={{ marginLeft: 14, color: 'var(--color-text-muted)', fontSize: 10 }}>
+                      {p.sourceName}{rel ? ` · ${rel}` : ''}
+                    </div>
+                    {key === 'aircraft' && (
+                      <div style={{ marginLeft: 14, color: 'var(--color-text-muted)', fontSize: 10, lineHeight: 1.35 }}>
+                        Transponder positions, an indicator, not confirmed movements.
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
             <div style={{ marginBottom: 8 }}>
               <div style={{ color: 'var(--color-text-muted)', marginBottom: 4, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
@@ -298,6 +331,7 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
             aoi={config.aoi}
             onAoiChange={(next) => onSaveConfigRef.current({ ...configRef.current, aoi: next })}
             homeNonce={homeNonce}
+            onProvenance={setProvenance}
           />
         </div>
 

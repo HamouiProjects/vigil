@@ -455,7 +455,7 @@ export const LAYER_COLORS = {
   wildfires: '#EA5F38',
 }
 
-const LAYER_SWATCH_CSS = {
+export const LAYER_SWATCH_CSS = {
   earthquakes: 'var(--color-warning)',
   storms: 'var(--color-info)',
   wildfires: 'var(--color-error)',
@@ -493,7 +493,7 @@ function applyLayerMarkerColors(map) {
   }
 }
 
-const LAYER_ORDER = ['earthquakes', 'storms', 'aircraft', 'wildfires']
+export const LAYER_ORDER = ['earthquakes', 'storms', 'aircraft', 'wildfires']
 
 function createDefaultProvenance() {
   return {
@@ -533,7 +533,7 @@ function featureCollectionFromGeoResponse(json) {
   return { type: 'FeatureCollection', features: json.features ?? [] }
 }
 
-function formatRelativeTime(iso) {
+export function formatRelativeTime(iso) {
   if (!iso) return null
   const then = new Date(iso).getTime()
   if (Number.isNaN(then)) return null
@@ -944,7 +944,7 @@ function fitBoundsStub(map, bounds, padding = 40) {
 void flyToStub
 void fitBoundsStub
 
-export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi = null, onAoiChange, homeNonce = 0 }) {
+export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi = null, onAoiChange, homeNonce = 0, onProvenance }) {
   const wrapRef = useRef(null)
   const containerRef = useRef(null)
   const countryReadoutRef = useRef(null)
@@ -963,8 +963,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
   const [provenance, setProvenance] = useState(createDefaultProvenance)
   const provenanceRef = useRef(provenance)
   provenanceRef.current = provenance
-  const [legendCollapsed, setLegendCollapsed] = useState(true)
-  const [, setLegendTick] = useState(0)
   const aircraftPhotoCacheRef = useRef(new Map())
   const countriesGeoRef = useRef(null)
   const countryBBoxesRef = useRef(null)
@@ -973,6 +971,8 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
   const initialAoiRef = useRef(aoi)
   const onAoiChangeRef = useRef(onAoiChange)
   onAoiChangeRef.current = onAoiChange
+  const onProvenanceRef = useRef(onProvenance)
+  onProvenanceRef.current = onProvenance
 
   pausedRef.current = paused
   layersRef.current = layers
@@ -986,9 +986,8 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
   }
 
   useEffect(() => {
-    const id = setInterval(() => setLegendTick((t) => t + 1), 60_000)
-    return () => clearInterval(id)
-  }, [])
+    if (typeof onProvenanceRef.current === 'function') onProvenanceRef.current(provenance)
+  }, [provenance])
 
   useEffect(() => {
     let intervalId = null
@@ -1676,56 +1675,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
         className="atlas-country-readout"
         aria-hidden="true"
       />
-      <div className="atlas-globe-legend">
-        <button
-          type="button"
-          className="atlas-globe-legend-toggle"
-          onClick={() => setLegendCollapsed((c) => !c)}
-          aria-expanded={!legendCollapsed}
-        >
-          <span>Sources</span>
-          <span className="atlas-globe-legend-chevron" aria-hidden="true">
-            {legendCollapsed ? '\u25B8' : '\u25BE'}
-          </span>
-        </button>
-        {!legendCollapsed && (
-          <div className="atlas-globe-legend-body">
-            {LAYER_ORDER.filter((key) => layers?.[key]).map((key) => {
-              const p = provenance[key]
-              const rel = formatRelativeTime(p.fetchedAt)
-              const count =
-                p.count != null ? p.count.toLocaleString() : '-'
-              return (
-                <div key={key} className="atlas-globe-legend-row-wrap">
-                  <div className="atlas-globe-legend-row">
-                    <span
-                      className="atlas-globe-legend-swatch"
-                      style={{ background: LAYER_SWATCH_CSS[key] }}
-                      aria-hidden="true"
-                    />
-                    <span className="atlas-globe-legend-label">{p.label}</span>
-                    <span className="atlas-globe-legend-source">{p.sourceName}</span>
-                    <span className="atlas-globe-legend-count">{count}</span>
-                    {rel && (
-                      <span
-                        className="atlas-globe-legend-time"
-                        title={p.fetchedAt || undefined}
-                      >
-                        {rel}
-                      </span>
-                    )}
-                  </div>
-                  {key === 'aircraft' && (
-                    <p className="atlas-globe-legend-note">
-                      Transponder positions, an indicator, not confirmed movements.
-                    </p>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
     </div>
   )
 }
