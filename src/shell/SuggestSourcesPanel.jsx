@@ -99,7 +99,7 @@ export default function SuggestSourcesPanel({ onClose }) {
           <p className="suggest-disclaimer">{result?.disclaimer ?? DISCLAIMER}</p>
           <div className="suggest-inputs">
             <label className="suggest-field">Topics
-              <input type="text" value={topics} onChange={e => setTopics(e.target.value)} placeholder="e.g. M23, Goma" />
+              <input type="text" value={topics} onChange={e => setTopics(e.target.value)} placeholder="e.g. a conflict, market, or topic" />
             </label>
             <label className="suggest-field">Also include
               <input type="text" value={regions} onChange={e => setRegions(e.target.value)} placeholder="e.g. a team, place, or event" />
