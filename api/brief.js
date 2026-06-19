@@ -51,9 +51,11 @@ function buildMarkets(mkReq, quotes) {
   const r2 = (n) => Math.round(Number(n) * 100) / 100
   // Adaptive precision: 2 decimals at or above 1, up to 6 decimals below 1 so small crypto and
   // FX prices do not round to noise. Returns a number, not a string, so no render type changes.
-  const roundPrice = (n) => {
+  const roundPrice = (n, assetType) => {
     const x = Number(n)
     if (!Number.isFinite(x)) return null
+    // FX rates carry their meaning in the 4th decimal (pips), so keep 4 decimals for currencies.
+    if (String(assetType || '').toUpperCase() === 'CURRENCY') return Math.round(x * 1e4) / 1e4
     return Math.abs(x) >= 1 ? Math.round(x * 100) / 100 : Math.round(x * 1e6) / 1e6
   }
   const dirOf = (p) => (p > 0 ? 'up' : p < 0 ? 'down' : 'flat')
@@ -74,7 +76,7 @@ function buildMarkets(mkReq, quotes) {
   for (const s of (mkReq.symbols || [])) {
     const q = map.get(String(s).toUpperCase()); if (!q) continue
     const pct = r2(q.change_pct ?? 0)
-    rows.push({ symbol: q.symbol, name: q.name || q.symbol, price: roundPrice(q.price), changePct: pct, dir: dirOf(pct), currency: ccyOf(q) })
+    rows.push({ symbol: q.symbol, name: q.name || q.symbol, price: roundPrice(q.price, q.asset_type), changePct: pct, dir: dirOf(pct), currency: ccyOf(q) })
   }
   const heatmaps = []
   for (const h of (mkReq.heatmaps || [])) {
