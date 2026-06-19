@@ -454,7 +454,7 @@ button.status-dot:hover { opacity: 0.8; }
 .widget-icon { font-size: 13px; opacity: 0.85; }
 .widget-title {
   font-size: 10px; font-weight: 400; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--text-primary);
+  text-transform: uppercase; color: var(--color-info);
   font-family: 'JetBrains Mono', monospace;
 }
 

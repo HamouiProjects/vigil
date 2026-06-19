@@ -101,11 +101,11 @@ export default function SuggestSourcesPanel({ onClose }) {
             <label className="suggest-field">Topics
               <input type="text" value={topics} onChange={e => setTopics(e.target.value)} placeholder="e.g. M23, Goma" />
             </label>
-            <label className="suggest-field">Regions
-              <input type="text" value={regions} onChange={e => setRegions(e.target.value)} placeholder="e.g. Congo" />
+            <label className="suggest-field">Also include
+              <input type="text" value={regions} onChange={e => setRegions(e.target.value)} placeholder="e.g. a team, place, or event" />
             </label>
             {regions.trim() === '' && (
-              <p className="suggest-hint">Add a region for local sources.</p>
+              <p className="suggest-hint">Add a place to also pull in local outlets.</p>
             )}
             <button type="button" className="nav-add-btn btn-primary" onClick={runSuggest} disabled={loading}>
               {loading ? 'Finding sources...' : 'Suggest sources'}
