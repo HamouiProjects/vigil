@@ -1221,6 +1221,13 @@ function buildFeedGroup(keywords) {
   }))
 }
 
+function buildTrendsGroup(keywords) {
+  return keywords.map(kw => ({
+    widgetType: 'trends', tier: '', verificationBasis: 'none',
+    label: kw, value: kw, sourceLink: '',
+  }))
+}
+
 async function buildRssGroup(topics, regions, req, deadlines) {
   let discovered = []
   try {
@@ -1315,8 +1322,13 @@ async function handleSuggestSources(req, res) {
   if (widgetTypes.includes('chart')) {
     suggestions.push(...buildChartGroup(resolvedSymbols.slice(0, 5)))
   }
+  const needKeywords = widgetTypes.includes('feed') || widgetTypes.includes('trends')
+  const resolvedKeywords = needKeywords ? await proposeKeywords(topics, req) : []
   if (widgetTypes.includes('feed')) {
-    suggestions.push(...buildFeedGroup(await proposeKeywords(topics, req)))
+    suggestions.push(...buildFeedGroup(resolvedKeywords))
+  }
+  if (widgetTypes.includes('trends')) {
+    suggestions.push(...buildTrendsGroup(resolvedKeywords))
   }
   const result = { suggestions, disclaimer: SUGGEST_DISCLAIMER, terms: { topics, regions } }
   await suggestCacheWrite(key, result)

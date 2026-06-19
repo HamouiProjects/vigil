@@ -42,6 +42,12 @@ export default function SuggestSourcesPanel({ onClose }) {
     const tabs = target?.config?.tabs ?? []
     return new Set(tabs.map(t => (t.keyword || '').toLowerCase()).filter(Boolean))
   }, [ws])
+  const existingTrendsKeywords = useMemo(() => {
+    const target = (ws?.widgets ?? []).find(w => w.type === 'trends')
+    const cfg = target?.config ?? {}
+    const kws = (Array.isArray(cfg.keywords) && cfg.keywords.length) ? cfg.keywords : (cfg.keyword ? [cfg.keyword] : [])
+    return new Set(kws.map(k => String(k || '').toLowerCase()).filter(Boolean))
+  }, [ws])
 
   const [topics, setTopics] = useState('')
   const [regions, setRegions] = useState('')
@@ -114,6 +120,18 @@ export default function SuggestSourcesPanel({ onClose }) {
       }
       setAccepted(prev => { const n = new Set(prev); n.add(sid(s)); return n })
     }
+    if (s.widgetType === 'trends') {
+      const target = (ws?.widgets ?? []).find(w => w.type === 'trends')
+      if (!target) { setError('Add a Search Interest widget to accept this.'); return }
+      const cfg = target.config ?? {}
+      const kws = (Array.isArray(cfg.keywords) && cfg.keywords.length) ? cfg.keywords : (cfg.keyword ? [cfg.keyword] : [])
+      if (kws.some(k => String(k || '').toLowerCase() === s.value.toLowerCase())) {
+        setAccepted(prev => { const n = new Set(prev); n.add(sid(s)); return n }); return
+      }
+      if (kws.length >= 5) { setError('Search Interest compares up to 5 terms. Remove one first.'); return }
+      updateWidgetConfig(activeWs, target.id, { ...cfg, keywords: [...kws, s.value] })
+      setAccepted(prev => { const n = new Set(prev); n.add(sid(s)); return n })
+    }
   }
 
   const visible = (result?.suggestions ?? []).filter(s => !dismissed.has(sid(s)))
@@ -121,6 +139,7 @@ export default function SuggestSourcesPanel({ onClose }) {
   const pricesGroup = visible.filter(s => s.widgetType === 'prices')
   const chartGroup = visible.filter(s => s.widgetType === 'chart')
   const feedGroup = visible.filter(s => s.widgetType === 'feed')
+  const trendsGroup = visible.filter(s => s.widgetType === 'trends')
 
   return (
     <div className="suggest-overlay" onClick={onClose}>
@@ -246,6 +265,29 @@ export default function SuggestSourcesPanel({ onClose }) {
                       </div>
                       <div className="suggest-row-actions">
                         {(accepted.has(sid(s)) || existingFeedKeywords.has(s.value.toLowerCase()))
+                          ? <span className="suggest-added">Added</span>
+                          : (<>
+                              <button type="button" className="nav-add-btn btn-secondary" onClick={() => acceptSuggestion(s)}>Accept</button>
+                              <button type="button" className="widget-btn" onClick={() => setDismissed(prev => { const n = new Set(prev); n.add(sid(s)); return n })} title="Dismiss">x</button>
+                            </>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {widgetTypes.includes('trends') && trendsGroup.length === 0 && (
+                <p className="suggest-empty">No search terms suggested.</p>
+              )}
+              {trendsGroup.length > 0 && (
+                <div className="suggest-group">
+                  <h3 className="suggest-group-title">Search Interest</h3>
+                  {trendsGroup.map(s => (
+                    <div key={sid(s)} className="suggest-row">
+                      <div className="suggest-row-main">
+                        <span className="suggest-name">{s.label}</span>
+                      </div>
+                      <div className="suggest-row-actions">
+                        {(accepted.has(sid(s)) || existingTrendsKeywords.has(s.value.toLowerCase()))
                           ? <span className="suggest-added">Added</span>
                           : (<>
                               <button type="button" className="nav-add-btn btn-secondary" onClick={() => acceptSuggestion(s)}>Accept</button>
