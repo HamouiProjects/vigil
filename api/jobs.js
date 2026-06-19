@@ -1184,6 +1184,43 @@ function buildChartGroup(resolved) {
   }))
 }
 
+async function proposeKeywords(topics, req, max = 8) {
+  let keywords = []
+  const llm = await rateLimit(req, 'suggest-llm', DISCOVERY_LLM_GLOBAL_MAX, 3600, 'global')
+  if (llm.allowed) {
+    try {
+      const topicStr = (topics || []).map(s => String(s).trim()).filter(Boolean).join(', ')
+      const raw = await fetchBriefLLM({
+        system: 'You suggest search keywords for monitoring a topic in a news search tool. Given topics, return specific search phrases an analyst would track, favoring precise multi word phrases over single generic words. Return STRICT JSON exactly {"keywords":["..."]} of up to 8 short phrases. No prose, no markdown.',
+        user: 'Topics: ' + topicStr,
+      })
+      const parsed = JSON.parse(raw)
+      keywords = Array.isArray(parsed?.keywords) ? parsed.keywords : []
+    } catch {
+      keywords = []
+    }
+  }
+  const seen = new Set()
+  const out = []
+  for (const k of keywords) {
+    const kw = String(k || '').trim()
+    if (!kw) continue
+    const key = kw.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(kw)
+    if (out.length >= max) break
+  }
+  return out
+}
+
+function buildFeedGroup(keywords) {
+  return keywords.map(kw => ({
+    widgetType: 'feed', tier: '', verificationBasis: 'none',
+    label: kw, value: kw, sourceLink: '',
+  }))
+}
+
 async function buildRssGroup(topics, regions, req, deadlines) {
   let discovered = []
   try {
@@ -1277,6 +1314,9 @@ async function handleSuggestSources(req, res) {
   }
   if (widgetTypes.includes('chart')) {
     suggestions.push(...buildChartGroup(resolvedSymbols.slice(0, 5)))
+  }
+  if (widgetTypes.includes('feed')) {
+    suggestions.push(...buildFeedGroup(await proposeKeywords(topics, req)))
   }
   const result = { suggestions, disclaimer: SUGGEST_DISCLAIMER, terms: { topics, regions } }
   await suggestCacheWrite(key, result)

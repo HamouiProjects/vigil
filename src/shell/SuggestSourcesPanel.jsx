@@ -37,6 +37,11 @@ export default function SuggestSourcesPanel({ onClose }) {
     const target = (ws?.widgets ?? []).find(w => w.type === 'chart')
     return target?.config?.symbol ?? null
   }, [ws])
+  const existingFeedKeywords = useMemo(() => {
+    const target = (ws?.widgets ?? []).find(w => w.type === 'feed')
+    const tabs = target?.config?.tabs ?? []
+    return new Set(tabs.map(t => (t.keyword || '').toLowerCase()).filter(Boolean))
+  }, [ws])
 
   const [topics, setTopics] = useState('')
   const [regions, setRegions] = useState('')
@@ -100,12 +105,22 @@ export default function SuggestSourcesPanel({ onClose }) {
       updateWidgetConfig(activeWs, target.id, { ...target.config, symbol: s.value })
       setAcceptedChart(s.value)
     }
+    if (s.widgetType === 'feed') {
+      const target = (ws?.widgets ?? []).find(w => w.type === 'feed')
+      if (!target) { setError('Add a News Search widget to accept this.'); return }
+      const tabs = target.config?.tabs ?? []
+      if (!tabs.some(t => (t.keyword || '').toLowerCase() === s.value.toLowerCase())) {
+        updateWidgetConfig(activeWs, target.id, { ...target.config, tabs: [...tabs, { id: `tab-${Date.now()}`, keyword: s.value }] })
+      }
+      setAccepted(prev => { const n = new Set(prev); n.add(sid(s)); return n })
+    }
   }
 
   const visible = (result?.suggestions ?? []).filter(s => !dismissed.has(sid(s)))
   const rssGroup = visible.filter(s => s.widgetType === 'rss')
   const pricesGroup = visible.filter(s => s.widgetType === 'prices')
   const chartGroup = visible.filter(s => s.widgetType === 'chart')
+  const feedGroup = visible.filter(s => s.widgetType === 'feed')
 
   return (
     <div className="suggest-overlay" onClick={onClose}>
@@ -208,6 +223,29 @@ export default function SuggestSourcesPanel({ onClose }) {
                       </div>
                       <div className="suggest-row-actions">
                         {(acceptedChart === s.value || existingChartSymbol === s.value)
+                          ? <span className="suggest-added">Added</span>
+                          : (<>
+                              <button type="button" className="nav-add-btn btn-secondary" onClick={() => acceptSuggestion(s)}>Accept</button>
+                              <button type="button" className="widget-btn" onClick={() => setDismissed(prev => { const n = new Set(prev); n.add(sid(s)); return n })} title="Dismiss">x</button>
+                            </>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {widgetTypes.includes('feed') && feedGroup.length === 0 && (
+                <p className="suggest-empty">No keywords suggested for these terms.</p>
+              )}
+              {feedGroup.length > 0 && (
+                <div className="suggest-group">
+                  <h3 className="suggest-group-title">News Search</h3>
+                  {feedGroup.map(s => (
+                    <div key={sid(s)} className="suggest-row">
+                      <div className="suggest-row-main">
+                        <span className="suggest-name">{s.label}</span>
+                      </div>
+                      <div className="suggest-row-actions">
+                        {(accepted.has(sid(s)) || existingFeedKeywords.has(s.value.toLowerCase()))
                           ? <span className="suggest-added">Added</span>
                           : (<>
                               <button type="button" className="nav-add-btn btn-secondary" onClick={() => acceptSuggestion(s)}>Accept</button>
