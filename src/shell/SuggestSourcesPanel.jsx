@@ -29,10 +29,16 @@ export default function SuggestSourcesPanel({ onClose }) {
   const activeWs = useShellStore(s => s.activeWs)
   const workspaces = useShellStore(s => s.workspaces)
   const updateWidgetConfig = useShellStore(s => s.updateWidgetConfig)
-  const { addSource } = useSources()
+  const { sources, addSource } = useSources()
 
   const ws = useMemo(() => workspaces.find(w => w.id === activeWs), [workspaces, activeWs])
   const widgetTypes = useMemo(() => [...new Set((ws?.widgets ?? []).map(w => w.type))], [ws])
+  const existingFeedUrls = useMemo(() => {
+    const target = (ws?.widgets ?? []).find(w => w.type === 'rss')
+    const feeds = target?.config?.feeds ?? []
+    const byId = new Map(sources.map(src => [src.id, src.identifier]))
+    return new Set(feeds.map(f => byId.get(f.sourceId)).filter(Boolean))
+  }, [ws, sources])
 
   const [topics, setTopics] = useState('')
   const [regions, setRegions] = useState('')
@@ -129,7 +135,7 @@ export default function SuggestSourcesPanel({ onClose }) {
                         {isHttpUrl(s.sourceLink) && (
                           <a className="suggest-link" href={s.sourceLink} target="_blank" rel="noreferrer noopener">Source</a>
                         )}
-                        {accepted.has(s.value)
+                        {(accepted.has(s.value) || existingFeedUrls.has(s.value))
                           ? <span className="suggest-added">Added</span>
                           : (<>
                               <button type="button" className="nav-add-btn btn-secondary" onClick={() => acceptSuggestion(s)}>Accept</button>
