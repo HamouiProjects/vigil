@@ -151,3 +151,79 @@ export function gatherTrendsRequest(workspace) {
   const window = cfg.time || 'today 12-m'
   return { terms, window, windowLabel: TREND_WINDOW_LABELS[window] || window }
 }
+
+// WMO weather code to a short label. Same thresholds the Weather widget uses (decodeWmo).
+function wmoLabel(code) {
+  if (code === 0) return 'Clear sky'
+  if (code <= 2) return 'Partly cloudy'
+  if (code === 3) return 'Overcast'
+  if (code <= 48) return 'Fog'
+  if (code <= 67) return 'Rain'
+  if (code <= 77) return 'Snow'
+  if (code <= 82) return 'Rain showers'
+  if (code <= 86) return 'Snow showers'
+  if (code <= 99) return 'Thunderstorm'
+  return 'Unknown'
+}
+
+function roundOrNull(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.round(n) : null
+}
+
+// Resolve a weather widget to a lat/lon. Prefers the persisted latLon, falls back to
+// geocoding the configured city via nominatim (the same source the widget uses).
+async function resolveWeatherLatLon(cfg) {
+  const ll = cfg?.latLon
+  if (ll && typeof ll.lat === 'number' && typeof ll.lon === 'number') {
+    return { lat: ll.lat, lon: ll.lon, name: ll.name || cfg.locName || cfg.city || 'Weather' }
+  }
+  const city = cfg?.city
+  if (!city) return null
+  try {
+    const json = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1`,
+      { signal: AbortSignal.timeout(8000) }
+    ).then((r) => r.json())
+    const loc = json?.[0]
+    if (!loc) return null
+    return { lat: parseFloat(loc.lat), lon: parseFloat(loc.lon), name: loc.display_name.split(',')[0].trim() }
+  } catch { return null }
+}
+
+// Current conditions plus a two day forecast for each included weather widget.
+// Client side fetch, returns already resolved data so the brief endpoint does no weather fetch.
+export async function gatherWeather(workspace) {
+  if (!workspace?.widgets?.length) return null
+  const widgets = workspace.widgets.filter((w) => w.type === 'weather' && w.config?.includeInBrief !== false)
+  if (!widgets.length) return null
+  const locations = []
+  for (const w of widgets) {
+    const loc = await resolveWeatherLatLon(w.config || {})
+    if (!loc) continue
+    try {
+      const url =
+        `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}` +
+        `&current=temperature_2m,apparent_temperature,wind_speed_10m,weather_code,relative_humidity_2m` +
+        `&daily=temperature_2m_max,temperature_2m_min,weather_code&forecast_days=2&timezone=auto`
+      const wx = await fetch(url, { signal: AbortSignal.timeout(8000) }).then((r) => r.json())
+      const c = wx?.current
+      const d = wx?.daily
+      if (!c) continue
+      locations.push({
+        name: loc.name,
+        tempC: roundOrNull(c.temperature_2m),
+        feelsC: roundOrNull(c.apparent_temperature),
+        condition: wmoLabel(Number(c.weather_code)),
+        windKph: roundOrNull(c.wind_speed_10m),
+        humidity: roundOrNull(c.relative_humidity_2m),
+        todayMaxC: roundOrNull(d?.temperature_2m_max?.[0]),
+        todayMinC: roundOrNull(d?.temperature_2m_min?.[0]),
+        tomorrowMaxC: roundOrNull(d?.temperature_2m_max?.[1]),
+        tomorrowMinC: roundOrNull(d?.temperature_2m_min?.[1]),
+        tomorrowCondition: wmoLabel(Number(d?.weather_code?.[1])),
+      })
+    } catch { /* skip this location, never fabricate */ }
+  }
+  return locations.length ? { locations } : null
+}

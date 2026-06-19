@@ -18,7 +18,7 @@ export const SOURCE_BACKED_TYPES = new Set(['rss'])
 // Widget types the brief actually gathers (see gatherRoomItems.js): news (feed, rss, browser),
 // markets (chart, prices, heatmap), and trends. The "include in brief" toggle renders only for these.
 // weather, social, stream, and map are never read by the brief, so the toggle is a dead button there.
-export const BRIEF_ELIGIBLE_TYPES = new Set(['feed', 'rss', 'social', 'browser', 'chart', 'prices', 'heatmap', 'trends'])
+export const BRIEF_ELIGIBLE_TYPES = new Set(['feed', 'rss', 'social', 'browser', 'chart', 'prices', 'heatmap', 'trends', 'weather'])
 
 export const widgetRegistry = {
   weather: lazy(() => import('../widgets/WeatherWidget.jsx')),

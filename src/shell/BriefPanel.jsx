@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useShellStore } from '../state/shellStore.js'
 import { supabase } from '../lib/supabase.js'
-import { gatherRoomItems, gatherMarketSymbols, gatherTrendsRequest } from '../lib/gatherRoomItems.js'
+import { gatherRoomItems, gatherMarketSymbols, gatherTrendsRequest, gatherWeather } from '../lib/gatherRoomItems.js'
 import { useFocusTrap } from '../hooks/useFocusTrap.js'
 import { relativeTime, cleanExcerpt } from '../lib/briefFormat.js'
 import GlobeGlyph from '../brand/GlobeGlyph.jsx'
@@ -9,6 +9,7 @@ import { TrendsChart, TrendsLegend, COLORS } from '../widgets/TrendsChart.jsx'
 
 function fmtPct(p) { const n = Number(p); if (!Number.isFinite(n)) return ''; return (n > 0 ? '+' : '') + n.toFixed(2) + '%' }
 function trendGlyph(dir) { return dir === 'up' ? '↑' : dir === 'down' ? '↓' : '→' }
+const DEG = '\u00B0'
 function isHttpUrl(u) {
   if (typeof u !== 'string') return false
   try { const p = new URL(u); return p.protocol === 'http:' || p.protocol === 'https:' } catch { return false }
@@ -234,6 +235,15 @@ function briefToPlainText(brief) {
     if (isHttpUrl(tr.googleTrendsUrl)) lines.push(`Google Trends: ${tr.googleTrendsUrl}`)
     lines.push('')
   }
+  const wx = brief.weather
+  if (wx && wx.locations && wx.locations.length) {
+    lines.push('Weather', '')
+    for (const l of wx.locations) {
+      lines.push(`${l.name}: ${l.tempC}${DEG}C, feels ${l.feelsC}${DEG}C, ${l.condition}. Wind ${l.windKph} km/h, humidity ${l.humidity}%.`)
+      if (l.todayMaxC != null) lines.push(`  Today ${l.todayMaxC}${DEG} / ${l.todayMinC}${DEG}. Tomorrow ${l.tomorrowMaxC}${DEG} / ${l.tomorrowMinC}${DEG}, ${l.tomorrowCondition}.`)
+    }
+    lines.push('')
+  }
   return lines.join('\n').trim()
 }
 
@@ -396,12 +406,14 @@ export default function BriefPanel({ onClose, onUpgrade }) {
     const widgetGroups = await gatherRoomItems(ws)
     const markets = gatherMarketSymbols(ws)
     const trends = gatherTrendsRequest(ws)
+    const weather = await gatherWeather(ws)
     const includedGroups = widgetGroups.filter((g) => g.includeInBrief !== false)
     const totalItems = includedGroups.reduce((n, g) => n + countGroupItems(g), 0)
     const hasMarkets = markets && (markets.symbols?.length || markets.heatmaps?.length)
     const hasTrends = trends && trends.terms?.length
+    const hasWeather = weather && weather.locations?.length
 
-    if (totalItems === 0 && !hasMarkets && !hasTrends) {
+    if (totalItems === 0 && !hasMarkets && !hasTrends && !hasWeather) {
       setPhase('error')
       setErrorMsg(NO_ITEMS_MSG)
       return
@@ -416,7 +428,7 @@ export default function BriefPanel({ onClose, onUpgrade }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ workspaceId: ws?.id, widgetGroups, period: 'on_demand', markets, trends }),
+        body: JSON.stringify({ workspaceId: ws?.id, widgetGroups, period: 'on_demand', markets, trends, weather }),
       })
 
       const data = await res.json().catch(() => ({}))
@@ -719,6 +731,16 @@ export default function BriefPanel({ onClose, onUpgrade }) {
           doc.setTextColor(20, 90, 160)
           doc.textWithLink('Google Trends', margin, y, { url: trp.googleTrendsUrl })
           y += 6
+        }
+        y += 2
+      }
+      const wxp = brief.weather
+      if (wxp && wxp.locations && wxp.locations.length) {
+        writeWrapped('Weather', { size: 11, style: 'bold', gap: 1 })
+        for (const l of wxp.locations) {
+          writeWrapped(String(l.name), { size: 10, style: 'bold', gap: 1 })
+          writeWrapped(`${l.tempC}${DEG}C, feels ${l.feelsC}${DEG}C, ${l.condition}. Wind ${l.windKph} km/h, humidity ${l.humidity}%.`, { size: 9, color: [60, 60, 60], gap: 1 })
+          if (l.todayMaxC != null) writeWrapped(`Today ${l.todayMaxC}${DEG} / ${l.todayMinC}${DEG}. Tomorrow ${l.tomorrowMaxC}${DEG} / ${l.tomorrowMinC}${DEG}, ${l.tomorrowCondition}.`, { size: 8, color: [120, 120, 120], gap: 1.5 })
         }
         y += 2
       }
@@ -1072,6 +1094,20 @@ export default function BriefPanel({ onClose, onUpgrade }) {
                       {' ↗'}
                     </a>
                   )}
+                </section>
+              ) : null}
+              {brief.weather && (brief.weather.locations?.length) ? (
+                <section className="brief-section brief-weather">
+                  <h3 className="brief-section-title">Weather</h3>
+                  {brief.weather.locations.map((l, i) => (
+                    <div key={l.name + i} className="brief-weather-loc">
+                      <span className="bw-name">{l.name}</span>
+                      <span className="bw-line">{l.tempC}{DEG}C, feels {l.feelsC}{DEG}C, {l.condition}. Wind {l.windKph} km/h, humidity {l.humidity}%.</span>
+                      {l.todayMaxC != null && (
+                        <span className="bw-line"> Today {l.todayMaxC}{DEG} / {l.todayMinC}{DEG}. Tomorrow {l.tomorrowMaxC}{DEG} / {l.tomorrowMinC}{DEG}, {l.tomorrowCondition}.</span>
+                      )}
+                    </div>
+                  ))}
                 </section>
               ) : null}
               {usage && (() => {

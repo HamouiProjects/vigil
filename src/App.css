@@ -2695,6 +2695,9 @@ button.status-dot:hover { opacity: 0.8; }
 @media (prefers-reduced-motion: reduce) { .shell-grid-scroll { transition: none; } }
 
 /* Deterministic Markets block in the brief (T-08) */
+.brief-weather-loc { margin: 6px 0; font-size: 13px; }
+.brief-weather-loc .bw-name { display: block; font-weight: 600; font-family: var(--font-mono); color: var(--color-text-primary); }
+.brief-weather-loc .bw-line { font-family: var(--font-sans); color: var(--color-text-secondary); }
 .brief-markets-caption { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-muted); margin-bottom: 6px; }
 .brief-markets-list { list-style: none; margin: 0; padding: 0; }
 .brief-markets-row { display: grid; grid-template-columns: 72px 1fr auto auto; gap: 12px; align-items: baseline; font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; padding: 2px 0; }

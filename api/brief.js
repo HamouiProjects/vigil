@@ -129,6 +129,26 @@ function hasTrendsData(trReq) {
   return trReq && Array.isArray(trReq.terms) && trReq.terms.length
 }
 
+function sanitizeWeather(weather) {
+  if (!weather || !Array.isArray(weather.locations) || !weather.locations.length) return null
+  const clampStr = (s, n) => (typeof s === 'string' ? s.slice(0, n) : '')
+  const num = (v) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : null)
+  const locations = weather.locations.slice(0, 8).map((l) => ({
+    name: clampStr(l.name, 80) || 'Weather',
+    tempC: num(l.tempC),
+    feelsC: num(l.feelsC),
+    condition: clampStr(l.condition, 40),
+    windKph: num(l.windKph),
+    humidity: num(l.humidity),
+    todayMaxC: num(l.todayMaxC),
+    todayMinC: num(l.todayMinC),
+    tomorrowMaxC: num(l.tomorrowMaxC),
+    tomorrowMinC: num(l.tomorrowMinC),
+    tomorrowCondition: clampStr(l.tomorrowCondition, 40),
+  })).filter((l) => l.tempC != null)
+  return locations.length ? { locations } : null
+}
+
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
@@ -154,7 +174,7 @@ export default async function handler(req, res) {
   const body = readBody(req)
   if (!body) return res.status(400).json({ error: 'invalid body' })
 
-  const { workspaceId, widgetGroups, period, markets, trends } = body
+  const { workspaceId, widgetGroups, period, markets, trends, weather } = body
   const normalized = normalizeWidgetGroups(widgetGroups)
   const included = normalized.filter((g) => g.includeInBrief !== false)
   const contentGroups = included.filter((g) => g.items.length > 0)
@@ -164,7 +184,9 @@ export default async function handler(req, res) {
   const hasMarkets = hasMarketsData(mkReq)
   const hasTrends = hasTrendsData(trReq)
 
-  if (!contentGroups.length && !hasMarkets && !hasTrends) {
+  const hasWeather = weather && Array.isArray(weather.locations) && weather.locations.length
+
+  if (!contentGroups.length && !hasMarkets && !hasTrends && !hasWeather) {
     return res.status(400).json({ error: 'NO_ITEMS' })
   }
 
@@ -209,6 +231,9 @@ export default async function handler(req, res) {
     const tr = buildTrends(trReq, trData)
     if (tr) cleaned.trends = tr
   } catch (err) { console.error('[brief] trends build failed', err?.message) }
+
+  const wx = sanitizeWeather(weather)
+  if (wx) cleaned.weather = wx
 
   const workspaceUuid = isWellFormedUuid(workspaceId) ? workspaceId : null
 

@@ -78,6 +78,21 @@ function sanitizeBrief(brief) {
     asOf: String(tr.asOf ?? ''),
     terms: tr.terms.slice(0, 5).map((t) => ({ term: clamp(t.term, 80), value: num(t.value), dir: dirOk(t.dir) })),
   } : null
+  const weather = (brief.weather && Array.isArray(brief.weather.locations)) ? {
+    locations: brief.weather.locations.slice(0, 8).map((l) => ({
+      name: clamp(l.name, 80),
+      tempC: num(l.tempC),
+      feelsC: num(l.feelsC),
+      condition: clamp(l.condition, 40),
+      windKph: num(l.windKph),
+      humidity: num(l.humidity),
+      todayMaxC: num(l.todayMaxC),
+      todayMinC: num(l.todayMinC),
+      tomorrowMaxC: num(l.tomorrowMaxC),
+      tomorrowMinC: num(l.tomorrowMinC),
+      tomorrowCondition: clamp(l.tomorrowCondition, 40),
+    })),
+  } : null
   return {
     headline: clamp(brief.headline, 300),
     sections: (brief.sections ?? []).slice(0, 20).map((section) => ({
@@ -94,6 +109,7 @@ function sanitizeBrief(brief) {
     })),
     markets,
     trends,
+    weather,
   }
 }
 
@@ -205,6 +221,17 @@ function renderEmailHtml({ brief, roomName, preparedFor, generatedAt }) {
     html += `</table>`
   }
 
+  if (brief.weather && brief.weather.locations && brief.weather.locations.length) {
+    html += `<h2 style="font-size:13px;font-weight:bold;color:#1a1a1a;margin:16px 0 4px;text-transform:uppercase;letter-spacing:0.06em;">Weather</h2>`
+    for (const l of brief.weather.locations) {
+      html += `<div style="font-size:14px;color:#1a1a1a;margin-bottom:8px;">`
+      html += `<div style="font-weight:bold;">${esc(l.name)}</div>`
+      html += `<div>${esc(String(l.tempC))}\u00B0C, feels ${esc(String(l.feelsC))}\u00B0C, ${esc(l.condition)}. Wind ${esc(String(l.windKph))} km/h, humidity ${esc(String(l.humidity))}%.</div>`
+      if (l.todayMaxC != null) html += `<div style="color:#6b7280;">Today ${esc(String(l.todayMaxC))}\u00B0 / ${esc(String(l.todayMinC))}\u00B0. Tomorrow ${esc(String(l.tomorrowMaxC))}\u00B0 / ${esc(String(l.tomorrowMinC))}\u00B0, ${esc(l.tomorrowCondition)}.</div>`
+      html += `</div>`
+    }
+  }
+
   html += `<p style="font-size:12px;color:#6b7280;margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb;">Vigil tracks, it does not verify.</p>
 </body></html>`
   return html
@@ -258,6 +285,15 @@ function renderEmailText({ brief, roomName, preparedFor, generatedAt }) {
     lines.push(`Search interest (relative, not volume${brief.trends.windowLabel ? `, last ${brief.trends.windowLabel}` : ''})`, '')
     for (const t of brief.trends.terms) lines.push(`- ${t.term}  ${t.value}  ${g(t.dir)}`)
     lines.push('')
+  }
+
+  if (brief.weather && brief.weather.locations && brief.weather.locations.length) {
+    lines.push('', 'WEATHER', '')
+    for (const l of brief.weather.locations) {
+      lines.push(l.name)
+      lines.push(`  ${l.tempC}\u00B0C, feels ${l.feelsC}\u00B0C, ${l.condition}. Wind ${l.windKph} km/h, humidity ${l.humidity}%.`)
+      if (l.todayMaxC != null) lines.push(`  Today ${l.todayMaxC}\u00B0 / ${l.todayMinC}\u00B0. Tomorrow ${l.tomorrowMaxC}\u00B0 / ${l.tomorrowMinC}\u00B0, ${l.tomorrowCondition}.`)
+    }
   }
 
   lines.push('Vigil tracks, it does not verify.')
