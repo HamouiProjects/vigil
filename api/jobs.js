@@ -6,6 +6,7 @@ import { resolveEntitlements } from '../src/entitlements/resolve.js'
 import { safeFetch } from './_ssrf.js'
 import { rateLimit } from './_ratelimit.js'
 import { fetchBriefLLM } from './_brief_llm.js'
+import { searchSymbols } from './symbol-search.js'
 import { relativeTime, cleanExcerpt } from '../src/lib/briefFormat.js'
 import crypto from 'node:crypto'
 function safeEqual(a, b) {
@@ -822,6 +823,7 @@ async function dispatchScheduledBriefs() {
 const SUGGEST_CACHE_TTL_MS = 86_400_000 // 24h
 const SUGGEST_MAX_REGIONS = 6
 const SUGGEST_MAX_RSS = 8
+const SUGGEST_MAX_SYMBOLS = 8
 const SUGGEST_DISCLAIMER = 'These are suggestions of publicly available sources, not verified or endorsed by Vigil, and not a substitute for your own due diligence.'
 const DISCOVERY_MAX_OUTBOUND = 36
 const DISCOVERY_MAINSTREAM_ATTEMPT = 7
@@ -1087,7 +1089,7 @@ async function buildRssDiscovery(topics, regions, req, softDeadlineAt) {
     if (await budgetedFeedCheck(gnFeed, budget)) {
       return {
         widgetType: 'rss', tier: 'manufactured', verificationBasis: 'none',
-        label: domain + ' (via Google News)', value: gnFeed, sourceLink: gnHtmlUrl(q, gnHl, gnGl),
+        label: domain, value: gnFeed, sourceLink: gnHtmlUrl(q, gnHl, gnGl),
       }
     }
     return null
@@ -1117,7 +1119,7 @@ async function buildRssDiscovery(topics, regions, req, softDeadlineAt) {
         kind: 'manufactured',
         row: {
           widgetType: 'rss', tier: 'manufactured', verificationBasis: 'none',
-          label: domain + ' (via Google News)', value: gnFeed, sourceLink: gnHtmlUrl(q, gnHl, gnGl),
+          label: domain, value: gnFeed, sourceLink: gnHtmlUrl(q, gnHl, gnGl),
         },
       }
     }
@@ -1130,6 +1132,50 @@ async function buildRssDiscovery(topics, regions, req, softDeadlineAt) {
   }
 
   return [...mainstreamRows, ...localNativeRows, ...localManufacturedRows]
+}
+
+async function buildPricesGroup(topics, req, deadlines) {
+  let proposedQueries = []
+  const llm = await rateLimit(req, 'suggest-llm', DISCOVERY_LLM_GLOBAL_MAX, 3600, 'global')
+  if (llm.allowed) {
+    try {
+      const topicStr = (topics || []).map(s => String(s).trim()).filter(Boolean).join(', ')
+      const raw = await fetchBriefLLM({
+        system: 'You suggest tradable instruments for monitoring a topic. Given topics, return ticker symbols or asset names a financial analyst would track (equities, indices, ETFs, FX pairs, commodities, crypto). Return STRICT JSON exactly {"symbols":["..."]} of up to 10 short query strings, a ticker or a company or asset name. No prose, no markdown.',
+        user: 'Topics: ' + topicStr,
+      })
+      const parsed = JSON.parse(raw)
+      proposedQueries = Array.isArray(parsed?.symbols) ? parsed.symbols : []
+    } catch {
+      proposedQueries = []
+    }
+  }
+
+  const validated = await mapWithConcurrency(proposedQueries, DISCOVERY_OUTLET_CONCURRENCY, async (qy) => {
+    if (Date.now() > deadlines.soft) return null
+    const r = (await searchSymbols(qy))[0]
+    return r ? { tvSymbol: r.tvSymbol, display: r.display, description: r.description } : null
+  })
+
+  const seen = new Set()
+  const resolved = []
+  for (const r of validated) {
+    if (!r || seen.has(r.tvSymbol)) continue
+    seen.add(r.tvSymbol)
+    resolved.push(r)
+    if (resolved.length >= SUGGEST_MAX_SYMBOLS) break
+  }
+
+  return resolved.map(r => ({
+    widgetType: 'prices',
+    tier: '',
+    verificationBasis: 'none',
+    label: (r.description || r.display),
+    value: r.tvSymbol,
+    sourceLink: '',
+    display: r.display,
+    description: r.description,
+  }))
 }
 
 async function buildRssGroup(topics, regions, req, deadlines) {
@@ -1217,6 +1263,9 @@ async function handleSuggestSources(req, res) {
   if (widgetTypes.includes('rss')) {
     const rssGroup = await buildRssGroup(topics, regions, req, deadlines)
     suggestions.push(...rssGroup)
+  }
+  if (widgetTypes.includes('prices')) {
+    suggestions.push(...await buildPricesGroup(topics, req, deadlines))
   }
   const result = { suggestions, disclaimer: SUGGEST_DISCLAIMER, terms: { topics, regions } }
   await suggestCacheWrite(key, result)

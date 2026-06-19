@@ -524,6 +524,14 @@ body {
   color: var(--color-text-primary);
 }
 
+.suggest-detail {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
 .suggest-row-actions {
   display: flex;
   align-items: center;

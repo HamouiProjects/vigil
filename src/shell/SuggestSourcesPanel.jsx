@@ -26,6 +26,11 @@ export default function SuggestSourcesPanel({ onClose }) {
     const byId = new Map(sources.map(src => [src.id, src.identifier]))
     return new Set(feeds.map(f => byId.get(f.sourceId)).filter(Boolean))
   }, [ws, sources])
+  const existingSymbols = useMemo(() => {
+    const target = (ws?.widgets ?? []).find(w => w.type === 'prices')
+    const syms = target?.config?.symbols ?? []
+    return new Set(syms.map(s => s.tvSymbol).filter(Boolean))
+  }, [ws])
 
   const [topics, setTopics] = useState('')
   const [regions, setRegions] = useState('')
@@ -60,20 +65,32 @@ export default function SuggestSourcesPanel({ onClose }) {
   }
 
   async function acceptSuggestion(s) {
-    if (s.widgetType !== 'rss') return
-    const target = (ws?.widgets ?? []).find(w => w.type === 'rss')
-    if (!target) { setError('Add an RSS widget to accept this.'); return }
-    const row = await addSource({ type: 'rss', identifier: s.value, label: s.label, meta: { suggested: true } })
-    if (!row) { setError('Could not add the feed.'); return }
-    const feeds = target.config?.feeds ?? []
-    if (!feeds.some(f => f.sourceId === row.id)) {
-      updateWidgetConfig(activeWs, target.id, { ...target.config, feeds: [...feeds, { sourceId: row.id, enabled: true }] })
+    if (s.widgetType === 'rss') {
+      const target = (ws?.widgets ?? []).find(w => w.type === 'rss')
+      if (!target) { setError('Add an RSS widget to accept this.'); return }
+      const row = await addSource({ type: 'rss', identifier: s.value, label: s.label, meta: { suggested: true } })
+      if (!row) { setError('Could not add the feed.'); return }
+      const feeds = target.config?.feeds ?? []
+      if (!feeds.some(f => f.sourceId === row.id)) {
+        updateWidgetConfig(activeWs, target.id, { ...target.config, feeds: [...feeds, { sourceId: row.id, enabled: true }] })
+      }
+      setAccepted(prev => { const n = new Set(prev); n.add(s.value); return n })
+      return
     }
-    setAccepted(prev => { const n = new Set(prev); n.add(s.value); return n })
+    if (s.widgetType === 'prices') {
+      const target = (ws?.widgets ?? []).find(w => w.type === 'prices')
+      if (!target) { setError('Add a Prices widget to accept this.'); return }
+      const syms = target.config?.symbols ?? []
+      if (!syms.some(item => item.tvSymbol === s.value)) {
+        updateWidgetConfig(activeWs, target.id, { ...target.config, symbols: [...syms, { tvSymbol: s.value, display: s.display, description: s.description }] })
+      }
+      setAccepted(prev => { const n = new Set(prev); n.add(s.value); return n })
+    }
   }
 
   const visible = (result?.suggestions ?? []).filter(s => !dismissed.has(s.value))
   const rssGroup = visible.filter(s => s.widgetType === 'rss')
+  const pricesGroup = visible.filter(s => s.widgetType === 'prices')
 
   return (
     <div className="suggest-overlay" onClick={onClose}>
@@ -128,6 +145,30 @@ export default function SuggestSourcesPanel({ onClose }) {
                       </div>
                       <div className="suggest-row-actions">
                         {(accepted.has(s.value) || existingFeedUrls.has(s.value))
+                          ? <span className="suggest-added">Added</span>
+                          : (<>
+                              <button type="button" className="nav-add-btn btn-secondary" onClick={() => acceptSuggestion(s)}>Accept</button>
+                              <button type="button" className="widget-btn" onClick={() => setDismissed(prev => { const n = new Set(prev); n.add(s.value); return n })} title="Dismiss">x</button>
+                            </>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {widgetTypes.includes('prices') && pricesGroup.length === 0 && (
+                <p className="suggest-empty">No instruments resolved for these terms.</p>
+              )}
+              {pricesGroup.length > 0 && (
+                <div className="suggest-group">
+                  <h3 className="suggest-group-title">Prices</h3>
+                  {pricesGroup.map(s => (
+                    <div key={s.value} className="suggest-row">
+                      <div className="suggest-row-main">
+                        <span className="suggest-name">{s.label}</span>
+                        <span className="suggest-detail">{s.value}</span>
+                      </div>
+                      <div className="suggest-row-actions">
+                        {(accepted.has(s.value) || existingSymbols.has(s.value))
                           ? <span className="suggest-added">Added</span>
                           : (<>
                               <button type="button" className="nav-add-btn btn-secondary" onClick={() => acceptSuggestion(s)}>Accept</button>

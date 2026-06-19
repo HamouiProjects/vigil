@@ -82,6 +82,22 @@ async function fetchUpstream(q) {
   return fetch(url, { headers: BROWSER_HEADERS, signal: AbortSignal.timeout(10000) })
 }
 
+export async function searchSymbols(q) {
+  try {
+    const upstream = await fetchUpstream(q)
+    if (!upstream.ok) return []
+    let items
+    try {
+      items = await upstream.json()
+    } catch {
+      return []
+    }
+    return normalizeResults(items)
+  } catch {
+    return []
+  }
+}
+
 export default async function handler(req, res) {
   applyCors(req, res)
 
@@ -138,21 +154,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const upstream = await fetchUpstream(q)
-    if (!upstream.ok) {
-      setResponseHeaders(res)
-      return res.status(200).json({ results: [], error: `upstream ${upstream.status}` })
-    }
-
-    let items
-    try {
-      items = await upstream.json()
-    } catch {
-      setResponseHeaders(res)
-      return res.status(200).json({ results: [], error: 'invalid JSON' })
-    }
-
-    const results = normalizeResults(items)
+    const results = await searchSymbols(q)
     setCache(cacheKey, results)
     setResponseHeaders(res)
     return res.status(200).json({ results })
