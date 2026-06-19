@@ -1353,7 +1353,16 @@ async function buildRssFloor(topics, regions, hardDeadlineAt) {
 
 async function handleSuggestSources(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' })
-  const rl = await rateLimit(req, 'suggest-sources', 10, 60)
+  if (!supabase) return res.status(503).json({ error: 'SUPABASE_UNAVAILABLE' })
+
+  const authHeader = req.headers.authorization || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
+  if (!token) return res.status(401).json({ error: 'UNAUTHORIZED' })
+  const { data: userData, error: userErr } = await supabase.auth.getUser(token)
+  const user = userData?.user
+  if (userErr || !user?.id) return res.status(401).json({ error: 'UNAUTHORIZED' })
+
+  const rl = await rateLimit(req, 'suggest-sources', 10, 60, user.id)
   if (!rl.allowed) {
     res.setHeader('Retry-After', String(rl.retryAfter))
     return res.status(429).json({ error: 'RATE_LIMITED' })

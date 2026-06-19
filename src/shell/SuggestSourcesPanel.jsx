@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useShellStore } from '../state/shellStore.js'
 import { useSources } from '../data/useSources.js'
+import { supabase } from '../lib/supabase.js'
 
 const DISCLAIMER = 'These are suggestions of publicly available sources, not verified or endorsed by Vigil, and not a substitute for your own due diligence.'
 
@@ -85,9 +86,14 @@ export default function SuggestSourcesPanel({ onClose }) {
     setAcceptedChart(null)
     setDismissed(new Set())
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) { setError('Session expired. Reload and try again.'); setLoading(false); return }
       const res = await fetch('/api/jobs?action=suggest-sources', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ topics: t, regions: r, widgetTypes }),
       })
       if (!res.ok) { setError('Could not fetch suggestions. Try again.'); setLoading(false); return }
