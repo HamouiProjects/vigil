@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { TrendsChart, COLORS } from './TrendsChart.jsx'
 
 const TIME_OPTIONS = [
   { label: '7d', value: 'now 7-d' },
@@ -7,140 +8,10 @@ const TIME_OPTIONS = [
   { label: '5y', value: 'today 5-y' },
 ]
 
-const COLORS = [
-  'var(--color-brand)',
-  'var(--color-info)',
-  'var(--color-warning)',
-  'var(--color-error)',
-  'var(--color-success)',
-]
-
-const CHART_W = 600
-const CHART_H = 200
-const CHART_PAD = 6
-const Y_AXIS_W = 30
-const Y_LABELS = [100, 75, 50, 25, 0]
-
-function chartY(v) {
-  return CHART_PAD + (CHART_H - 2 * CHART_PAD) * (1 - v / 100)
-}
-
 function resolveKeywords(config) {
   if (Array.isArray(config.keywords) && config.keywords.length) return config.keywords
   if (config.keyword) return [config.keyword]
   return []
-}
-
-function TrendsChart({ points, keywords }) {
-  const n = points.length
-  const firstLabel = points[0]?.label ?? ''
-  const lastLabel = points[n - 1]?.label ?? ''
-
-  const polylines = useMemo(() => {
-    return keywords.map((_, ki) => {
-      const coords = []
-      points.forEach((p, idx) => {
-        const v = p.values?.[ki]
-        if (v == null) return
-        const x = n <= 1 ? CHART_W / 2 : (idx / (n - 1)) * CHART_W
-        coords.push(`${x},${chartY(v)}`)
-      })
-      return coords.join(' ')
-    })
-  }, [points, keywords, n])
-
-  const gridYs = useMemo(() => Y_LABELS.map(chartY), [])
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <div
-        style={{
-          flexShrink: 0,
-          padding: '6px 10px 2px',
-          fontFamily: 'var(--font-sans)',
-          fontSize: 9,
-          color: 'var(--color-text-muted)',
-        }}
-      >
-        {firstLabel && lastLabel ? `${firstLabel} → ${lastLabel}` : ''}
-      </div>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'row' }}>
-          <div
-            style={{
-              width: Y_AXIS_W,
-              flexShrink: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              padding: `${CHART_PAD}px 4px ${CHART_PAD}px 0`,
-              fontFamily: 'var(--font-mono)',
-              fontSize: 9,
-              color: 'var(--color-text-muted)',
-              textAlign: 'right',
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {Y_LABELS.map((v) => (
-              <span key={v}>{v}</span>
-            ))}
-          </div>
-          <div style={{ flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}>
-            <svg
-              width="100%"
-              height="100%"
-              viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-              preserveAspectRatio="none"
-              style={{ display: 'block', width: '100%', height: '100%' }}
-              aria-hidden
-            >
-              {gridYs.map((y) => (
-                <line
-                  key={y}
-                  x1={0}
-                  y1={y}
-                  x2={CHART_W}
-                  y2={y}
-                  stroke="var(--color-border)"
-                  strokeWidth={1}
-                  vectorEffect="non-scaling-stroke"
-                />
-              ))}
-              {polylines.map((pts, ki) => (
-                pts ? (
-                  <polyline
-                    key={keywords[ki] ?? ki}
-                    points={pts}
-                    fill="none"
-                    stroke={COLORS[ki]}
-                    strokeWidth={2}
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                ) : null
-              ))}
-            </svg>
-          </div>
-        </div>
-        <div
-          style={{
-            flexShrink: 0,
-            display: 'flex',
-            justifyContent: 'space-between',
-            paddingLeft: Y_AXIS_W,
-            padding: `2px 0 4px ${Y_AXIS_W}px`,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 9,
-            color: 'var(--color-text-muted)',
-          }}
-        >
-          <span>{firstLabel}</span>
-          <span>{lastLabel}</span>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 export default function TrendsWidget({ paused, config, onSaveConfig, setActions, setTitle }) {

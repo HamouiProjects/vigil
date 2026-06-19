@@ -2706,6 +2706,13 @@ button.status-dot:hover { opacity: 0.8; }
 .bm-down { color: var(--color-error); }
 .bm-flat { color: var(--color-text-muted); }
 
+.brief-trends-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0;
+}
+
 .bottom-bar-links { display: flex; gap: 14px; }
 .bottom-bar-links a { color: var(--color-text-muted); text-decoration: none; }
 .bottom-bar-links a:hover { color: var(--color-text-secondary); text-decoration: underline; }

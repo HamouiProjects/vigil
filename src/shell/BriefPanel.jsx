@@ -5,6 +5,7 @@ import { gatherRoomItems, gatherMarketSymbols, gatherTrendsRequest } from '../li
 import { useFocusTrap } from '../hooks/useFocusTrap.js'
 import { relativeTime, cleanExcerpt } from '../lib/briefFormat.js'
 import GlobeGlyph from '../brand/GlobeGlyph.jsx'
+import { TrendsChart, TrendsLegend, COLORS } from '../widgets/TrendsChart.jsx'
 
 function fmtPct(p) { const n = Number(p); if (!Number.isFinite(n)) return ''; return (n > 0 ? '+' : '') + n.toFixed(2) + '%' }
 function trendGlyph(dir) { return dir === 'up' ? '↑' : dir === 'down' ? '↓' : '→' }
@@ -140,77 +141,7 @@ function writeBriefItemPdf(doc, item, margin, yRef, contentW, ensure) {
 
 const TRENDS_CHART_W = 280
 const TRENDS_CHART_H = 72
-const TRENDS_CHART_PAD = 4
-const TRENDS_SERIES_COLORS = [
-  'var(--color-brand)',
-  'var(--color-info)',
-  'var(--color-warning)',
-  'var(--color-error)',
-  'var(--color-success)',
-]
 const TRENDS_PDF_STROKES = ['#0A6B61', '#155E86', '#6F4D08', '#AE2E27', '#0A6B43']
-
-function trendsChartY(v) {
-  return TRENDS_CHART_PAD + (TRENDS_CHART_H - 2 * TRENDS_CHART_PAD) * (1 - v / 100)
-}
-
-function buildTrendsPolylines(terms) {
-  return (terms ?? []).map((t) => {
-    const series = t.series
-    if (!Array.isArray(series) || series.length < 2) return null
-    const n = series.length
-    return series.map((v, idx) => {
-      const x = n <= 1 ? TRENDS_CHART_W / 2 : (idx / (n - 1)) * TRENDS_CHART_W
-      return `${x},${trendsChartY(v)}`
-    }).join(' ')
-  })
-}
-
-function BriefTrendsChart({ terms, chartRef, strokeColors }) {
-  const polylines = buildTrendsPolylines(terms)
-  const hasLine = polylines.some(Boolean)
-  if (!hasLine) return null
-  const colors = strokeColors ?? TRENDS_SERIES_COLORS
-  return (
-    <svg
-      ref={chartRef}
-      width={TRENDS_CHART_W}
-      height={TRENDS_CHART_H}
-      viewBox={`0 0 ${TRENDS_CHART_W} ${TRENDS_CHART_H}`}
-      className="brief-trends-chart"
-      style={{ display: 'block', width: '100%', maxWidth: TRENDS_CHART_W, marginBottom: 8 }}
-      aria-hidden
-    >
-      {[100, 50, 0].map((v) => {
-        const y = trendsChartY(v)
-        return (
-          <line
-            key={v}
-            x1={0}
-            y1={y}
-            x2={TRENDS_CHART_W}
-            y2={y}
-            stroke="var(--color-border)"
-            strokeWidth={1}
-          />
-        )
-      })}
-      {polylines.map((pts, i) => (
-        pts ? (
-          <polyline
-            key={(terms[i]?.term) ?? i}
-            points={pts}
-            fill="none"
-            stroke={colors[i % colors.length]}
-            strokeWidth={2}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-        ) : null
-      ))}
-    </svg>
-  )
-}
 
 function svgToPngDataUrl(svgEl, strokeOverrides) {
   return new Promise((resolve) => {
@@ -234,11 +165,14 @@ function svgToPngDataUrl(svgEl, strokeOverrides) {
       const img = new Image()
       img.onload = () => {
         try {
+          const vb = svgEl.viewBox?.baseVal
+          const w = (vb && vb.width) || Number(svgEl.getAttribute('width')) || TRENDS_CHART_W
+          const h = (vb && vb.height) || Number(svgEl.getAttribute('height')) || TRENDS_CHART_H
           const canvas = document.createElement('canvas')
-          canvas.width = TRENDS_CHART_W
-          canvas.height = TRENDS_CHART_H
-          canvas.getContext('2d').drawImage(img, 0, 0)
-          resolve({ dataUrl: canvas.toDataURL('image/png'), width: TRENDS_CHART_W, height: TRENDS_CHART_H })
+          canvas.width = w
+          canvas.height = h
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+          resolve({ dataUrl: canvas.toDataURL('image/png'), width: w, height: h })
         } catch { resolve(null) }
       }
       img.onerror = () => resolve(null)
@@ -1107,17 +1041,26 @@ export default function BriefPanel({ onClose, onUpgrade }) {
                 <section className="brief-section brief-markets">
                   <h3 className="brief-section-title">Search Interest</h3>
                   <div className="brief-markets-caption">relative search interest{brief.trends.windowLabel ? ` over the last ${brief.trends.windowLabel}` : ''}, not volume</div>
-                  <BriefTrendsChart terms={brief.trends.terms} chartRef={trendsChartRef} />
-                  <ul className="brief-markets-list">
-                    {(brief.trends.terms ?? []).map((t) => (
-                      <li key={t.term} className="brief-markets-row">
-                        <span className="bm-sym">{t.term}</span>
-                        <span className="bm-name"></span>
-                        <span className="bm-price">{t.value}</span>
-                        <span className="bm-chg bm-flat">{trendGlyph(t.dir)}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  {(() => {
+                    const terms = brief.trends.terms ?? []
+                    const trendsKeywords = terms.map((t) => t.term)
+                    const trendsValues = terms.map((t) => t.value)
+                    const len = terms.reduce((m, t) => Math.max(m, Array.isArray(t.series) ? t.series.length : 0), 0)
+                    const trendsPoints = len
+                      ? Array.from({ length: len }, (_, idx) => ({
+                          label: '',
+                          values: terms.map((t) => (Array.isArray(t.series) ? (t.series[idx] ?? null) : null)),
+                        }))
+                      : []
+                    return (
+                      <>
+                        <div className="brief-trends-chart-wrap" style={{ height: 150 }}>
+                          <TrendsChart points={trendsPoints} keywords={trendsKeywords} chartRef={trendsChartRef} />
+                        </div>
+                        <TrendsLegend keywords={trendsKeywords} values={trendsValues} colors={COLORS} />
+                      </>
+                    )
+                  })()}
                   {isHttpUrl(brief.trends.googleTrendsUrl) && (
                     <a
                       className="brief-source"
