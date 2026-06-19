@@ -1141,7 +1141,7 @@ async function buildPricesGroup(topics, req, deadlines) {
     try {
       const topicStr = (topics || []).map(s => String(s).trim()).filter(Boolean).join(', ')
       const raw = await fetchBriefLLM({
-        system: 'You suggest tradable instruments for monitoring a topic. Given topics, return ticker symbols or asset names a financial analyst would track (equities, indices, ETFs, FX pairs, commodities, crypto). Return STRICT JSON exactly {"symbols":["..."]} of up to 10 short query strings, a ticker or a company or asset name. No prose, no markdown.',
+        system: 'You suggest tradable instruments for MONITORING a specific topic, not for general market exposure. Given topics, return only instruments with a clear, specific link to the topic: a commodity the topic is a major producer or consumer of, a company or asset materially exposed to it, the single most relevant FX pair, or a narrowly scoped sector ETF tied to it. Do NOT return broad market proxies (the S&P 500, total market or country index funds, a generic volatility index, or gold as a generic safe haven) unless the topic itself is that market or asset. Prefer fewer well justified instruments over a long list, and an empty list is acceptable when nothing has a clear specific link. Return STRICT JSON exactly {"symbols":["..."]} of up to 8 short query strings, each a ticker or a company or asset name. No prose, no markdown.',
         user: 'Topics: ' + topicStr,
       })
       const parsed = JSON.parse(raw)
