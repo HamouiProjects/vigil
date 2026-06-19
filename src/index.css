@@ -531,17 +531,13 @@ body {
   flex-shrink: 0;
 }
 
-.suggest-link {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: normal;
-  text-transform: none;
-  overflow-wrap: anywhere;
-  color: var(--color-text-secondary);
+a.suggest-name-link {
+  color: inherit;
   text-decoration: none;
+  cursor: pointer;
 }
 
-.suggest-link:hover {
+a.suggest-name-link:hover {
   color: var(--color-brand);
   text-decoration: underline;
 }

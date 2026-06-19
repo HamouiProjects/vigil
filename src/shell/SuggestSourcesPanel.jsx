@@ -122,10 +122,9 @@ export default function SuggestSourcesPanel({ onClose }) {
                   {rssGroup.map(s => (
                     <div key={s.value} className="suggest-row">
                       <div className="suggest-row-main">
-                        <span className="suggest-name">{s.label}</span>
-                        {isHttpUrl(s.sourceLink) && (
-                          <a className="suggest-link" href={s.sourceLink} target="_blank" rel="noreferrer noopener">{s.sourceLink}</a>
-                        )}
+                        {isHttpUrl(s.sourceLink)
+                          ? <a className="suggest-name suggest-name-link" href={s.sourceLink} target="_blank" rel="noreferrer noopener">{s.label}</a>
+                          : <span className="suggest-name">{s.label}</span>}
                       </div>
                       <div className="suggest-row-actions">
                         {(accepted.has(s.value) || existingFeedUrls.has(s.value))
