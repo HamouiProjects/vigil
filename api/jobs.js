@@ -3,7 +3,7 @@ import { applyCors } from './_cors.js'
 import { buildFeedBrief, normalizeWidgetGroups } from './_brief_core.js'
 import { gatherRoomFeedGroups } from './_brief_gather.js'
 import { resolveEntitlements } from '../src/entitlements/resolve.js'
-import { safeFetch } from './_ssrf.js'
+import { safeFetch, readTextCapped } from './_ssrf.js'
 import { rateLimit } from './_ratelimit.js'
 import { fetchBriefLLM } from './_brief_llm.js'
 import { searchSymbols } from './symbol-search.js'
@@ -982,7 +982,7 @@ async function discoverOutletFeed(domain, budget) {
     if (budget.left > 0 && !(budget.deadlineAt && Date.now() >= budget.deadlineAt)) {
       budget.left -= 1
       const res = await safeFetch(homepage, { signal: AbortSignal.timeout(DISCOVERY_HOMEPAGE_TIMEOUT_MS) })
-      const html = (await res.text()).slice(0, DISCOVERY_HTML_CAP_BYTES)
+      const html = await readTextCapped(res, DISCOVERY_HTML_CAP_BYTES)
       const candidates = extractFeedLinkCandidates(html, homepage)
       for (const feedUrl of candidates) {
         if (await budgetedFeedCheck(feedUrl, budget)) return feedUrl

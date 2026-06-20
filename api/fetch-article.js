@@ -1,4 +1,4 @@
-import { safeFetch } from './_ssrf.js'
+import { safeFetch, readTextCapped } from './_ssrf.js'
 import { applyCors } from './_cors.js'
 import { rateLimit } from './_ratelimit.js'
 
@@ -87,7 +87,7 @@ export default async function handler(req, res) {
     if (!contentType.includes('text/html'))
       return res.status(415).json({ error: 'URL does not point to an HTML page' })
 
-    const html = await response.text()
+    const html = await readTextCapped(response, 2_000_000)
 
     const ogTitle = metaContent(html, ['og:title', 'twitter:title'])
     const rawTitle = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]

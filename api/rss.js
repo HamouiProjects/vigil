@@ -1,5 +1,5 @@
 import supabase from './_supabase.js'
-import { safeFetch } from './_ssrf.js'
+import { safeFetch, readTextCapped } from './_ssrf.js'
 import { applyCors } from './_cors.js'
 import { rateLimit } from './_ratelimit.js'
 import { XMLParser } from 'fast-xml-parser'
@@ -143,7 +143,7 @@ async function fetchViaDirect(feedUrl) {
     signal: AbortSignal.timeout(8000),
   })
   if (!res.ok) return { ok: false }
-  const xml = await res.text()
+  const xml = await readTextCapped(res, 2_000_000)
   const { title, image, items } = parseFeedXml(xml)
   if (!items.length) return { ok: false }
   return { ok: true, title, image, items: items.slice(0, MAX_ITEMS) }

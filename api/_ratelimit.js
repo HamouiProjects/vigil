@@ -1,6 +1,7 @@
 import supabase from './_supabase.js'
 
 const UNKNOWN_IP = 'unknown'
+const FAIL_CLOSED_BUCKETS = new Set(['suggest-llm'])
 
 function getClientIp(req) {
   const xff = req.headers['x-forwarded-for']
@@ -29,11 +30,12 @@ function retryAfterSeconds(windowSeconds) {
 export async function rateLimit(req, endpoint, max, windowSeconds = 60, keyOverride = null) {
   const keyPart = keyOverride ?? getClientIp(req)
   const bucket = `${endpoint}:${keyPart}`
+  const allowOnError = !FAIL_CLOSED_BUCKETS.has(endpoint)
   const windowStart = floorWindowStart(windowSeconds)
   const retryAfter = retryAfterSeconds(windowSeconds)
 
   if (!supabase) {
-    return { allowed: true, retryAfter }
+    return { allowed: allowOnError, retryAfter }
   }
 
   try {
@@ -44,11 +46,11 @@ export async function rateLimit(req, endpoint, max, windowSeconds = 60, keyOverr
     })
     if (error) {
       console.error('[ratelimit] rpc error', error.message)
-      return { allowed: true, retryAfter }
+      return { allowed: allowOnError, retryAfter }
     }
     return { allowed: data === true, retryAfter }
   } catch (err) {
     console.error('[ratelimit] error', err?.message)
-    return { allowed: true, retryAfter }
+    return { allowed: allowOnError, retryAfter }
   }
 }

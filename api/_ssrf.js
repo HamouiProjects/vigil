@@ -52,3 +52,28 @@ export async function safeFetch(rawUrl, opts = {}, maxRedirects = 5) {
   }
   throw new Error('Too many redirects')
 }
+
+// Read a fetch Response body as text, hard-capped at maxBytes, so an oversized
+// upstream cannot spike function memory. Streams and stops at the cap.
+export async function readTextCapped(res, maxBytes) {
+  if (!res.body || typeof res.body.getReader !== 'function') {
+    const t = await res.text()
+    return t.length > maxBytes ? t.slice(0, maxBytes) : t
+  }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let out = ''
+  let total = 0
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      out += decoder.decode(value, { stream: true })
+    }
+    out += decoder.decode()
+  } finally {
+    try { await reader.cancel() } catch {}
+  }
+  return out
+}
