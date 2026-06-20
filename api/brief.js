@@ -1,4 +1,5 @@
 import supabase from './_supabase.js'
+import { rateLimit } from './_ratelimit.js'
 import { applyCors } from './_cors.js'
 import { BriefLLMNotConfiguredError } from './_brief_llm.js'
 import { normalizeWidgetGroups, isHttpUrl, buildFeedBrief, BriefParseError } from './_brief_core.js'
@@ -190,6 +191,11 @@ export default async function handler(req, res) {
     })
   }
 
+  const rl = await rateLimit(req, 'brief', 10, 3600, user.id)
+  if (!rl.allowed) {
+    return res.status(429).json({ error: 'RATE_LIMITED', retryAfter: rl.retryAfter })
+  }
+
   const body = readBody(req)
   if (!body) return res.status(400).json({ error: 'invalid body' })
 
@@ -217,6 +223,20 @@ export default async function handler(req, res) {
 
   const ent = resolveEntitlements(sub?.plan ?? 'free', sub?.add_ons ?? [], sub?.status ?? null)
   const cap = ent.limits.briefsPerMonth ?? resolveEntitlements('free').limits.briefsPerMonth
+
+  // Cost guard: reject a capped user before any paid LLM/SerpApi/Yahoo call.
+  // brief_insert_capped below stays the atomic, race-safe enforcement.
+  const usedBefore = await countBriefsThisMonth(user.id)
+  if (usedBefore == null) return res.status(500).json({ error: 'DB_ERROR', stage: 'count' })
+  if (usedBefore >= cap) {
+    return res.status(429).json({
+      error: 'BRIEF_LIMIT_REACHED',
+      limit: cap,
+      used: usedBefore,
+      resetsAt: firstDayNextMonthISO(),
+      message: `You have used all ${cap} briefs for this month. Your allowance resets on the 1st.`,
+    })
+  }
 
   const wantedSyms = mkReq
     ? [...new Set([...(mkReq.symbols || []), ...((mkReq.heatmaps || []).map((h) => h?.symbol))]

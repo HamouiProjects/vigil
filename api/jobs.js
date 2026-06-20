@@ -770,7 +770,7 @@ async function dispatchScheduledBriefs() {
     if (!u.canSchedule) { skipped += 1; continue }
 
     const { data: ws, error: wsErr } = await supabase
-      .from('workspaces').select('id, name, widgets').eq('id', s.workspace_id).maybeSingle()
+      .from('workspaces').select('id, name, widgets').eq('id', s.workspace_id).eq('user_id', s.user_id).maybeSingle()
     if (wsErr || !ws) { skipped += 1; continue }
 
     let cleaned
