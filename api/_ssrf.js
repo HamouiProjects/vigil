@@ -1,5 +1,7 @@
 import dns from 'node:dns/promises'
+import dnscb from 'node:dns'
 import net from 'node:net'
+import { Agent, fetch as undiciFetch } from 'undici'
 
 function ipBlocked(ip) {
   const t = net.isIP(ip)
@@ -26,24 +28,50 @@ function ipBlocked(ip) {
   return true // not a valid IP literal -> deny
 }
 
-async function assertPublicHost(hostname) {
+// Early clear error before opening a socket. The pinning dispatcher below is the
+// actual enforcement (it resolves once and connects to that exact IP).
+async function resolvePublic(hostname) {
   let addrs
-  try { addrs = await dns.lookup(hostname, { all: true }) } // getaddrinfo normalizes decimal/hex/octal IP forms
+  try { addrs = await dns.lookup(hostname, { all: true }) }
   catch { throw new Error('DNS resolution failed') }
   if (!addrs.length) throw new Error('No addresses for host')
   for (const { address } of addrs) {
     if (ipBlocked(address)) throw new Error('Blocked private/internal host')
   }
+  return addrs
 }
 
-// SSRF-safe fetch: validates protocol + resolved IPs, follows redirects MANUALLY and re-validates each hop.
+// Pinning dispatcher: undici uses THIS lookup as the sole socket resolution, so
+// the validated IP is the exact IP connected to. This closes the old
+// resolve-then-fetch-resolves-again DNS-rebinding / TOCTOU window (audit M2).
+// Validates every redirect hop's host on connect (Host + TLS SNI stay correct
+// because undici derives them from the request URL hostname, not the pinned IP).
+const pinnedDispatcher = new Agent({
+  connect: {
+    lookup(hostname, options, callback) {
+      dnscb.lookup(hostname, { all: true }, (err, addresses) => {
+        if (err) return callback(err)
+        if (!addresses || !addresses.length) return callback(new Error('No addresses for host'))
+        for (const a of addresses) {
+          if (ipBlocked(a.address)) return callback(new Error('Blocked private/internal host'))
+        }
+        if (options && options.all) return callback(null, addresses)
+        const first = addresses[0]
+        return callback(null, first.address, first.family)
+      })
+    }
+  }
+})
+
+// SSRF-safe fetch: validates protocol + resolved IPs, pins the IP at connect,
+// follows redirects MANUALLY and re-validates each hop.
 export async function safeFetch(rawUrl, opts = {}, maxRedirects = 5) {
   let url = rawUrl
   for (let i = 0; i <= maxRedirects; i++) {
     const parsed = new URL(url)
     if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Only HTTP/HTTPS allowed')
-    await assertPublicHost(parsed.hostname)
-    const res = await fetch(url, { ...opts, redirect: 'manual' })
+    await resolvePublic(parsed.hostname)
+    const res = await undiciFetch(url, { ...opts, redirect: 'manual', dispatcher: pinnedDispatcher })
     if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
       url = new URL(res.headers.get('location'), url).toString()
       continue

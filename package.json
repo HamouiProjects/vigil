@@ -21,6 +21,7 @@
     "react-dom": "^19.2.6",
     "react-grid-layout": "^2.2.3",
     "stripe": "^22.2.0",
+    "undici": "^7.28.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
