@@ -27,9 +27,10 @@ function timeAgo(ts) {
   return `${d}d ago`
 }
 
-function buildChannels(emailOn, webhookOn, canWebhook) {
+function buildChannels(emailOn, webhookOn, telegramOn, canWebhook) {
   const ch = ['in_app']
   if (emailOn) ch.push('email')
+  if (telegramOn) ch.push('telegram')
   if (canWebhook && webhookOn) ch.push('webhook')
   return ch
 }
@@ -47,6 +48,8 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
   const [keyword, setKeyword] = useState('')
   const [region, setRegion] = useState('')
   const [emailOn, setEmailOn] = useState(true)
+  const [telegramOn, setTelegramOn] = useState(false)
+  const [telegramConnected, setTelegramConnected] = useState(false)
   const [webhookOn, setWebhookOn] = useState(false)
   const [webhookUrl, setWebhookUrl] = useState('')
   const [severity, setSeverity] = useState('normal')
@@ -114,6 +117,14 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
   }, [open, loadRules])
 
   useEffect(() => {
+    if (!open) return
+    supabase.auth.getUser().then(({ data }) => {
+      const meta = data?.user?.user_metadata ?? {}
+      setTelegramConnected(!!meta.telegram_chat_id)
+    })
+  }, [open])
+
+  useEffect(() => {
     if (open && section === 'activity' && !eventsLoaded && !eventsLoading) loadEvents()
   }, [open, section, eventsLoaded, eventsLoading, loadEvents])
 
@@ -163,7 +174,7 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
         workspace_id: null,
         keyword: kw,
         region: reg || null,
-        channels: buildChannels(emailOn, webhookOn, canWebhook),
+        channels: buildChannels(emailOn, webhookOn, telegramOn, canWebhook),
         severity,
         webhook_url: canWebhook && webhookOn ? webhookUrl.trim() : null,
         active: true,
@@ -176,6 +187,7 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
       setRegion('')
       setWebhookUrl('')
       setWebhookOn(false)
+      setTelegramOn(false)
       setSeverity('normal')
       await loadRules()
     } finally {
@@ -290,6 +302,24 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
                       />
                       <span>Email digest</span>
                     </label>
+                    {telegramConnected ? (
+                      <label className="alerts-channel-row">
+                        <input
+                          type="checkbox"
+                          checked={telegramOn}
+                          onChange={(e) => setTelegramOn(e.target.checked)}
+                        />
+                        <span>Telegram</span>
+                      </label>
+                    ) : (
+                      <>
+                        <label className="alerts-channel-row is-disabled">
+                          <input type="checkbox" checked={false} disabled />
+                          <span>Telegram</span>
+                        </label>
+                        <p className="alerts-channel-hint">Connect Telegram in Settings to enable</p>
+                      </>
+                    )}
                     {canWebhook && (
                       <label className="alerts-channel-row">
                         <input

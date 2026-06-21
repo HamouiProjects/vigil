@@ -2163,9 +2163,17 @@ button.status-dot:hover { opacity: 0.8; }
   color: var(--text-secondary);
   cursor: pointer;
 }
-.alerts-channel-row.is-fixed {
+.alerts-channel-row.is-fixed,
+.alerts-channel-row.is-disabled {
   opacity: 0.7;
   cursor: default;
+}
+.alerts-channel-hint {
+  margin: 0 0 0 22px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 .alerts-channel-row input[type="checkbox"] {
   accent-color: var(--accent);
