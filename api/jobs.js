@@ -489,18 +489,15 @@ async function sendAlertWebhook(webhookUrl, keyword, region, items) {
   }
 }
 
-async function handleAlertDispatch(req, res) {
-  const secret = process.env.CRON_SECRET
-  const authHeader = req.headers.authorization || ''
-  if (!secret || !safeEqual(authHeader, `Bearer ${secret}`)) return res.status(401).json({ error: 'UNAUTHORIZED' })
-  if (!supabase) return res.status(503).json({ error: 'SUPABASE_UNAVAILABLE' })
+async function runAlertMatch() {
+  if (!supabase) return { error: 'SUPABASE_UNAVAILABLE', status: 503 }
 
   const { data: rules, error: rulesErr } = await supabase
     .from('alerts')
     .select('id, user_id, keyword, region, channels, webhook_url')
     .eq('active', true)
     .limit(40)
-  if (rulesErr) return res.status(500).json({ error: 'DB_ERROR', stage: 'rules' })
+  if (rulesErr) return { error: 'DB_ERROR', status: 500 }
 
   const userCache = new Map()
   let matched = 0
@@ -557,11 +554,33 @@ async function handleAlertDispatch(req, res) {
 
   console.log('[alert-dispatch]', JSON.stringify({ rules: (rules || []).length, matched, emailed, posted }))
 
+  return { ok: true, rules: (rules || []).length, matched, emailed, posted }
+}
+
+async function handleAlertDispatch(req, res) {
+  const secret = process.env.CRON_SECRET
+  const authHeader = req.headers.authorization || ''
+  if (!secret || !safeEqual(authHeader, `Bearer ${secret}`)) return res.status(401).json({ error: 'UNAUTHORIZED' })
+
+  const result = await runAlertMatch()
+  if (result.error) return res.status(result.status).json({ error: result.error })
+
   const sched = await dispatchScheduledBriefs().catch((e) => { console.error('[scheduled-brief] dispatch threw', e?.message); return { due: 0, sent: 0, capped: 0, skipped: 0 } })
 
   await cleanupStaleRows()
 
-  return res.status(200).json({ ok: true, rules: (rules || []).length, matched, emailed, posted, scheduledBriefs: sched })
+  return res.status(200).json({ ok: true, rules: result.rules, matched: result.matched, emailed: result.emailed, posted: result.posted, scheduledBriefs: sched })
+}
+
+async function handleAlertPoll(req, res) {
+  const secret = process.env.CRON_SECRET
+  const authHeader = req.headers.authorization || ''
+  if (!secret || !safeEqual(authHeader, `Bearer ${secret}`)) return res.status(401).json({ error: 'UNAUTHORIZED' })
+
+  const result = await runAlertMatch()
+  if (result.error) return res.status(result.status).json({ error: result.error })
+
+  return res.status(200).json({ ok: true, rules: result.rules, matched: result.matched, emailed: result.emailed, posted: result.posted })
 }
 
 async function handleDeleteAccount(req, res) {
@@ -711,6 +730,23 @@ async function cleanupStaleRows() {
     }
   } catch (err) {
     console.error('[cleanup] feed_cache delete threw', err?.message)
+  }
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+  try {
+    const { data: aeRows, error: aeErr } = await supabase
+      .from('alert_events')
+      .delete()
+      .lt('matched_at', thirtyDaysAgo)
+      .select('id')
+    if (aeErr) {
+      console.error('[cleanup] alert_events delete error', aeErr.message)
+    } else {
+      console.log('[cleanup] alert_events deleted', aeRows?.length ?? 0)
+    }
+  } catch (err) {
+    console.error('[cleanup] alert_events delete threw', err?.message)
   }
 }
 
@@ -1420,6 +1456,8 @@ export default async function handler(req, res) {
       return handleEmailBrief(req, res)
     case 'alert-dispatch':
       return handleAlertDispatch(req, res)
+    case 'alert-poll':
+      return handleAlertPoll(req, res)
     case 'delete-account':
       return handleDeleteAccount(req, res)
     case 'email-signup':

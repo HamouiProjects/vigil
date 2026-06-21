@@ -233,7 +233,7 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
             <div className="alerts-rules">
               {!canAlert && (
                 <p className="alerts-nudge">
-                  Alerts are a paid feature. Upgrade to start a daily digest over your own keywords.
+                  Alerts are a paid feature. Upgrade to start a near-real-time keyword watch.
                 </p>
               )}
               {canAlert && atCap && (
