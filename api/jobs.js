@@ -489,6 +489,57 @@ async function sendAlertWebhook(webhookUrl, keyword, region, items) {
   }
 }
 
+function renderAlertTelegramText(keyword, region, items) {
+  const scope = region ? ` in ${region}` : ''
+  const footer = '\n\nVigil tracks, it does not verify.'
+  const header = `New items matching "${keyword}"${scope}\n\n`
+  const maxLen = 4096
+  const lines = []
+  for (const it of items) {
+    const url = isHttpUrl(it.url) ? it.url : null
+    const line = `• ${it.title || it.url || ''}${it.source ? ` (${it.source})` : ''}${url ? `\n${url}` : ''}`
+    const candidate = header + [...lines, line].join('\n') + footer
+    if (candidate.length > maxLen) break
+    lines.push(line)
+  }
+  return header + lines.join('\n') + footer
+}
+
+async function sendAlertTelegram(chatId, alert, items) {
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  if (!token || !chatId) return false
+  const text = renderAlertTelegramText(alert.keyword, alert.region, items)
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text }),
+      signal: AbortSignal.timeout(10000),
+    })
+    return resp.ok
+  } catch (e) {
+    console.error('[alert-dispatch] telegram send failed', e?.message)
+    return false
+  }
+}
+
+async function sendTelegramPlain(chatId, text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  if (!token || !chatId) return false
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text }),
+      signal: AbortSignal.timeout(10000),
+    })
+    return resp.ok
+  } catch (e) {
+    console.error('[telegram-webhook] send failed', e?.message)
+    return false
+  }
+}
+
 async function runAlertMatch() {
   if (!supabase) return { error: 'SUPABASE_UNAVAILABLE', status: 503 }
 
@@ -503,6 +554,7 @@ async function runAlertMatch() {
   let matched = 0
   let emailed = 0
   let posted = 0
+  let telegramSent = 0
 
   for (const rule of (rules || [])) {
     let u = userCache.get(rule.user_id)
@@ -516,6 +568,7 @@ async function runAlertMatch() {
         canAlert: ent.capabilities.has('alerts'),
         canWebhook: ent.capabilities.has('alerts_webhook'),
         notifyAlertEmail: ud?.user?.user_metadata?.notify_alert_email !== false,
+        telegramChatId: ud?.user?.user_metadata?.telegram_chat_id ? String(ud.user.user_metadata.telegram_chat_id) : null,
       }
       userCache.set(rule.user_id, u)
     }
@@ -550,11 +603,15 @@ async function runAlertMatch() {
       const ok = await sendAlertWebhook(rule.webhook_url, rule.keyword, rule.region, mapped)
       if (ok) posted += 1
     }
+    if (channels.includes('telegram') && u.telegramChatId) {
+      const sent = await sendAlertTelegram(u.telegramChatId, { keyword: rule.keyword, region: rule.region }, mapped)
+      if (sent) telegramSent += 1
+    }
   }
 
-  console.log('[alert-dispatch]', JSON.stringify({ rules: (rules || []).length, matched, emailed, posted }))
+  console.log('[alert-dispatch]', JSON.stringify({ rules: (rules || []).length, matched, emailed, posted, telegramSent }))
 
-  return { ok: true, rules: (rules || []).length, matched, emailed, posted }
+  return { ok: true, rules: (rules || []).length, matched, emailed, posted, telegramSent }
 }
 
 async function handleAlertDispatch(req, res) {
@@ -569,7 +626,7 @@ async function handleAlertDispatch(req, res) {
 
   await cleanupStaleRows()
 
-  return res.status(200).json({ ok: true, rules: result.rules, matched: result.matched, emailed: result.emailed, posted: result.posted, scheduledBriefs: sched })
+  return res.status(200).json({ ok: true, rules: result.rules, matched: result.matched, emailed: result.emailed, posted: result.posted, telegramSent: result.telegramSent, scheduledBriefs: sched })
 }
 
 async function handleAlertPoll(req, res) {
@@ -580,7 +637,109 @@ async function handleAlertPoll(req, res) {
   const result = await runAlertMatch()
   if (result.error) return res.status(result.status).json({ error: result.error })
 
-  return res.status(200).json({ ok: true, rules: result.rules, matched: result.matched, emailed: result.emailed, posted: result.posted })
+  return res.status(200).json({ ok: true, rules: result.rules, matched: result.matched, emailed: result.emailed, posted: result.posted, telegramSent: result.telegramSent })
+}
+
+const TELEGRAM_BOT_USERNAME = 'TheVigilRoom_alerts_bot'
+const TGLINK_CACHE_TTL_MS = 15 * 60 * 1000
+const TGLINK_TOKEN_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-'
+
+function mintTgLinkToken() {
+  const bytes = crypto.randomBytes(32)
+  let token = ''
+  for (let i = 0; i < bytes.length; i++) {
+    token += TGLINK_TOKEN_CHARS[bytes[i] % TGLINK_TOKEN_CHARS.length]
+  }
+  return token.slice(0, 48)
+}
+
+function tgLinkCacheKey(token) {
+  return `tglink:${token}`
+}
+
+async function tgLinkCacheRead(key) {
+  if (!supabase) return null
+  try {
+    const { data } = await supabase.from('feed_cache').select('*').eq('feed_url', key).maybeSingle()
+    if (!data) return null
+    const age = Date.now() - new Date(data.updated_at).getTime()
+    if (age >= 0 && age < TGLINK_CACHE_TTL_MS) return data.items
+    return null
+  } catch { return null }
+}
+
+async function tgLinkCacheWrite(key, payload) {
+  if (!supabase) return
+  try {
+    await supabase.from('feed_cache').upsert(
+      { feed_url: key, title: 'tglink', items: payload, updated_at: new Date().toISOString() },
+      { onConflict: 'feed_url' },
+    )
+  } catch { /* best-effort */ }
+}
+
+async function tgLinkCacheDelete(key) {
+  if (!supabase) return
+  try {
+    await supabase.from('feed_cache').delete().eq('feed_url', key)
+  } catch { /* best-effort */ }
+}
+
+async function handleTelegramLinkStart(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' })
+  if (!supabase) return res.status(503).json({ error: 'SUPABASE_UNAVAILABLE' })
+
+  const authHeader = req.headers.authorization || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
+  if (!token) return res.status(401).json({ error: 'UNAUTHORIZED' })
+  const { data: userData, error: userErr } = await supabase.auth.getUser(token)
+  const user = userData?.user
+  if (userErr || !user?.id) return res.status(401).json({ error: 'UNAUTHORIZED' })
+
+  const rl = await rateLimit(req, 'telegram-link', 10, 60, user.id)
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', String(rl.retryAfter))
+    return res.status(429).json({ error: 'RATE_LIMITED' })
+  }
+
+  const linkToken = mintTgLinkToken()
+  await tgLinkCacheWrite(tgLinkCacheKey(linkToken), { user_id: user.id })
+  const deepLink = `https://t.me/${TELEGRAM_BOT_USERNAME}?start=${linkToken}`
+  return res.status(200).json({ deepLink })
+}
+
+async function handleTelegramWebhook(req, res) {
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET
+  const headerSecret = req.headers['x-telegram-bot-api-secret-token'] || ''
+  if (!secret || !safeEqual(headerSecret, secret)) return res.status(401).json({ error: 'UNAUTHORIZED' })
+
+  try {
+    const update = readBody(req)
+    const text = update?.message?.text
+    const chatId = update?.message?.chat?.id
+    if (typeof text !== 'string' || chatId == null) return res.status(200).json({ ok: true })
+
+    const m = text.match(/^\/start (\S+)$/)
+    if (!m) return res.status(200).json({ ok: true })
+
+    const linkToken = m[1]
+    const cacheKey = tgLinkCacheKey(linkToken)
+    const cached = await tgLinkCacheRead(cacheKey)
+    if (!cached?.user_id) return res.status(200).json({ ok: true })
+
+    const userId = cached.user_id
+    const { data: ud } = await supabase.auth.admin.getUserById(userId)
+    const existingMeta = ud?.user?.user_metadata ?? {}
+    await supabase.auth.admin.updateUserById(userId, {
+      user_metadata: { ...existingMeta, telegram_chat_id: String(chatId) },
+    })
+    await tgLinkCacheDelete(cacheKey)
+    await sendTelegramPlain(chatId, 'Vigil is connected. Your keyword alerts will arrive here.')
+  } catch (e) {
+    console.error('[telegram-webhook] processing error', e?.message)
+  }
+
+  return res.status(200).json({ ok: true })
 }
 
 async function handleDeleteAccount(req, res) {
@@ -1464,6 +1623,10 @@ export default async function handler(req, res) {
       return handleEmailSignup(req, res)
     case 'suggest-sources':
       return handleSuggestSources(req, res)
+    case 'telegram-link-start':
+      return handleTelegramLinkStart(req, res)
+    case 'telegram-webhook':
+      return handleTelegramWebhook(req, res)
     default:
       return res.status(400).json({ error: 'UNKNOWN_ACTION' })
   }

@@ -380,7 +380,10 @@ function SubscriptionSection({ plan, isPaid, onUpgrade }) {
 function NotificationsSection({ isReal, hasAlerts, onAuth, onClose, flashSaved, savedFlash }) {
   const [notifyBrief, setNotifyBrief] = useState(true)
   const [notifyAlert, setNotifyAlert] = useState(true)
+  const [telegramConnected, setTelegramConnected] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [telegramLoading, setTelegramLoading] = useState(false)
+  const [telegramError, setTelegramError] = useState('')
 
   useEffect(() => {
     if (!isReal) return
@@ -388,6 +391,7 @@ function NotificationsSection({ isReal, hasAlerts, onAuth, onClose, flashSaved, 
       const meta = data?.user?.user_metadata ?? {}
       setNotifyBrief(meta.notify_brief_email !== false)
       setNotifyAlert(meta.notify_alert_email !== false)
+      setTelegramConnected(!!meta.telegram_chat_id)
       setLoaded(true)
     })
   }, [isReal])
@@ -402,6 +406,50 @@ function NotificationsSection({ isReal, hasAlerts, onAuth, onClose, flashSaved, 
     setNotifyAlert(val)
     await supabase.auth.updateUser({ data: { notify_alert_email: val } })
     flashSaved()
+  }
+
+  async function connectTelegram() {
+    if (!hasAlerts) return
+    setTelegramError('')
+    setTelegramLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        setTelegramError('Session expired. Reload and try again.')
+        return
+      }
+      const res = await fetch('/api/jobs?action=telegram-link-start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+      if (!res.ok) {
+        setTelegramError('Could not start Telegram link. Try again.')
+        return
+      }
+      const data = await res.json()
+      if (data.deepLink) window.open(data.deepLink, '_blank')
+    } catch {
+      setTelegramError('Could not start Telegram link. Try again.')
+    } finally {
+      setTelegramLoading(false)
+    }
+  }
+
+  async function disconnectTelegram() {
+    setTelegramLoading(true)
+    setTelegramError('')
+    try {
+      await supabase.auth.updateUser({ data: { telegram_chat_id: null } })
+      setTelegramConnected(false)
+      flashSaved()
+    } catch {
+      setTelegramError('Could not disconnect Telegram. Try again.')
+    } finally {
+      setTelegramLoading(false)
+    }
   }
 
   if (!isReal) {
@@ -466,6 +514,46 @@ function NotificationsSection({ isReal, hasAlerts, onAuth, onClose, flashSaved, 
           <span className="account-switch-knob" />
         </button>
       </div>
+
+      <div className={`settings-toggle-row${!hasAlerts ? ' is-disabled' : ''}`}>
+        <div>
+          <div className="settings-toggle-label">Telegram</div>
+          {telegramConnected ? (
+            <p className="settings-microcopy">Telegram connected</p>
+          ) : (
+            <p className="settings-microcopy">
+              {hasAlerts
+                ? 'Receive keyword alerts in Telegram.'
+                : 'Alerts are part of paid plans.'}
+            </p>
+          )}
+        </div>
+        {telegramConnected ? (
+          <button
+            type="button"
+            className="settings-btn"
+            disabled={!loaded || !hasAlerts || telegramLoading}
+            onClick={disconnectTelegram}
+          >
+            Disconnect
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="settings-btn settings-btn-primary"
+            disabled={!loaded || !hasAlerts || telegramLoading}
+            onClick={connectTelegram}
+          >
+            {telegramLoading ? 'Opening...' : 'Connect Telegram'}
+          </button>
+        )}
+      </div>
+      {!telegramConnected && hasAlerts && (
+        <p className="settings-microcopy">
+          After you tap Start in Telegram, reopen Settings to see Connected.
+        </p>
+      )}
+      {telegramError && <p className="settings-msg-error">{telegramError}</p>}
     </>
   )
 }
