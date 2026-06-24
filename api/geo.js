@@ -417,6 +417,80 @@ async function handleConflict() {
   }
 }
 
+// --- Conflict detail (T2): proxy the GDELT DOC API server-side so the popup fetches same-origin. ---
+// The DOC host (api.gdeltproject.org) serves no Access-Control-Allow-Origin, so a direct browser
+// fetch is CORS-blocked. The host is fixed and only the query string carries user input, so there
+// is no SSRF surface. Reuses the AIRCRAFT_HEADERS user-agent that GDELT accepts.
+const CONFLICT_DOC_API = 'https://api.gdeltproject.org/api/v2/doc/doc'
+const CONFLICT_DOC_TIMESPAN = '72h'
+const CONFLICT_DOC_MAXRECORDS = 8
+const CONFLICT_DOC_RENDER_MAX = 5
+const CONFLICT_DETAIL_TTL_MS = 600_000 // 10 min, so repeated clicks on the same event reuse the result
+
+function conflictQueryTerm(kind) {
+  switch (kind) {
+    case 'Armed clash': return '(clash OR clashes OR fighting OR offensive)'
+    case 'Bombing': return '(blast OR explosion OR bombing OR ied)'
+    case 'Assassination': return '(killed OR assassination OR shot OR gunmen)'
+    case 'Mass killing or violence': return '(massacre OR killed OR attack OR atrocity)'
+    default: return '(conflict OR attack OR violence)'
+  }
+}
+
+function conflictQueryPlace(place) {
+  const p = (place || '').trim()
+  if (!p) return ''
+  const primary = (p.split(',')[0] || '').trim()
+  const locality = primary.length >= 3 ? primary : p
+  return `"${locality.replace(/"/g, '')}"`
+}
+
+function httpUrlOrNull(value) {
+  try {
+    const parsed = new URL(String(value))
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href
+  } catch { /* not a usable url */ }
+  return null
+}
+
+async function fetchConflictDetail(place, kind) {
+  const placePart = conflictQueryPlace(place)
+  if (!placePart) return []
+  const query = `${placePart} ${conflictQueryTerm(kind)}`
+  const url = `${CONFLICT_DOC_API}?query=${encodeURIComponent(query)}&mode=artlist&format=json&timespan=${CONFLICT_DOC_TIMESPAN}&maxrecords=${CONFLICT_DOC_MAXRECORDS}`
+  const res = await fetch(url, { headers: AIRCRAFT_HEADERS, signal: AbortSignal.timeout(8000) })
+  if (!res.ok) throw new Error(`doc ${res.status}`)
+  const json = await res.json()
+  const list = Array.isArray(json?.articles) ? json.articles : []
+  const seen = new Set()
+  const out = []
+  for (const a of list) {
+    const href = httpUrlOrNull(a?.url)
+    if (!href || seen.has(href)) continue
+    seen.add(href)
+    out.push({ title: String(a?.title || a?.domain || href).trim(), domain: String(a?.domain || ''), url: href })
+    if (out.length >= CONFLICT_DOC_RENDER_MAX) break
+  }
+  return out
+}
+
+async function handleConflictDetail(req) {
+  const place = String(req.query.place || '')
+  const kind = String(req.query.kind || '')
+  const key = cacheKey('conflict-detail', { place, kind })
+  const fresh = getFreshCache(key, CONFLICT_DETAIL_TTL_MS)
+  if (fresh) return { articles: fresh.articles }
+  try {
+    const articles = await fetchConflictDetail(place, kind)
+    setCache(key, { articles })
+    return { articles }
+  } catch {
+    const stale = getStaleCache(key)
+    if (stale) return { articles: stale.articles }
+    return { error: true }
+  }
+}
+
 async function handleDebugPassthrough(req, res, source) {
   const upstreamUrl = getUpstreamUrl(source)
   if (!upstreamUrl) {
@@ -459,7 +533,7 @@ export default async function handler(req, res) {
 
   const source = (req.query.source || '').toLowerCase()
 
-  if (source !== 'aircraft' && source !== 'firms' && source !== 'conflict') {
+  if (source !== 'aircraft' && source !== 'firms' && source !== 'conflict' && source !== 'conflict-detail') {
     return res.status(400).json({ error: 'invalid source' })
   }
 
@@ -467,6 +541,13 @@ export default async function handler(req, res) {
   if (!rl.allowed) {
     res.setHeader('Retry-After', String(rl.retryAfter))
     return res.status(429).json({ error: 'rate_limited' })
+  }
+
+  // Conflict detail returns an articles array, not a FeatureCollection, so it short-circuits here.
+  if (source === 'conflict-detail') {
+    const result = await handleConflictDetail(req)
+    setGeoHeaders(res)
+    return res.status(200).json(result.error ? { articles: [], error: true } : { articles: result.articles })
   }
 
   if (req.query.debug === '1' && debugAllowed()) {

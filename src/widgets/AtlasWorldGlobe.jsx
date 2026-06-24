@@ -910,51 +910,18 @@ function buildWildfirePopupHtml(props, newsSearchQuery, prov) {
   })
 }
 
-const CONFLICT_DOC_API = 'https://api.gdeltproject.org/api/v2/doc/doc'
-const CONFLICT_DOC_TIMESPAN = '72h'
-const CONFLICT_DOC_MAXRECORDS = 8
-const CONFLICT_DOC_RENDER_MAX = 5
-
-function conflictQueryTerm(kind) {
-  switch (kind) {
-    case 'Armed clash': return '(clash OR clashes OR fighting OR offensive)'
-    case 'Bombing': return '(blast OR explosion OR bombing OR ied)'
-    case 'Assassination': return '(killed OR assassination OR shot OR gunmen)'
-    case 'Mass killing or violence': return '(massacre OR killed OR attack OR atrocity)'
-    default: return '(conflict OR attack OR violence)'
-  }
-}
-
-function conflictQueryPlace(place) {
-  const p = (place || '').trim()
-  if (!p) return ''
-  const primary = (p.split(',')[0] || '').trim()
-  const locality = primary.length >= 3 ? primary : p
-  return `"${locality.replace(/"/g, '')}"`
-}
-
 async function fetchConflictArticles(place, kind) {
-  // Client-side fetch of GDELT DOC 2.0 (keyless, CORS wildcard, per-user IP, same pattern as USGS/GDACS).
+  // Server-proxied through api/geo.js (source=conflict-detail) so this fetch is same-origin (no CORS).
   // Returns an array of articles (possibly empty) on success, or null on error.
-  const placePart = conflictQueryPlace(place)
-  if (!placePart) return []
-  const query = `${placePart} ${conflictQueryTerm(kind)}`
-  const url = `${CONFLICT_DOC_API}?query=${encodeURIComponent(query)}&mode=artlist&format=json&timespan=${CONFLICT_DOC_TIMESPAN}&maxrecords=${CONFLICT_DOC_MAXRECORDS}`
+  const p = (place || '').trim()
+  if (!p) return []
+  const url = `/api/geo?source=conflict-detail&place=${encodeURIComponent(place)}&kind=${encodeURIComponent(kind || '')}`
   try {
     const res = await fetch(url)
     if (!res.ok) return null
     const json = await res.json()
-    const list = Array.isArray(json?.articles) ? json.articles : []
-    const seen = new Set()
-    const out = []
-    for (const a of list) {
-      const href = safeHttpUrl(a?.url)
-      if (!href || seen.has(href)) continue
-      seen.add(href)
-      out.push({ title: (a?.title || a?.domain || href).trim(), domain: a?.domain || '', url: href })
-      if (out.length >= CONFLICT_DOC_RENDER_MAX) break
-    }
-    return out
+    if (json?.error) return null
+    return Array.isArray(json?.articles) ? json.articles : []
   } catch {
     return null
   }
