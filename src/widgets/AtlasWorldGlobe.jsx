@@ -454,14 +454,14 @@ export const LAYER_COLORS = {
   earthquakes: '#F2A03D',
   storms: '#58B4E6',
   aircraft: '#E2E8F0',
-  wildfires: '#EA5F38',
-  conflict: '#E5352E',
+  wildfires: '#F4C430',
+  conflict: '#E5564D',
 }
 
 export const LAYER_SWATCH_CSS = {
   earthquakes: 'var(--color-warning)',
   storms: 'var(--color-info)',
-  wildfires: 'var(--color-error)',
+  wildfires: 'var(--color-wildfire)',
   aircraft: 'var(--color-text-primary)',
   conflict: 'var(--color-conflict-mid)',
 }
@@ -472,7 +472,7 @@ function resolveLayerMarkerColors() {
   return {
     earthquakes: styles.getPropertyValue('--color-warning').trim(),
     storms: styles.getPropertyValue('--color-info').trim(),
-    wildfires: styles.getPropertyValue('--color-error').trim(),
+    wildfires: styles.getPropertyValue('--color-wildfire').trim(),
     aircraft: styles.getPropertyValue('--color-text-primary').trim(),
     conflict: conflictMid || LAYER_COLORS.conflict,
   }
@@ -900,7 +900,7 @@ function buildWildfirePopupHtml(props, newsSearchQuery, prov) {
   if (detected) rows.push(['Detected', `${detected} UTC`])
 
   return buildPopupCard({
-    dotColor: 'var(--color-error)',
+    dotColor: 'var(--color-wildfire)',
     kicker: 'ACTIVE WILDFIRE',
     title: 'Active fire detection',
     rows,

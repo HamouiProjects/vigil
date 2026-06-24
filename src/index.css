@@ -27,9 +27,10 @@
   --color-success:#3FD27E;
   --color-warning:#E0A93B;
   --color-error:#E5564D;
+  --color-wildfire:#F4C430;
   --color-info:#4FA8D6;
   --color-conflict-low:#C77DD6;
-  --color-conflict-mid:#E5352E;
+  --color-conflict-mid:#E5564D;
   --color-conflict-high:#7A1FA2;
   --shadow-overlay:none;
   /* Legacy aliases → semantic, so existing var(--accent)/var(--bg)/… flip per theme without mass edits */
@@ -68,9 +69,10 @@
   --color-success:#0A6B43;
   --color-warning:#6F4D08;
   --color-error:#AE2E27;
+  --color-wildfire:#E0A300;
   --color-info:#155E86;
   --color-conflict-low:#B25DD0;
-  --color-conflict-mid:#C62828;
+  --color-conflict-mid:#AE2E27;
   --color-conflict-high:#6A1B9A;
   --shadow-overlay:0 4px 16px rgba(0,0,0,0.08);
 }
