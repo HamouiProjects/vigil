@@ -463,19 +463,18 @@ export const LAYER_SWATCH_CSS = {
   storms: 'var(--color-info)',
   wildfires: 'var(--color-error)',
   aircraft: 'var(--color-text-primary)',
-  conflict: 'linear-gradient(90deg, var(--color-conflict-low), var(--color-conflict-mid), var(--color-conflict-high))',
+  conflict: 'var(--color-conflict-mid)',
 }
 
 function resolveLayerMarkerColors() {
   const styles = getComputedStyle(document.documentElement)
+  const conflictMid = styles.getPropertyValue('--color-conflict-mid').trim()
   return {
     earthquakes: styles.getPropertyValue('--color-warning').trim(),
     storms: styles.getPropertyValue('--color-info').trim(),
     wildfires: styles.getPropertyValue('--color-error').trim(),
     aircraft: styles.getPropertyValue('--color-text-primary').trim(),
-    conflictLow: styles.getPropertyValue('--color-conflict-low').trim(),
-    conflictMid: styles.getPropertyValue('--color-conflict-mid').trim(),
-    conflictHigh: styles.getPropertyValue('--color-conflict-high').trim(),
+    conflict: conflictMid || LAYER_COLORS.conflict,
   }
 }
 
@@ -491,6 +490,9 @@ function applyLayerMarkerColors(map) {
     }
     if (map.getLayer('wildfires-layer')) {
       map.setPaintProperty('wildfires-layer', 'circle-color', colors.wildfires)
+    }
+    if (map.getLayer('conflict-layer')) {
+      map.setPaintProperty('conflict-layer', 'circle-color', colors.conflict)
     }
     if (map.hasImage(AIRCRAFT_ICON_ID)) {
       map.updateImage(AIRCRAFT_ICON_ID, createAircraftPlaneImageData(colors.aircraft))
@@ -533,11 +535,12 @@ function createDefaultProvenance() {
       count: null,
     },
     conflict: {
-      label: 'Conflict mentions',
-      sourceName: 'GDELT GEO 2.0',
+      label: 'Reported conflict events',
+      sourceName: 'GDELT 2.0 Event database',
       sourceUrl: 'https://www.gdeltproject.org/',
       fetchedAt: null,
       count: null,
+      note: 'Machine-coded from news reports, an indicator, not confirmed events.',
     },
   }
 }
@@ -634,6 +637,7 @@ const DATA_MARKER_LAYERS = [
   'storms-layer',
   'aircraft-layer',
   'wildfires-layer',
+  'conflict-layer',
 ]
 
 function dispatchNewsSearch(query) {
@@ -761,6 +765,7 @@ function buildPopupCard({
   titleRows,
   rows,
   footerExtra,
+  bodyExtraHtml,
   photoHtml,
   newsSearchQuery,
   sourceName,
@@ -777,6 +782,7 @@ function buildPopupCard({
   const footerBlock = footerParts.length
     ? `<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--color-border);display:flex;flex-wrap:wrap;gap:4px;align-items:center;">${footerParts.join('<span style="color:var(--color-text-muted);font-size:10px;opacity:0.5;"> · </span>')}</div>`
     : ''
+  const bodyExtraBlock = bodyExtraHtml ? `<div style="margin-top:6px;">${bodyExtraHtml}</div>` : ''
 
   return `${photoHtml || ''}<div style="${POPUP_BODY_STYLE}">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
@@ -786,6 +792,7 @@ function buildPopupCard({
     <div style="font-weight:600;font-size:13px;margin-bottom:6px;line-height:1.35;color:var(--color-text-primary);">${escapeHtml(title)}</div>
     ${titleRowsHtml}
     ${rowsHtml}
+    ${bodyExtraBlock}
     ${footerBlock}
     ${searchBtn}
   </div>`
@@ -903,6 +910,37 @@ function buildWildfirePopupHtml(props, newsSearchQuery, prov) {
   })
 }
 
+function buildConflictPopupHtml(props, prov) {
+  const kind = props.kind || 'Conflict event'
+  const place = (props.place || '').trim()
+  const articles = Number(props.articles) || 0
+  const articleLine = articles === 1 ? 'Reported in 1 article' : `Reported in ${articles} articles`
+  const titleRows = place ? [['', place]] : []
+  const rows = [['', articleLine]]
+  const href = safeHttpUrl(props.url)
+  const bodyExtraHtml = href
+    ? `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--color-brand);text-decoration:none;">View source ↗</a>`
+    : ''
+  const rel = formatRelativeTime(prov?.fetchedAt)
+  const footerExtra = [
+    'Machine-coded from news reports, an indicator, not confirmed events.',
+    rel ? `Updated ${rel}` : null,
+  ].filter(Boolean).join(' · ')
+
+  return buildPopupCard({
+    dotColor: 'var(--color-conflict-mid)',
+    kicker: 'REPORTED CONFLICT',
+    title: kind,
+    titleRows,
+    rows,
+    bodyExtraHtml,
+    footerExtra,
+    sourceName: prov?.sourceName,
+    sourceUrl: prov?.sourceUrl,
+    newsSearchQuery: place || 'conflict',
+  })
+}
+
 function buildAircraftPopupHtml(props, { country = null, photo = null, prov = null } = {}) {
   const callsign = (props.callsign || '').trim()
   const titleBase = callsign || props.hex || 'Unknown aircraft'
@@ -974,7 +1012,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
   const aircraftGeoRef = useRef(null)
   const wildfiresGeoRef = useRef(null)
   const conflictGeoRef = useRef(null)
-  const conflictBreaksRef = useRef({ low: 1, mid: 2, high: 3 })
   const lastFetchRef = useRef(null)
   const [provenance, setProvenance] = useState(createDefaultProvenance)
   const provenanceRef = useRef(provenance)
@@ -1001,16 +1038,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       provenanceRef.current = next
       return next
     })
-  }
-
-  const applyConflictFillPaint = (map) => {
-    const c = resolveLayerMarkerColors()
-    const b = conflictBreaksRef.current
-    if (map?.getLayer('conflict-fill')) {
-      map.setPaintProperty('conflict-fill', 'fill-color',
-        ['interpolate', ['linear'], ['to-number', ['coalesce', ['get', 'count'], 0]],
-         b.low, c.conflictLow, b.mid, c.conflictMid, b.high, c.conflictHigh])
-    }
   }
 
   useEffect(() => {
@@ -1149,11 +1176,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
         const json = await res.json()
         const geojson = featureCollectionFromGeoResponse(json)
         conflictGeoRef.current = geojson
-        const counts = (geojson.features || []).map(f => Number(f.properties?.count) || 0)
-        const maxC = counts.length ? Math.max(...counts) : 0
-        conflictBreaksRef.current = maxC > 0
-          ? { low: Math.max(1, maxC * 0.10), mid: maxC * 0.40, high: maxC }
-          : { low: 1, mid: 2, high: 3 }
         if (json.meta) {
           patchProvenance('conflict', {
             sourceName: json.meta.sourceName ?? provenanceRef.current.conflict.sourceName,
@@ -1166,7 +1188,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
         }
         const map = mapRef.current
         map?.getSource('conflict')?.setData(geojson)
-        applyConflictFillPaint(map)
       } catch { /* ignore network errors */ }
     }
     fetchConflict()
@@ -1213,8 +1234,8 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
   useEffect(() => {
     const map = mapRef.current
     if (!map || !map.isStyleLoaded()) return
-    if (!map.getLayer('conflict-fill')) return
-    map.setLayoutProperty('conflict-fill', 'visibility', layers?.conflict ? 'visible' : 'none')
+    if (!map.getLayer('conflict-layer')) return
+    map.setLayoutProperty('conflict-layer', 'visibility', layers?.conflict ? 'visible' : 'none')
   }, [layers?.conflict])
 
   useEffect(() => {
@@ -1232,6 +1253,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
     let stormListenersBound = false
     let aircraftListenersBound = false
     let wildfiresListenersBound = false
+    let conflictListenersBound = false
 
     const updateCountryReadout = (name) => {
       const el = countryReadoutRef.current
@@ -1339,7 +1361,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
     const themeObserver = new MutationObserver(() => {
       applyTheme()
       applyLayerMarkerColors(map)
-      applyConflictFillPaint(map)
     })
     themeObserver.observe(document.documentElement, {
       attributes: true,
@@ -1660,30 +1681,50 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
         map.getSource('conflict').setData(conflictGeoRef.current)
       }
 
-      if (!map.getLayer('conflict-fill')) {
-        const c = resolveLayerMarkerColors()
-        const b = conflictBreaksRef.current
-        const beforeId = ['country-highlight-fill', 'quakes-layer', 'storms-layer', 'aircraft-layer', 'wildfires-layer']
-          .find((id) => map.getLayer(id))
-        map.addLayer(
-          {
-            id: 'conflict-fill',
-            type: 'fill',
-            source: 'conflict',
-            paint: {
-              'fill-opacity': 0.45,
-              'fill-color': [
-                'interpolate', ['linear'], ['to-number', ['coalesce', ['get', 'count'], 0]],
-                b.low, c.conflictLow, b.mid, c.conflictMid, b.high, c.conflictHigh,
-              ],
-            },
+      if (!map.getLayer('conflict-layer')) {
+        const markerColors = resolveLayerMarkerColors()
+        map.addLayer({
+          id: 'conflict-layer',
+          type: 'circle',
+          source: 'conflict',
+          paint: {
+            'circle-radius': 6,
+            'circle-color': markerColors.conflict,
+            'circle-opacity': 0.85,
+            'circle-stroke-color': CIRCLE_STROKE_COLOR,
+            'circle-stroke-width': CIRCLE_STROKE_WIDTH,
+            'circle-stroke-opacity': 1,
           },
-          beforeId,
-        )
+        })
       }
 
       const visible = layersRef.current?.conflict ? 'visible' : 'none'
-      map.setLayoutProperty('conflict-fill', 'visibility', visible)
+      map.setLayoutProperty('conflict-layer', 'visibility', visible)
+
+      if (!conflictListenersBound) {
+        conflictListenersBound = true
+
+        map.on('click', 'conflict-layer', (e) => {
+          const feature = e.features?.[0]
+          if (!feature) return
+          const props = feature.properties || {}
+
+          popup?.remove()
+          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
+            .setLngLat(e.lngLat)
+            .setHTML(buildConflictPopupHtml(props, provenanceRef.current.conflict))
+            .addTo(map)
+          wirePopupDismiss(popup, map)
+          attachPopupNewsSearchButton(popup)
+        })
+
+        map.on('mouseenter', 'conflict-layer', () => {
+          map.getCanvas().style.cursor = 'pointer'
+        })
+        map.on('mouseleave', 'conflict-layer', () => {
+          map.getCanvas().style.cursor = ''
+        })
+      }
     }
 
     const tryAdvanceStyle = () => {
@@ -1714,11 +1755,11 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       applyTheme()
       calmBasemapLabels(map)
       ensureCountryHighlightLayer()
-      ensureConflictLayer()
       ensureQuakesLayer()
       ensureStormsLayer()
       ensureAircraftLayer()
       ensureWildfiresLayer()
+      ensureConflictLayer()
       applyLayerMarkerColors(map)
     }
 
