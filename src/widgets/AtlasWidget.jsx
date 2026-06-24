@@ -146,6 +146,7 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
   const [newsLoading, setNewsLoading] = useState(false)
 
   const globeContainerRef = useRef(null)
+  const worldGlobeRef = useRef(null)
   const sidebarDragRef = useRef(false)
 
   const sourcesPanelRef = useRef(null)
@@ -537,12 +538,20 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
                           </span>
                         </div>
                         {items.slice(0, 5).map((item, i) => (
-                          <div
-                            key={i}
-                            style={{ marginLeft: 14, fontSize: 11, color: swatch, marginBottom: 2 }}
-                          >
-                            {layer === 'conflict' && item.kind ? `${item.label} · ${item.kind}` : item.label}
-                          </div>
+                          layer === 'aircraft' ? (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => worldGlobeRef.current?.openAircraftPopup(item.hex, sidebarWidth)}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', marginLeft: 14, fontSize: 11, color: swatch, marginBottom: 2, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', lineHeight: 'inherit' }}
+                            >
+                              {item.label}
+                            </button>
+                          ) : (
+                            <div key={i} style={{ marginLeft: 14, fontSize: 11, color: swatch, marginBottom: 2 }}>
+                              {layer === 'conflict' && item.kind ? `${item.label} · ${item.kind}` : item.label}
+                            </div>
+                          )
                         ))}
                       </div>
                     )
@@ -651,6 +660,7 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
         {/* WORLD globe: stays mounted; paused when it is not the active tab so its pollers stop */}
         <div style={{ display: mapMode === 'world' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <AtlasWorldGlobe
+            ref={worldGlobeRef}
             paused={paused || mapMode !== 'world'}
             layers={layers}
             refreshNonce={refreshNonce}

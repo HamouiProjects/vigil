@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
@@ -1057,8 +1057,13 @@ function fitBoundsStub(map, bounds, padding = 40) {
 void flyToStub
 void fitBoundsStub
 
-export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi = null, onAoiChange, homeNonce = 0, onProvenance, onCountrySelect }) {
+const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi = null, onAoiChange, homeNonce = 0, onProvenance, onCountrySelect }, ref) {
   const wrapRef = useRef(null)
+  const openAircraftRef = useRef(null)
+
+  useImperativeHandle(ref, () => ({
+    openAircraftPopup: (hex, leftPad) => openAircraftRef.current?.(hex, leftPad),
+  }), [])
   const containerRef = useRef(null)
   const countryReadoutRef = useRef(null)
   const mapRef = useRef(null)
@@ -1409,7 +1414,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       if (onLayers?.aircraft) {
         const items = containedMarkers(aircraftGeoRef, geometry, (f, coords) => {
           const p = f.properties || {}
-          return { label: p.callsign || p.hex || 'Aircraft', coords }
+          return { label: p.callsign || p.hex || 'Aircraft', hex: p.hex, coords }
         })
         if (items.length) indicators.aircraft = items
       }
@@ -1648,44 +1653,41 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       const visible = layersRef.current?.aircraft ? 'visible' : 'none'
       map.setLayoutProperty('aircraft-layer', 'visibility', visible)
 
+      const openAircraftPopupAt = (props, lngLat) => {
+        const hex = String(props.hex || '').trim().toLowerCase()
+        const country = countryFromHex(hex)
+        const token = ++aircraftPopupToken
+        const cache = aircraftPhotoCacheRef.current
+        const aircraftProv = provenanceRef.current.aircraft
+        const renderAircraftPopup = (photo) => {
+          if (token !== aircraftPopupToken || !popup) return
+          popup.setHTML(buildAircraftPopupHtml(props, { country, photo, prov: aircraftProv }))
+        }
+        popup?.remove()
+        popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
+          .setLngLat(lngLat)
+          .setHTML(buildAircraftPopupHtml(props, { country, photo: null, prov: aircraftProv }))
+          .addTo(map)
+        wirePopupDismiss(popup, map)
+        if (!hex) return
+        const cached = cache.get(hex)
+        if (cached !== undefined) {
+          if (cached) renderAircraftPopup(cached)
+          return
+        }
+        fetchPlanespottersPhoto(hex, cache).then((photo) => {
+          if (!photo) return
+          renderAircraftPopup(photo)
+        })
+      }
+
       if (!aircraftListenersBound) {
         aircraftListenersBound = true
 
         map.on('click', 'aircraft-layer', (e) => {
           const feature = e.features?.[0]
           if (!feature) return
-          const props = feature.properties || {}
-          const hex = String(props.hex || '').trim().toLowerCase()
-          const country = countryFromHex(hex)
-          const token = ++aircraftPopupToken
-          const cache = aircraftPhotoCacheRef.current
-
-          const aircraftProv = provenanceRef.current.aircraft
-
-          const renderAircraftPopup = (photo) => {
-            if (token !== aircraftPopupToken || !popup) return
-            popup.setHTML(buildAircraftPopupHtml(props, { country, photo, prov: aircraftProv }))
-          }
-
-          popup?.remove()
-          popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
-            .setLngLat(e.lngLat)
-            .setHTML(buildAircraftPopupHtml(props, { country, photo: null, prov: aircraftProv }))
-            .addTo(map)
-          wirePopupDismiss(popup, map)
-
-          if (!hex) return
-
-          const cached = cache.get(hex)
-          if (cached !== undefined) {
-            if (cached) renderAircraftPopup(cached)
-            return
-          }
-
-          fetchPlanespottersPhoto(hex, cache).then((photo) => {
-            if (!photo) return
-            renderAircraftPopup(photo)
-          })
+          openAircraftPopupAt(feature.properties || {}, e.lngLat)
         })
 
         map.on('mouseenter', 'aircraft-layer', () => {
@@ -1695,6 +1697,19 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
           map.getCanvas().style.cursor = ''
         })
       }
+
+      const openAircraftPopupByHex = (hexInput, leftPad) => {
+        const hx = String(hexInput || '').trim().toLowerCase()
+        if (!hx) return
+        const feats = aircraftGeoRef.current?.features || []
+        const f = feats.find((ft) => String(ft.properties?.hex || '').trim().toLowerCase() === hx)
+        if (!f) return
+        const coords = f.geometry?.coordinates
+        if (!coords || coords.length < 2) return
+        map.easeTo({ center: coords, zoom: Math.max(map.getZoom(), 4), duration: 800, padding: { left: leftPad || 0 } })
+        openAircraftPopupAt(f.properties || {}, { lng: coords[0], lat: coords[1] })
+      }
+      openAircraftRef.current = openAircraftPopupByHex
     }
 
     const ensureWildfiresLayer = () => {
@@ -1888,6 +1903,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
     return () => {
       themeObserver.disconnect()
       popup?.remove()
+      openAircraftRef.current = null
       cancelAnimationFrame(rafRef.current)
       cancelAnimationFrame(hoverRAFRef.current)
       clearTimeout(idleTimerRef.current)
@@ -1928,4 +1944,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       />
     </div>
   )
-}
+})
+
+export default AtlasWorldGlobe
