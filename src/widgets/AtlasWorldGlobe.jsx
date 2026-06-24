@@ -455,7 +455,7 @@ export const LAYER_COLORS = {
   storms: '#58B4E6',
   aircraft: '#E2E8F0',
   wildfires: '#EA5F38',
-  conflict: '#A23BC9',
+  conflict: '#E5352E',
 }
 
 export const LAYER_SWATCH_CSS = {
@@ -910,17 +910,83 @@ function buildWildfirePopupHtml(props, newsSearchQuery, prov) {
   })
 }
 
-function buildConflictPopupHtml(props, prov) {
+const CONFLICT_DOC_API = 'https://api.gdeltproject.org/api/v2/doc/doc'
+const CONFLICT_DOC_TIMESPAN = '72h'
+const CONFLICT_DOC_MAXRECORDS = 8
+const CONFLICT_DOC_RENDER_MAX = 5
+
+function conflictQueryTerm(kind) {
+  switch (kind) {
+    case 'Armed clash': return '(clash OR clashes OR fighting OR offensive)'
+    case 'Bombing': return '(blast OR explosion OR bombing OR ied)'
+    case 'Assassination': return '(killed OR assassination OR shot OR gunmen)'
+    case 'Mass killing or violence': return '(massacre OR killed OR attack OR atrocity)'
+    default: return '(conflict OR attack OR violence)'
+  }
+}
+
+function conflictQueryPlace(place) {
+  const p = (place || '').trim()
+  if (!p) return ''
+  const primary = (p.split(',')[0] || '').trim()
+  const locality = primary.length >= 3 ? primary : p
+  return `"${locality.replace(/"/g, '')}"`
+}
+
+async function fetchConflictArticles(place, kind) {
+  // Client-side fetch of GDELT DOC 2.0 (keyless, CORS wildcard, per-user IP, same pattern as USGS/GDACS).
+  // Returns an array of articles (possibly empty) on success, or null on error.
+  const placePart = conflictQueryPlace(place)
+  if (!placePart) return []
+  const query = `${placePart} ${conflictQueryTerm(kind)}`
+  const url = `${CONFLICT_DOC_API}?query=${encodeURIComponent(query)}&mode=artlist&format=json&timespan=${CONFLICT_DOC_TIMESPAN}&maxrecords=${CONFLICT_DOC_MAXRECORDS}`
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const json = await res.json()
+    const list = Array.isArray(json?.articles) ? json.articles : []
+    const seen = new Set()
+    const out = []
+    for (const a of list) {
+      const href = safeHttpUrl(a?.url)
+      if (!href || seen.has(href)) continue
+      seen.add(href)
+      out.push({ title: (a?.title || a?.domain || href).trim(), domain: a?.domain || '', url: href })
+      if (out.length >= CONFLICT_DOC_RENDER_MAX) break
+    }
+    return out
+  } catch {
+    return null
+  }
+}
+
+function conflictArticlesHtml(articles, state) {
+  if (state === 'loading') {
+    return `<div style="font-size:11px;color:var(--color-text-muted);">Loading recent coverage...</div>`
+  }
+  if (state === 'error') {
+    return `<div style="font-size:11px;color:var(--color-text-muted);">Could not load recent coverage.</div>`
+  }
+  if (!articles || !articles.length) {
+    return `<div style="font-size:11px;color:var(--color-text-muted);">No recent sources found for this location.</div>`
+  }
+  const items = articles.map((a) => {
+    const domain = a.domain
+      ? `<span style="color:var(--color-text-muted);font-size:10px;"> ${escapeHtml(a.domain)}</span>`
+      : ''
+    return `<div style="margin-bottom:6px;line-height:1.35;">
+      <a href="${escapeAttr(a.url)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--color-brand);text-decoration:none;">${escapeHtml(a.title)} ↗</a>${domain}
+    </div>`
+  }).join('')
+  const label = `<div style="font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-text-muted);margin-bottom:2px;">Recent coverage</div>`
+  const caption = `<div style="font-size:10px;color:var(--color-text-muted);margin-bottom:6px;">Matching this place and topic, not this exact event.</div>`
+  return `${label}${caption}${items}`
+}
+
+function buildConflictPopupHtml(props, prov, articles, state) {
   const kind = props.kind || 'Conflict event'
   const place = (props.place || '').trim()
-  const articles = Number(props.articles) || 0
-  const articleLine = articles === 1 ? 'Reported in 1 article' : `Reported in ${articles} articles`
   const titleRows = place ? [['', place]] : []
-  const rows = [['', articleLine]]
-  const href = safeHttpUrl(props.url)
-  const bodyExtraHtml = href
-    ? `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--color-brand);text-decoration:none;">View source ↗</a>`
-    : ''
   const rel = formatRelativeTime(prov?.fetchedAt)
   const footerExtra = [
     'Machine-coded from news reports, an indicator, not confirmed events.',
@@ -932,8 +998,7 @@ function buildConflictPopupHtml(props, prov) {
     kicker: 'REPORTED CONFLICT',
     title: kind,
     titleRows,
-    rows,
-    bodyExtraHtml,
+    bodyExtraHtml: conflictArticlesHtml(articles, state),
     footerExtra,
     sourceName: prov?.sourceName,
     sourceUrl: prov?.sourceUrl,
@@ -1249,6 +1314,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
     let watchdogTimer = null
     let popup = null
     let aircraftPopupToken = 0
+    let conflictPopupToken = 0
     let quakeListenersBound = false
     let stormListenersBound = false
     let aircraftListenersBound = false
@@ -1708,14 +1774,26 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
           const feature = e.features?.[0]
           if (!feature) return
           const props = feature.properties || {}
+          const token = ++conflictPopupToken
+          const conflictProv = provenanceRef.current.conflict
+
+          const renderConflictPopup = (articles, state) => {
+            if (token !== conflictPopupToken || !popup) return
+            popup.setHTML(buildConflictPopupHtml(props, conflictProv, articles, state))
+            attachPopupNewsSearchButton(popup)
+          }
 
           popup?.remove()
           popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
             .setLngLat(e.lngLat)
-            .setHTML(buildConflictPopupHtml(props, provenanceRef.current.conflict))
+            .setHTML(buildConflictPopupHtml(props, conflictProv, null, 'loading'))
             .addTo(map)
           wirePopupDismiss(popup, map)
           attachPopupNewsSearchButton(popup)
+
+          fetchConflictArticles(props.place, props.kind).then((result) => {
+            renderConflictPopup(result === null ? null : result, result === null ? 'error' : 'done')
+          })
         })
 
         map.on('mouseenter', 'conflict-layer', () => {

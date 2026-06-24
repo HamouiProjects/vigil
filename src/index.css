@@ -29,7 +29,7 @@
   --color-error:#E5564D;
   --color-info:#4FA8D6;
   --color-conflict-low:#C77DD6;
-  --color-conflict-mid:#A23BC9;
+  --color-conflict-mid:#E5352E;
   --color-conflict-high:#7A1FA2;
   --shadow-overlay:none;
   /* Legacy aliases → semantic, so existing var(--accent)/var(--bg)/… flip per theme without mass edits */
@@ -70,7 +70,7 @@
   --color-error:#AE2E27;
   --color-info:#155E86;
   --color-conflict-low:#B25DD0;
-  --color-conflict-mid:#8E24AA;
+  --color-conflict-mid:#C62828;
   --color-conflict-high:#6A1B9A;
   --shadow-overlay:0 4px 16px rgba(0,0,0,0.08);
 }
