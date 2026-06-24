@@ -691,6 +691,7 @@ function stormNewsSearchQuery(name) {
   return n.replace(/-\d+$/, '').trim()
 }
 
+// Dead after the Atlas popup cleanup, removal is a separate tidy.
 function buildNewsSearchButtonHtml(query) {
   const q = (query || '').trim()
   if (!q) return ''
@@ -894,7 +895,6 @@ function buildEarthquakePopupHtml(feature, prov) {
     footerExtra,
     sourceName: prov?.sourceName,
     sourceUrl: prov?.sourceUrl,
-    newsSearchQuery: earthquakeNewsSearchQuery(place),
   })
 }
 
@@ -917,11 +917,10 @@ function buildStormPopupHtml(props, prov) {
     rows,
     sourceName: prov?.sourceName,
     sourceUrl: prov?.sourceUrl,
-    newsSearchQuery: stormNewsSearchQuery(name),
   })
 }
 
-function buildWildfirePopupHtml(props, newsSearchQuery, prov) {
+function buildWildfirePopupHtml(props, prov) {
   const rows = []
   if (props.frp != null && props.frp !== '' && !Number.isNaN(Number(props.frp))) {
     rows.push(['Radiative power', `${props.frp} MW`])
@@ -937,10 +936,10 @@ function buildWildfirePopupHtml(props, newsSearchQuery, prov) {
     rows,
     sourceName: prov?.sourceName,
     sourceUrl: prov?.sourceUrl,
-    newsSearchQuery,
   })
 }
 
+// Dead after stripping the conflict popup sources list, removal plus the api/geo.js conflict-detail branch is a separate tidy.
 async function fetchConflictArticles(place, kind) {
   // Server-proxied through api/geo.js (source=conflict-detail) so this fetch is same-origin (no CORS).
   // Returns an array of articles (possibly empty) on success, or null on error.
@@ -982,7 +981,7 @@ function conflictArticlesHtml(articles, state) {
   return `${label}${caption}${items}`
 }
 
-function buildConflictPopupHtml(props, prov, articles, state) {
+function buildConflictPopupHtml(props, prov) {
   const kind = props.kind || 'Conflict event'
   const place = (props.place || '').trim()
   const titleRows = place ? [['', place]] : []
@@ -997,11 +996,9 @@ function buildConflictPopupHtml(props, prov, articles, state) {
     kicker: 'REPORTED CONFLICT',
     title: kind,
     titleRows,
-    bodyExtraHtml: conflictArticlesHtml(articles, state),
     footerExtra,
     sourceName: prov?.sourceName,
     sourceUrl: prov?.sourceUrl,
-    newsSearchQuery: place || 'conflict',
   })
 }
 
@@ -1313,7 +1310,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
     let watchdogTimer = null
     let popup = null
     let aircraftPopupToken = 0
-    let conflictPopupToken = 0
     let quakeListenersBound = false
     let stormListenersBound = false
     let aircraftListenersBound = false
@@ -1555,7 +1551,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
             .setHTML(buildEarthquakePopupHtml(feature, provenanceRef.current.earthquakes))
             .addTo(map)
           wirePopupDismiss(popup, map)
-          attachPopupNewsSearchButton(popup)
         })
 
         map.on('mouseenter', 'quakes-layer', () => {
@@ -1611,7 +1606,6 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
             .setHTML(buildStormPopupHtml(props, provenanceRef.current.storms))
             .addTo(map)
           wirePopupDismiss(popup, map)
-          attachPopupNewsSearchButton(popup)
         })
 
         map.on('mouseenter', 'storms-layer', () => {
@@ -1751,17 +1745,12 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
           if (!feature) return
           const props = feature.properties || {}
 
-          const ll = e.lngLat
-          const country = countryNameAtLngLat(ll.lng, ll.lat, countriesGeoRef.current)
-          const wildfireQuery = country ? `${country} wildfire` : 'wildfire'
-
           popup?.remove()
           popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
             .setLngLat(e.lngLat)
-            .setHTML(buildWildfirePopupHtml(props, wildfireQuery, provenanceRef.current.wildfires))
+            .setHTML(buildWildfirePopupHtml(props, provenanceRef.current.wildfires))
             .addTo(map)
           wirePopupDismiss(popup, map)
-          attachPopupNewsSearchButton(popup)
         })
 
         map.on('mouseenter', 'wildfires-layer', () => {
@@ -1810,26 +1799,13 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
           const feature = e.features?.[0]
           if (!feature) return
           const props = feature.properties || {}
-          const token = ++conflictPopupToken
           const conflictProv = provenanceRef.current.conflict
-
-          const renderConflictPopup = (articles, state) => {
-            if (token !== conflictPopupToken || !popup) return
-            popup.setHTML(buildConflictPopupHtml(props, conflictProv, articles, state))
-            attachPopupNewsSearchButton(popup)
-          }
-
           popup?.remove()
           popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
             .setLngLat(e.lngLat)
-            .setHTML(buildConflictPopupHtml(props, conflictProv, null, 'loading'))
+            .setHTML(buildConflictPopupHtml(props, conflictProv))
             .addTo(map)
           wirePopupDismiss(popup, map)
-          attachPopupNewsSearchButton(popup)
-
-          fetchConflictArticles(props.place, props.kind).then((result) => {
-            renderConflictPopup(result === null ? null : result, result === null ? 'error' : 'done')
-          })
         })
 
         map.on('mouseenter', 'conflict-layer', () => {
