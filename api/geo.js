@@ -1,5 +1,7 @@
 import { applyCors } from './_cors.js'
 import { rateLimit } from './_ratelimit.js'
+import zlib from 'node:zlib'
+import { COUNTRY_BY_FIPS } from './_conflict_countries.js'
 
 const EMPTY_FC = { type: 'FeatureCollection', features: [] }
 const AIRCRAFT_UPSTREAM = 'https://api.adsb.lol/v2/mil'
@@ -21,7 +23,7 @@ const SOURCE_META = {
   },
   conflict: {
     source: 'conflict',
-    sourceName: 'GDELT GEO 2.0',
+    sourceName: 'GDELT 2.0 Event database',
     sourceUrl: 'https://www.gdeltproject.org/',
   },
 }
@@ -92,20 +94,124 @@ function getFirmsUpstreamUrl() {
   return `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${mapKey}/VIIRS_NOAA20_NRT/world/1`
 }
 
-const GDELT_CONFLICT_QUERY = '(war OR clashes OR airstrike OR shelling OR offensive OR militants OR insurgency OR "armed conflict")'
+// ---- Conflict: GDELT 2.0 raw 15-minute Event files -> per-country conflict-event choropleth ----
+// Free, no key. We tally CAMEO conflict events (EventRootCode 18 assault / 19 fight / 20 mass
+// violence) by ActionGeo_CountryCode (where the event happened, FIPS 10-4) across a trailing
+// window of 15-minute export files, then attach each country's polygon from COUNTRY_BY_FIPS.
+const GDELT_BASE = 'http://data.gdeltproject.org/gdeltv2'
+const CONFLICT_WINDOW_FILES = 12 // 12 x 15min = trailing ~3h of events (tune at eyeball)
+const CONFLICT_FILE_TIMEOUT_MS = 6000
+const CONFLICT_ROOT_CODES = new Set(['18', '19', '20'])
+const COL_EVENT_ROOT = 28 // EventRootCode
+const COL_ACTION_COUNTRY = 53 // ActionGeo_CountryCode (FIPS 10-4)
+const GDELT_HEADERS = { 'User-Agent': AIRCRAFT_HEADERS['User-Agent'] }
 
-function getGdeltConflictUrl() {
-  return 'https://api.gdeltproject.org/api/v2/geo/geo?query=' + encodeURIComponent(GDELT_CONFLICT_QUERY) + '&mode=country&format=GeoJSON&timespan=7d'
+function gdeltStamp(ms) {
+  const dt = new Date(ms)
+  return (
+    dt.getUTCFullYear().toString() +
+    String(dt.getUTCMonth() + 1).padStart(2, '0') +
+    String(dt.getUTCDate()).padStart(2, '0') +
+    String(dt.getUTCHours()).padStart(2, '0') +
+    String(dt.getUTCMinutes()).padStart(2, '0') +
+    '00'
+  )
 }
 
-function getUpstreamUrl(source, req) {
+// Build the trailing window of export URLs from current UTC time. We start one 15-minute slot
+// back (files publish a few minutes after each boundary) so the newest URL always exists; any
+// individual miss is tolerated by Promise.allSettled.
+function recentExportUrls(n) {
+  const slot = 15 * 60 * 1000
+  const newest = Math.floor(Date.now() / slot) * slot - slot
+  const urls = []
+  for (let i = 0; i < n; i++) {
+    urls.push(`${GDELT_BASE}/${gdeltStamp(newest - i * slot)}.export.CSV.zip`)
+  }
+  return urls
+}
+
+// Extract a single-file (stored or deflated) PKZIP entry without an external dependency, using
+// Node's built-in raw inflate. GDELT export zips contain exactly one tab-delimited .CSV.
+function unzipSingle(buf) {
+  if (!buf || buf.length < 30 || buf.readUInt32LE(0) !== 0x04034b50) return null
+  const method = buf.readUInt16LE(8)
+  const compSize = buf.readUInt32LE(18)
+  const nameLen = buf.readUInt16LE(26)
+  const extraLen = buf.readUInt16LE(28)
+  const dataStart = 30 + nameLen + extraLen
+  if (dataStart > buf.length) return null
+  if (method === 0) {
+    return buf.subarray(dataStart, compSize ? dataStart + compSize : undefined).toString('latin1')
+  }
+  if (method !== 8) return null
+  let deflated
+  if (compSize > 0) {
+    deflated = buf.subarray(dataStart, dataStart + compSize)
+  } else {
+    // No size in the local header (data descriptor): bound at the central directory signature.
+    const cdIdx = buf.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]), dataStart)
+    deflated = buf.subarray(dataStart, cdIdx > dataStart ? cdIdx : undefined)
+  }
+  try {
+    return zlib.inflateRawSync(deflated).toString('latin1')
+  } catch {
+    return null
+  }
+}
+
+// Conflict columns are ASCII, so latin1 decode + tab split is correct (tabs are single 0x09
+// bytes, never produced inside a UTF-8 multibyte sequence). Mutates `counts` (FIPS -> tally).
+async function tallyExport(url, counts) {
+  try {
+    const res = await fetch(url, { headers: GDELT_HEADERS, signal: AbortSignal.timeout(CONFLICT_FILE_TIMEOUT_MS) })
+    if (!res.ok) return
+    const text = unzipSingle(Buffer.from(await res.arrayBuffer()))
+    if (!text) return
+    const lines = text.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      if (!line) continue
+      const cols = line.split('\t')
+      if (cols.length < 54) continue
+      if (!CONFLICT_ROOT_CODES.has(cols[COL_EVENT_ROOT])) continue
+      const fips = cols[COL_ACTION_COUNTRY]
+      if (!fips) continue
+      counts[fips] = (counts[fips] || 0) + 1
+    }
+  } catch {
+    /* skip this file */
+  }
+}
+
+// Resolve FIPS tallies to country polygon features, summing counts that map to the same country
+// (GDELT splits Palestinian territory into WE + GZ, both resolving to the one Palestine polygon).
+function countsToFeatureCollection(counts) {
+  const byName = new Map()
+  for (const fips in counts) {
+    const c = COUNTRY_BY_FIPS[fips]
+    if (!c) continue
+    const cur = byName.get(c.name)
+    if (cur) cur.count += counts[fips]
+    else byName.set(c.name, { name: c.name, geometry: c.geometry, count: counts[fips] })
+  }
+  const features = []
+  for (const v of byName.values()) {
+    if (v.count > 0) {
+      features.push({ type: 'Feature', geometry: v.geometry, properties: { name: v.name, count: v.count } })
+    }
+  }
+  return { type: 'FeatureCollection', features }
+}
+
+function getUpstreamUrl(source) {
   switch (source) {
     case 'aircraft':
       return AIRCRAFT_UPSTREAM
     case 'firms':
       return getFirmsUpstreamUrl()
     case 'conflict':
-      return getGdeltConflictUrl()
+      return `${GDELT_BASE}/lastupdate.txt`
     default:
       return null
   }
@@ -198,24 +304,6 @@ function normalizeAircraft(raw) {
   return { type: 'FeatureCollection', features }
 }
 
-function normalizeConflict(raw) {
-  if (!raw || raw.type !== 'FeatureCollection' || !Array.isArray(raw.features)) return EMPTY_FC
-  const features = raw.features
-    .map((f) => {
-      if (!f.geometry) return null
-      return {
-        type: 'Feature',
-        geometry: f.geometry,
-        properties: {
-          name: f.properties?.name ?? '',
-          count: Number(f.properties?.count) || 0,
-        },
-      }
-    })
-    .filter(Boolean)
-  return { type: 'FeatureCollection', features }
-}
-
 async function fetchFirms() {
   if (!process.env.FIRMS_MAP_KEY) return EMPTY_FC
 
@@ -244,15 +332,14 @@ async function fetchAircraft() {
 }
 
 async function fetchConflict() {
-  const res = await fetch(getGdeltConflictUrl(), { headers: AIRCRAFT_HEADERS, signal: AbortSignal.timeout(12000) })
-  let raw = null
   try {
-    raw = await res.json()
+    const counts = {}
+    await Promise.allSettled(recentExportUrls(CONFLICT_WINDOW_FILES).map((u) => tallyExport(u, counts)))
+    if (Object.keys(counts).length === 0) return EMPTY_FC
+    return countsToFeatureCollection(counts)
   } catch {
     return EMPTY_FC
   }
-  if (!res.ok) return EMPTY_FC
-  return normalizeConflict(raw)
 }
 
 async function handleFirms() {
@@ -296,15 +383,16 @@ async function handleConflict() {
 
   try {
     const body = await fetchConflict()
-    setCache(key, body)
-    return body
+    // Only cache a non-empty result so a transient upstream miss does not pin an empty map for 15 min.
+    if (body.features.length > 0) setCache(key, body)
+    return body.features.length > 0 ? body : (getStaleCache(key) ?? body)
   } catch {
     return getStaleCache(key) ?? EMPTY_FC
   }
 }
 
 async function handleDebugPassthrough(req, res, source) {
-  const upstreamUrl = getUpstreamUrl(source, req)
+  const upstreamUrl = getUpstreamUrl(source)
   if (!upstreamUrl) {
     return res.status(400).json({ error: 'invalid source' })
   }
