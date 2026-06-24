@@ -417,33 +417,13 @@ async function handleConflict() {
   }
 }
 
-// --- Conflict detail (T2): proxy the GDELT DOC API server-side so the popup fetches same-origin. ---
-// The DOC host (api.gdeltproject.org) serves no Access-Control-Allow-Origin, so a direct browser
-// fetch is CORS-blocked. The host is fixed and only the query string carries user input, so there
-// is no SSRF surface. Reuses the AIRCRAFT_HEADERS user-agent that GDELT accepts.
-const CONFLICT_DOC_API = 'https://api.gdeltproject.org/api/v2/doc/doc'
-const CONFLICT_DOC_TIMESPAN = '72h'
-const CONFLICT_DOC_MAXRECORDS = 8
-const CONFLICT_DOC_RENDER_MAX = 5
-const CONFLICT_DETAIL_TTL_MS = 600_000 // 10 min, so repeated clicks on the same event reuse the result
-
-function conflictQueryTerm(kind) {
-  switch (kind) {
-    case 'Armed clash': return '(clash OR clashes OR fighting OR offensive)'
-    case 'Bombing': return '(blast OR explosion OR bombing OR ied)'
-    case 'Assassination': return '(killed OR assassination OR shot OR gunmen)'
-    case 'Mass killing or violence': return '(massacre OR killed OR attack OR atrocity)'
-    default: return '(conflict OR attack OR violence)'
-  }
-}
-
-function conflictQueryPlace(place) {
-  const p = (place || '').trim()
-  if (!p) return ''
-  const primary = (p.split(',')[0] || '').trim()
-  const locality = primary.length >= 3 ? primary : p
-  return `"${locality.replace(/"/g, '')}"`
-}
+// --- Conflict detail (T2): cluster the SOURCEURLs that the conflict markers already carry. ---
+// The GDELT DOC API (api.gdeltproject.org) is blocked from Vercel's datacenter IP (confirmed live),
+// so the popup cannot get topic-matched coverage. Instead we reuse the SOURCEURL values already
+// parsed from the GDELT EXPORT rows for the conflict markers (the warm conflict cache), matched to
+// the clicked place. No outbound fetch to a blocked host, no CORS, reliably reachable.
+const CONFLICT_DETAIL_MAX_LINKS = 5
+const CONFLICT_DETAIL_TTL_MS = 600_000 // 10 min, so repeated clicks on the same place reuse the result
 
 function httpUrlOrNull(value) {
   try {
@@ -453,23 +433,49 @@ function httpUrlOrNull(value) {
   return null
 }
 
-async function fetchConflictDetail(place, kind) {
-  const placePart = conflictQueryPlace(place)
-  if (!placePart) return []
-  const query = `${placePart} ${conflictQueryTerm(kind)}`
-  const url = `${CONFLICT_DOC_API}?query=${encodeURIComponent(query)}&mode=artlist&format=json&timespan=${CONFLICT_DOC_TIMESPAN}&maxrecords=${CONFLICT_DOC_MAXRECORDS}`
-  const res = await fetch(url, { headers: AIRCRAFT_HEADERS, signal: AbortSignal.timeout(8000) })
-  if (!res.ok) throw new Error(`doc ${res.status}`)
-  const json = await res.json()
-  const list = Array.isArray(json?.articles) ? json.articles : []
-  const seen = new Set()
+function normPlace(value) {
+  return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function domainOf(href) {
+  try {
+    return new URL(href).hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
+
+// Match an event place against the clicked place: exact, or one contains the other, so a click on
+// "Iran" clusters "Tehran, Iran" and vice versa. Place-only, no topic matching.
+function conflictPlaceMatches(eventPlace, clickedPlace) {
+  const a = normPlace(eventPlace)
+  const b = normPlace(clickedPlace)
+  if (!a || !b) return false
+  return a === b || a.includes(b) || b.includes(a)
+}
+
+async function conflictSourceLinks(place) {
+  if (!normPlace(place)) return []
+  // Prefer the warm conflict cache (the user just clicked a marker, so the layer was fetched and
+  // cached server-side). Gather only if it is cold.
+  const cachedBody = getFreshCache(cacheKey('conflict', {}), SOURCE_TTL_MS.conflict)
+  let events
+  if (cachedBody && Array.isArray(cachedBody.features)) {
+    events = cachedBody.features.map((f) => f.properties || {})
+  } else {
+    events = [...(await gatherConflictEvents()).values()]
+  }
+  const seenDomain = new Set()
   const out = []
-  for (const a of list) {
-    const href = httpUrlOrNull(a?.url)
-    if (!href || seen.has(href)) continue
-    seen.add(href)
-    out.push({ title: String(a?.title || a?.domain || href).trim(), domain: String(a?.domain || ''), url: href })
-    if (out.length >= CONFLICT_DOC_RENDER_MAX) break
+  for (const e of events) {
+    if (!conflictPlaceMatches(e.place, place)) continue
+    const href = httpUrlOrNull(e.url)
+    if (!href) continue
+    const dom = domainOf(href)
+    if (!dom || seenDomain.has(dom)) continue
+    seenDomain.add(dom)
+    out.push({ title: dom, domain: dom, url: href })
+    if (out.length >= CONFLICT_DETAIL_MAX_LINKS) break
   }
   return out
 }
@@ -477,11 +483,12 @@ async function fetchConflictDetail(place, kind) {
 async function handleConflictDetail(req) {
   const place = String(req.query.place || '')
   const kind = String(req.query.kind || '')
+  if (!normPlace(place)) return { articles: [] }
   const key = cacheKey('conflict-detail', { place, kind })
   const fresh = getFreshCache(key, CONFLICT_DETAIL_TTL_MS)
   if (fresh) return { articles: fresh.articles }
   try {
-    const articles = await fetchConflictDetail(place, kind)
+    const articles = await conflictSourceLinks(place)
     setCache(key, { articles })
     return { articles }
   } catch {

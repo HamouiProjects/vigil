@@ -929,24 +929,25 @@ async function fetchConflictArticles(place, kind) {
 
 function conflictArticlesHtml(articles, state) {
   if (state === 'loading') {
-    return `<div style="font-size:11px;color:var(--color-text-muted);">Loading recent coverage...</div>`
+    return `<div style="font-size:11px;color:var(--color-text-muted);">Loading sources...</div>`
   }
   if (state === 'error') {
-    return `<div style="font-size:11px;color:var(--color-text-muted);">Could not load recent coverage.</div>`
+    return `<div style="font-size:11px;color:var(--color-text-muted);">Could not load sources.</div>`
   }
   if (!articles || !articles.length) {
-    return `<div style="font-size:11px;color:var(--color-text-muted);">No recent sources found for this location.</div>`
+    return `<div style="font-size:11px;color:var(--color-text-muted);">No sources found for this location.</div>`
   }
   const items = articles.map((a) => {
-    const domain = a.domain
+    const showDomain = a.domain && a.domain !== a.title
+    const domain = showDomain
       ? `<span style="color:var(--color-text-muted);font-size:10px;"> ${escapeHtml(a.domain)}</span>`
       : ''
     return `<div style="margin-bottom:6px;line-height:1.35;">
       <a href="${escapeAttr(a.url)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--color-brand);text-decoration:none;">${escapeHtml(a.title)} ↗</a>${domain}
     </div>`
   }).join('')
-  const label = `<div style="font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-text-muted);margin-bottom:2px;">Recent coverage</div>`
-  const caption = `<div style="font-size:10px;color:var(--color-text-muted);margin-bottom:6px;">Matching this place and topic, not this exact event.</div>`
+  const label = `<div style="font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-text-muted);margin-bottom:2px;">Recent sources</div>`
+  const caption = `<div style="font-size:10px;color:var(--color-text-muted);margin-bottom:6px;">Outlets reporting conflict at this place, not this exact event.</div>`
   return `${label}${caption}${items}`
 }
 
