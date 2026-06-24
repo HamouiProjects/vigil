@@ -99,10 +99,17 @@ function getFirmsUpstreamUrl() {
 // violence) by ActionGeo_CountryCode (where the event happened, FIPS 10-4) across a trailing
 // window of 15-minute export files, then attach each country's polygon from COUNTRY_BY_FIPS.
 const GDELT_BASE = 'http://data.gdeltproject.org/gdeltv2'
-const CONFLICT_WINDOW_FILES = 12 // 12 x 15min = trailing ~3h of events (tune at eyeball)
+const CONFLICT_WINDOW_FILES = 12 // 12 x 15min = trailing ~3h of events
 const CONFLICT_FILE_TIMEOUT_MS = 6000
-const CONFLICT_ROOT_CODES = new Set(['18', '19', '20'])
+const CONFLICT_ROOT_CODES = new Set(['18', '19', '20']) // CAMEO assault / fight / mass violence
+// Noise control. GDELT codes conflict-root events in almost every country from routine crime and
+// protest news, so two gates keep the map to real hotspots (tune against ?source=conflict&summary=1):
+// only count an event reported by at least this many source articles, and only shade a country once
+// its significant-event tally clears the floor (keeps the quiet long tail off the globe).
+const CONFLICT_MIN_ARTICLES = 3
+const CONFLICT_COUNTRY_FLOOR = 6
 const COL_EVENT_ROOT = 28 // EventRootCode
+const COL_NUM_ARTICLES = 33 // NumArticles
 const COL_ACTION_COUNTRY = 53 // ActionGeo_CountryCode (FIPS 10-4)
 const GDELT_HEADERS = { 'User-Agent': AIRCRAFT_HEADERS['User-Agent'] }
 
@@ -177,7 +184,11 @@ async function tallyExport(url, counts) {
       if (!CONFLICT_ROOT_CODES.has(cols[COL_EVENT_ROOT])) continue
       const fips = cols[COL_ACTION_COUNTRY]
       if (!fips) continue
-      counts[fips] = (counts[fips] || 0) + 1
+      const articles = Number(cols[COL_NUM_ARTICLES]) || 0
+      const c = counts[fips] || (counts[fips] = { events: 0, sig: 0, articles: 0 })
+      c.events += 1
+      c.articles += articles
+      if (articles >= CONFLICT_MIN_ARTICLES) c.sig += 1
     }
   } catch {
     /* skip this file */
@@ -189,15 +200,17 @@ async function tallyExport(url, counts) {
 function countsToFeatureCollection(counts) {
   const byName = new Map()
   for (const fips in counts) {
-    const c = COUNTRY_BY_FIPS[fips]
-    if (!c) continue
-    const cur = byName.get(c.name)
-    if (cur) cur.count += counts[fips]
-    else byName.set(c.name, { name: c.name, geometry: c.geometry, count: counts[fips] })
+    const poly = COUNTRY_BY_FIPS[fips]
+    if (!poly) continue
+    const sig = counts[fips].sig
+    const cur = byName.get(poly.name)
+    if (cur) cur.count += sig
+    else byName.set(poly.name, { name: poly.name, geometry: poly.geometry, count: sig })
   }
   const features = []
   for (const v of byName.values()) {
-    if (v.count > 0) {
+    // Floor after the WE+GZ merge so Palestine is judged on its combined total.
+    if (v.count >= CONFLICT_COUNTRY_FLOOR) {
       features.push({ type: 'Feature', geometry: v.geometry, properties: { name: v.name, count: v.count } })
     }
   }
@@ -331,14 +344,49 @@ async function fetchAircraft() {
   return normalizeAircraft(raw)
 }
 
+async function gatherConflictCounts() {
+  const counts = {}
+  await Promise.allSettled(recentExportUrls(CONFLICT_WINDOW_FILES).map((u) => tallyExport(u, counts)))
+  return counts
+}
+
 async function fetchConflict() {
   try {
-    const counts = {}
-    await Promise.allSettled(recentExportUrls(CONFLICT_WINDOW_FILES).map((u) => tallyExport(u, counts)))
+    const counts = await gatherConflictCounts()
     if (Object.keys(counts).length === 0) return EMPTY_FC
     return countsToFeatureCollection(counts)
   } catch {
     return EMPTY_FC
+  }
+}
+
+// Diagnostic only (?source=conflict&summary=1): the full per-country distribution with NO floor and
+// NO geometry, so CONFLICT_MIN_ARTICLES / CONFLICT_COUNTRY_FLOOR can be tuned against real numbers.
+// `events` = all conflict-root events, `sig` = those clearing the article gate, `articles` = their
+// article sum. Unresolved FIPS are listed under their raw code so nothing is hidden.
+function buildConflictSummary(counts) {
+  const byName = new Map()
+  for (const fips in counts) {
+    const name = COUNTRY_BY_FIPS[fips]?.name ?? fips
+    const c = counts[fips]
+    const cur = byName.get(name)
+    if (cur) {
+      cur.events += c.events
+      cur.sig += c.sig
+      cur.articles += c.articles
+    } else {
+      byName.set(name, { name, events: c.events, sig: c.sig, articles: c.articles })
+    }
+  }
+  const countries = [...byName.values()].sort((a, b) => b.events - a.events)
+  return {
+    source: 'conflict',
+    window_files: CONFLICT_WINDOW_FILES,
+    min_articles: CONFLICT_MIN_ARTICLES,
+    country_floor: CONFLICT_COUNTRY_FLOOR,
+    shaded_now: countsToFeatureCollection(counts).features.length,
+    total_countries: countries.length,
+    countries,
   }
 }
 
@@ -445,6 +493,16 @@ export default async function handler(req, res) {
 
   if (req.query.debug === '1' && debugAllowed()) {
     return handleDebugPassthrough(req, res, source)
+  }
+
+  if (source === 'conflict' && req.query.summary === '1') {
+    try {
+      const summary = buildConflictSummary(await gatherConflictCounts())
+      setGeoHeaders(res)
+      return res.status(200).json(summary)
+    } catch {
+      return res.status(200).json({ source: 'conflict', error: 'summary_failed', countries: [] })
+    }
   }
 
   try {
