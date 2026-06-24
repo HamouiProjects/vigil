@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Bell } from 'lucide-react'
 import AtlasWorldGlobe, { LAYER_COLORS, LAYER_ORDER, LAYER_SWATCH_CSS, formatRelativeTime } from './AtlasWorldGlobe'
-import { GN_SEARCH_URL } from '../lib/feedSources.js'
+import { GN_SEARCH_URL, nsExtractSource, nsCleanTitle } from '../lib/feedSources.js'
 
 const INDICATOR_LAYER_LABELS = {
   conflict: 'Conflict',
@@ -541,19 +541,9 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
                             key={i}
                             style={{ marginLeft: 14, fontSize: 11, color: swatch, marginBottom: 2 }}
                           >
-                            {item.label}
+                            {layer === 'conflict' && item.kind ? `${item.label} · ${item.kind}` : item.label}
                           </div>
                         ))}
-                        {layer === 'conflict' && (
-                          <div style={{ marginLeft: 14, color: 'var(--color-text-muted)', fontSize: 10, lineHeight: 1.35, marginTop: 4 }}>
-                            Auto-coded indicator from open news data, not verified events
-                          </div>
-                        )}
-                        {layer === 'aircraft' && (
-                          <div style={{ marginLeft: 14, color: 'var(--color-text-muted)', fontSize: 10, lineHeight: 1.35, marginTop: 4 }}>
-                            Transponder positions, an indicator, not confirmed movements
-                          </div>
-                        )}
                       </div>
                     )
                   })}
@@ -578,10 +568,11 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
                 {!newsLoading && newsItems.map((item, i) => {
                   const excerpt = newsExcerpt(item.description, item.title)
                   const date = newsRelativeDate(item.pubDate)
+                  const src = nsExtractSource(item.title) || item.author || ''
                   return (
                     <div key={i} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--color-border)' }}>
                       <div style={{ fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>
-                        {item.title}
+                        {nsCleanTitle(item.title)}
                       </div>
                       {excerpt && (
                         <p style={{ margin: '0 0 4px', color: 'var(--color-text-secondary)', fontSize: 11 }}>
@@ -589,19 +580,10 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
                         </p>
                       )}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, color: 'var(--color-text-muted)' }}>
-                        {item.author && item.link && (
-                          <a
-                            href={item.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: 'var(--color-brand)', textDecoration: 'none' }}
-                          >
-                            {item.author}
-                          </a>
+                        {src && item.link && (
+                          <a href={item.link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-brand)', textDecoration: 'none' }}>{src}</a>
                         )}
-                        {item.author && !item.link && (
-                          <span>{item.author}</span>
-                        )}
+                        {src && !item.link && (<span>{src}</span>)}
                         {date && <span>{date}</span>}
                       </div>
                     </div>
@@ -650,10 +632,10 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
                   justifyContent: 'center',
                   gap: 6,
                   padding: '6px 10px',
-                  border: '1px solid var(--color-brand)',
+                  border: '1px solid var(--color-border)',
                   borderRadius: 3,
-                  background: 'var(--color-brand-tint)',
-                  color: 'var(--color-brand)',
+                  background: 'var(--color-surface-2)',
+                  color: 'var(--color-text-secondary)',
                   fontFamily: 'inherit',
                   fontSize: 11,
                   cursor: 'pointer',
