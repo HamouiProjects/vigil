@@ -32,8 +32,7 @@ const USGS_QUAKES_URL =
 const GDACS_STORMS_URL = 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP'
 const AIRCRAFT_GEO_URL = '/api/geo?source=aircraft'
 const WILDFIRES_GEO_URL = '/api/geo?source=firms'
-const GDELT_CONFLICT_QUERY = '(war OR clashes OR airstrike OR shelling OR offensive OR militants OR insurgency OR "armed conflict")'
-const GDELT_CONFLICT_URL = `https://api.gdeltproject.org/api/v2/geo/geo?query=${encodeURIComponent(GDELT_CONFLICT_QUERY)}&mode=country&format=GeoJSON&timespan=7d`
+const CONFLICT_GEO_URL = '/api/geo?source=conflict'
 const QUAKES_REFRESH_MS = 120_000
 const STORMS_REFRESH_MS = 300_000
 const AIRCRAFT_REFRESH_MS = 20_000
@@ -456,7 +455,7 @@ export const LAYER_COLORS = {
   storms: '#58B4E6',
   aircraft: '#E2E8F0',
   wildfires: '#EA5F38',
-  conflict: '#E0A93B',
+  conflict: '#A23BC9',
 }
 
 export const LAYER_SWATCH_CSS = {
@@ -464,7 +463,7 @@ export const LAYER_SWATCH_CSS = {
   storms: 'var(--color-info)',
   wildfires: 'var(--color-error)',
   aircraft: 'var(--color-text-primary)',
-  conflict: 'linear-gradient(90deg, var(--color-info), var(--color-warning), var(--color-error))',
+  conflict: 'linear-gradient(90deg, var(--color-conflict-low), var(--color-conflict-mid), var(--color-conflict-high))',
 }
 
 function resolveLayerMarkerColors() {
@@ -474,9 +473,9 @@ function resolveLayerMarkerColors() {
     storms: styles.getPropertyValue('--color-info').trim(),
     wildfires: styles.getPropertyValue('--color-error').trim(),
     aircraft: styles.getPropertyValue('--color-text-primary').trim(),
-    conflictLow: styles.getPropertyValue('--color-info').trim(),
-    conflictMid: styles.getPropertyValue('--color-warning').trim(),
-    conflictHigh: styles.getPropertyValue('--color-error').trim(),
+    conflictLow: styles.getPropertyValue('--color-conflict-low').trim(),
+    conflictMid: styles.getPropertyValue('--color-conflict-mid').trim(),
+    conflictHigh: styles.getPropertyValue('--color-conflict-high').trim(),
   }
 }
 
@@ -1145,18 +1144,26 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
     const fetchConflict = async () => {
       if (pausedRef.current) return
       try {
-        const res = await fetch(GDELT_CONFLICT_URL)
-        console.log('[conflict] status', res.status)        // eyeball aid, remove later
+        const res = await fetch(CONFLICT_GEO_URL)
         if (!res.ok) return
-        const geojson = await res.json()
-        console.log('[conflict] feature[0] props', geojson.features?.[0]?.properties)  // eyeball aid
+        const json = await res.json()
+        const geojson = featureCollectionFromGeoResponse(json)
         conflictGeoRef.current = geojson
         const counts = (geojson.features || []).map(f => Number(f.properties?.count) || 0)
         const maxC = counts.length ? Math.max(...counts) : 0
         conflictBreaksRef.current = maxC > 0
           ? { low: Math.max(1, maxC * 0.10), mid: maxC * 0.40, high: maxC }
           : { low: 1, mid: 2, high: 3 }
-        patchProvenance('conflict', { fetchedAt: new Date().toISOString(), count: geojson.features?.length ?? 0 })
+        if (json.meta) {
+          patchProvenance('conflict', {
+            sourceName: json.meta.sourceName ?? provenanceRef.current.conflict.sourceName,
+            sourceUrl: json.meta.sourceUrl ?? provenanceRef.current.conflict.sourceUrl,
+            fetchedAt: json.meta.fetchedAt ?? new Date().toISOString(),
+            count: json.meta.count ?? geojson.features.length,
+          })
+        } else {
+          patchProvenance('conflict', { fetchedAt: new Date().toISOString(), count: geojson.features.length })
+        }
         const map = mapRef.current
         map?.getSource('conflict')?.setData(geojson)
         applyConflictFillPaint(map)

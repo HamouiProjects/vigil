@@ -19,11 +19,17 @@ const SOURCE_META = {
     sourceName: 'NASA FIRMS VIIRS NOAA-20 NRT',
     sourceUrl: 'https://firms.modaps.eosdis.nasa.gov/',
   },
+  conflict: {
+    source: 'conflict',
+    sourceName: 'GDELT GEO 2.0',
+    sourceUrl: 'https://www.gdeltproject.org/',
+  },
 }
 
 const SOURCE_TTL_MS = {
   aircraft: 15_000,
   firms: 900_000,
+  conflict: 900_000,
 }
 
 /** @type {Map<string, { body: object, storedAt: number }>} */
@@ -86,12 +92,20 @@ function getFirmsUpstreamUrl() {
   return `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${mapKey}/VIIRS_NOAA20_NRT/world/1`
 }
 
+const GDELT_CONFLICT_QUERY = '(war OR clashes OR airstrike OR shelling OR offensive OR militants OR insurgency OR "armed conflict")'
+
+function getGdeltConflictUrl() {
+  return 'https://api.gdeltproject.org/api/v2/geo/geo?query=' + encodeURIComponent(GDELT_CONFLICT_QUERY) + '&mode=country&format=GeoJSON&timespan=7d'
+}
+
 function getUpstreamUrl(source, req) {
   switch (source) {
     case 'aircraft':
       return AIRCRAFT_UPSTREAM
     case 'firms':
       return getFirmsUpstreamUrl()
+    case 'conflict':
+      return getGdeltConflictUrl()
     default:
       return null
   }
@@ -184,6 +198,24 @@ function normalizeAircraft(raw) {
   return { type: 'FeatureCollection', features }
 }
 
+function normalizeConflict(raw) {
+  if (!raw || raw.type !== 'FeatureCollection' || !Array.isArray(raw.features)) return EMPTY_FC
+  const features = raw.features
+    .map((f) => {
+      if (!f.geometry) return null
+      return {
+        type: 'Feature',
+        geometry: f.geometry,
+        properties: {
+          name: f.properties?.name ?? '',
+          count: Number(f.properties?.count) || 0,
+        },
+      }
+    })
+    .filter(Boolean)
+  return { type: 'FeatureCollection', features }
+}
+
 async function fetchFirms() {
   if (!process.env.FIRMS_MAP_KEY) return EMPTY_FC
 
@@ -211,6 +243,18 @@ async function fetchAircraft() {
   return normalizeAircraft(raw)
 }
 
+async function fetchConflict() {
+  const res = await fetch(getGdeltConflictUrl(), { signal: AbortSignal.timeout(12000) })
+  let raw = null
+  try {
+    raw = await res.json()
+  } catch {
+    return EMPTY_FC
+  }
+  if (!res.ok) return EMPTY_FC
+  return normalizeConflict(raw)
+}
+
 async function handleFirms() {
   const key = cacheKey('firms', {})
   const ttl = SOURCE_TTL_MS.firms
@@ -236,6 +280,22 @@ async function handleAircraft() {
 
   try {
     const body = await fetchAircraft()
+    setCache(key, body)
+    return body
+  } catch {
+    return getStaleCache(key) ?? EMPTY_FC
+  }
+}
+
+async function handleConflict() {
+  const key = cacheKey('conflict', {})
+  const ttl = SOURCE_TTL_MS.conflict
+
+  const fresh = getFreshCache(key, ttl)
+  if (fresh) return fresh
+
+  try {
+    const body = await fetchConflict()
     setCache(key, body)
     return body
   } catch {
@@ -274,6 +334,7 @@ async function handleDebugPassthrough(req, res, source) {
 function staleCacheKey(source) {
   if (source === 'aircraft') return cacheKey('aircraft', {})
   if (source === 'firms') return cacheKey('firms', {})
+  if (source === 'conflict') return cacheKey('conflict', {})
   return null
 }
 
@@ -284,7 +345,7 @@ export default async function handler(req, res) {
 
   const source = (req.query.source || '').toLowerCase()
 
-  if (source !== 'aircraft' && source !== 'firms') {
+  if (source !== 'aircraft' && source !== 'firms' && source !== 'conflict') {
     return res.status(400).json({ error: 'invalid source' })
   }
 
@@ -307,6 +368,9 @@ export default async function handler(req, res) {
         break
       case 'firms':
         body = await handleFirms()
+        break
+      case 'conflict':
+        body = await handleConflict()
         break
     }
 
