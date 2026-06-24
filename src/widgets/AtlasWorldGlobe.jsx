@@ -209,12 +209,30 @@ function countryFeatureAtLngLat(lng, lat, geo, bboxes) {
   return null
 }
 
-function containedMarkers(ref, geometry, toItem) {
+function featurePoint(f) {
+  const g = f?.geometry
+  if (!g) return null
+  if (g.type === 'Point') return g.coordinates
+  if (g.type === 'MultiPoint') return g.coordinates?.[0] || null
+  if (g.type === 'Polygon') return g.coordinates?.[0]?.[0] || null
+  if (g.type === 'MultiPolygon') return g.coordinates?.[0]?.[0]?.[0] || null
+  if (g.type === 'GeometryCollection') {
+    const pt = (g.geometries || []).find((s) => s?.type === 'Point')
+    if (pt) return pt.coordinates
+    const poly = (g.geometries || []).find((s) => s?.type === 'Polygon' || s?.type === 'MultiPolygon')
+    if (poly) return featurePoint({ geometry: poly })
+    return null
+  }
+  return null
+}
+
+function containedMarkers(ref, geometry, toItem, getPoint) {
   const features = ref?.current?.features
   if (!features?.length) return []
+  const pick = getPoint || ((f) => f.geometry?.coordinates)
   const out = []
   for (const f of features) {
-    const coords = f.geometry?.coordinates
+    const coords = pick(f)
     if (!coords || coords.length < 2) continue
     if (!pointInGeometry(coords[0], coords[1], geometry)) continue
     out.push(toItem(f, coords))
@@ -1389,7 +1407,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
         const items = containedMarkers(stormsGeoRef, geometry, (f, coords) => {
           const p = f.properties || {}
           return { label: p.name || p.eventname || 'Storm', coords }
-        })
+        }, featurePoint)
         if (items.length) indicators.storms = items
       }
       if (onLayers?.aircraft) {
