@@ -32,10 +32,13 @@ const USGS_QUAKES_URL =
 const GDACS_STORMS_URL = 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP'
 const AIRCRAFT_GEO_URL = '/api/geo?source=aircraft'
 const WILDFIRES_GEO_URL = '/api/geo?source=firms'
+const GDELT_CONFLICT_QUERY = '(war OR clashes OR airstrike OR shelling OR offensive OR militants OR insurgency OR "armed conflict")'
+const GDELT_CONFLICT_URL = `https://api.gdeltproject.org/api/v2/geo/geo?query=${encodeURIComponent(GDELT_CONFLICT_QUERY)}&mode=country&format=GeoJSON&timespan=7d`
 const QUAKES_REFRESH_MS = 120_000
 const STORMS_REFRESH_MS = 300_000
 const AIRCRAFT_REFRESH_MS = 20_000
 const WILDFIRES_REFRESH_MS = 600_000
+const CONFLICT_REFRESH_MS = 900_000  // 15 min
 const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] }
 const COUNTRIES_GEO_URL = '/ne_110m_admin_0_countries.geojson'
 const GLOBE_SPACE_BG = {
@@ -453,6 +456,7 @@ export const LAYER_COLORS = {
   storms: '#58B4E6',
   aircraft: '#E2E8F0',
   wildfires: '#EA5F38',
+  conflict: '#E0A93B',
 }
 
 export const LAYER_SWATCH_CSS = {
@@ -460,6 +464,7 @@ export const LAYER_SWATCH_CSS = {
   storms: 'var(--color-info)',
   wildfires: 'var(--color-error)',
   aircraft: 'var(--color-text-primary)',
+  conflict: 'linear-gradient(90deg, var(--color-info), var(--color-warning), var(--color-error))',
 }
 
 function resolveLayerMarkerColors() {
@@ -469,6 +474,9 @@ function resolveLayerMarkerColors() {
     storms: styles.getPropertyValue('--color-info').trim(),
     wildfires: styles.getPropertyValue('--color-error').trim(),
     aircraft: styles.getPropertyValue('--color-text-primary').trim(),
+    conflictLow: styles.getPropertyValue('--color-info').trim(),
+    conflictMid: styles.getPropertyValue('--color-warning').trim(),
+    conflictHigh: styles.getPropertyValue('--color-error').trim(),
   }
 }
 
@@ -493,7 +501,7 @@ function applyLayerMarkerColors(map) {
   }
 }
 
-export const LAYER_ORDER = ['earthquakes', 'storms', 'aircraft', 'wildfires']
+export const LAYER_ORDER = ['earthquakes', 'storms', 'aircraft', 'wildfires', 'conflict']
 
 function createDefaultProvenance() {
   return {
@@ -522,6 +530,13 @@ function createDefaultProvenance() {
       label: 'Active wildfires',
       sourceName: 'NASA FIRMS VIIRS NOAA-20 NRT',
       sourceUrl: 'https://firms.modaps.eosdis.nasa.gov/',
+      fetchedAt: null,
+      count: null,
+    },
+    conflict: {
+      label: 'Conflict mentions',
+      sourceName: 'GDELT GEO 2.0',
+      sourceUrl: 'https://www.gdeltproject.org/',
       fetchedAt: null,
       count: null,
     },
@@ -944,7 +959,7 @@ function fitBoundsStub(map, bounds, padding = 40) {
 void flyToStub
 void fitBoundsStub
 
-export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi = null, onAoiChange, homeNonce = 0, onProvenance }) {
+export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi = null, onAoiChange, homeNonce = 0, onProvenance, onCountrySelect }) {
   const wrapRef = useRef(null)
   const containerRef = useRef(null)
   const countryReadoutRef = useRef(null)
@@ -959,6 +974,8 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
   const stormsGeoRef = useRef(null)
   const aircraftGeoRef = useRef(null)
   const wildfiresGeoRef = useRef(null)
+  const conflictGeoRef = useRef(null)
+  const conflictBreaksRef = useRef({ low: 1, mid: 2, high: 3 })
   const lastFetchRef = useRef(null)
   const [provenance, setProvenance] = useState(createDefaultProvenance)
   const provenanceRef = useRef(provenance)
@@ -973,6 +990,8 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
   onAoiChangeRef.current = onAoiChange
   const onProvenanceRef = useRef(onProvenance)
   onProvenanceRef.current = onProvenance
+  const onCountrySelectRef = useRef(onCountrySelect)
+  onCountrySelectRef.current = onCountrySelect
 
   pausedRef.current = paused
   layersRef.current = layers
@@ -983,6 +1002,16 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       provenanceRef.current = next
       return next
     })
+  }
+
+  const applyConflictFillPaint = (map) => {
+    const c = resolveLayerMarkerColors()
+    const b = conflictBreaksRef.current
+    if (map?.getLayer('conflict-fill')) {
+      map.setPaintProperty('conflict-fill', 'fill-color',
+        ['interpolate', ['linear'], ['to-number', ['coalesce', ['get', 'count'], 0]],
+         b.low, c.conflictLow, b.mid, c.conflictMid, b.high, c.conflictHigh])
+    }
   }
 
   useEffect(() => {
@@ -1111,6 +1140,34 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
   }, [refreshNonce])
 
   useEffect(() => {
+    if (!layers?.conflict) return
+    let intervalId = null
+    const fetchConflict = async () => {
+      if (pausedRef.current) return
+      try {
+        const res = await fetch(GDELT_CONFLICT_URL)
+        console.log('[conflict] status', res.status)        // eyeball aid, remove later
+        if (!res.ok) return
+        const geojson = await res.json()
+        console.log('[conflict] feature[0] props', geojson.features?.[0]?.properties)  // eyeball aid
+        conflictGeoRef.current = geojson
+        const counts = (geojson.features || []).map(f => Number(f.properties?.count) || 0)
+        const maxC = counts.length ? Math.max(...counts) : 0
+        conflictBreaksRef.current = maxC > 0
+          ? { low: Math.max(1, maxC * 0.10), mid: maxC * 0.40, high: maxC }
+          : { low: 1, mid: 2, high: 3 }
+        patchProvenance('conflict', { fetchedAt: new Date().toISOString(), count: geojson.features?.length ?? 0 })
+        const map = mapRef.current
+        map?.getSource('conflict')?.setData(geojson)
+        applyConflictFillPaint(map)
+      } catch { /* ignore network errors */ }
+    }
+    fetchConflict()
+    intervalId = setInterval(fetchConflict, CONFLICT_REFRESH_MS)
+    return () => clearInterval(intervalId)
+  }, [refreshNonce, layers?.conflict])
+
+  useEffect(() => {
     const map = mapRef.current
     if (!map || !map.isStyleLoaded()) return
     const layer = map.getLayer('quakes-layer')
@@ -1145,6 +1202,13 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
     const visible = layers?.wildfires ? 'visible' : 'none'
     map.setLayoutProperty('wildfires-layer', 'visibility', visible)
   }, [layers?.wildfires])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    if (!map.getLayer('conflict-fill')) return
+    map.setLayoutProperty('conflict-fill', 'visibility', layers?.conflict ? 'visible' : 'none')
+  }, [layers?.conflict])
 
   useEffect(() => {
     const container = containerRef.current
@@ -1214,6 +1278,17 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
     map.on('click', (e) => {
       const markerHits = map.queryRenderedFeatures(e.point, { layers: DATA_MARKER_LAYERS })
       if (markerHits.length) return
+      if (layersRef.current?.conflict) {
+        const feat = countryFeatureAtLngLat(
+          e.lngLat.lng,
+          e.lngLat.lat,
+          countriesGeoRef.current,
+          countryBBoxesRef.current,
+        )
+        const props = feat?.properties
+        if (props) onCountrySelectRef.current?.({ name: countryNameFromProps(props), iso3: props?.ISO_A3 })
+        return
+      }
       const country = countryNameAtLngLat(e.lngLat.lng, e.lngLat.lat, countriesGeoRef.current)
       if (country) dispatchNewsSearch(country)
     })
@@ -1257,6 +1332,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
     const themeObserver = new MutationObserver(() => {
       applyTheme()
       applyLayerMarkerColors(map)
+      applyConflictFillPaint(map)
     })
     themeObserver.observe(document.documentElement, {
       attributes: true,
@@ -1567,6 +1643,42 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       }
     }
 
+    const ensureConflictLayer = () => {
+      if (!map.getSource('conflict')) {
+        map.addSource('conflict', {
+          type: 'geojson',
+          data: conflictGeoRef.current || EMPTY_GEOJSON,
+        })
+      } else if (conflictGeoRef.current) {
+        map.getSource('conflict').setData(conflictGeoRef.current)
+      }
+
+      if (!map.getLayer('conflict-fill')) {
+        const c = resolveLayerMarkerColors()
+        const b = conflictBreaksRef.current
+        const beforeId = ['country-highlight-fill', 'quakes-layer', 'storms-layer', 'aircraft-layer', 'wildfires-layer']
+          .find((id) => map.getLayer(id))
+        map.addLayer(
+          {
+            id: 'conflict-fill',
+            type: 'fill',
+            source: 'conflict',
+            paint: {
+              'fill-opacity': 0.45,
+              'fill-color': [
+                'interpolate', ['linear'], ['to-number', ['coalesce', ['get', 'count'], 0]],
+                b.low, c.conflictLow, b.mid, c.conflictMid, b.high, c.conflictHigh,
+              ],
+            },
+          },
+          beforeId,
+        )
+      }
+
+      const visible = layersRef.current?.conflict ? 'visible' : 'none'
+      map.setLayoutProperty('conflict-fill', 'visibility', visible)
+    }
+
     const tryAdvanceStyle = () => {
       if (styleLocked) return
       if (map.isStyleLoaded()) {
@@ -1595,6 +1707,7 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
       applyTheme()
       calmBasemapLabels(map)
       ensureCountryHighlightLayer()
+      ensureConflictLayer()
       ensureQuakesLayer()
       ensureStormsLayer()
       ensureAircraftLayer()

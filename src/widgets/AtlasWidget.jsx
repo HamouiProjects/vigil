@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import AtlasWorldGlobe, { LAYER_COLORS, LAYER_ORDER, LAYER_SWATCH_CSS, formatRelativeTime } from './AtlasWorldGlobe'
 
-const DEFAULT_GLOBE_LAYERS = { wildfires: false, earthquakes: true, storms: false, aircraft: false }
+const DEFAULT_GLOBE_LAYERS = { wildfires: false, earthquakes: true, storms: false, aircraft: false, conflict: false }
 
 /** Muted chip only — globe marker stays on LAYER_COLORS.aircraft */
 const AIRCRAFT_CHIP_COLOR = '#92A2B5'
@@ -11,6 +11,7 @@ const LAYER_DEFS = [
   { key: 'earthquakes', label: 'Earthquakes', color: LAYER_COLORS.earthquakes },
   { key: 'storms',      label: 'Storms',      color: LAYER_COLORS.storms },
   { key: 'aircraft',    label: 'Aircraft',    color: LAYER_COLORS.aircraft, chipColor: AIRCRAFT_CHIP_COLOR },
+  { key: 'conflict',    label: 'Conflict',    color: LAYER_COLORS.conflict },
 ]
 
 function layerChipColor(def, on) {
@@ -293,6 +294,11 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
                         Transponder positions, an indicator, not confirmed movements.
                       </div>
                     )}
+                    {key === 'conflict' && (
+                      <div style={{ marginLeft: 14, color: 'var(--color-text-muted)', fontSize: 10, lineHeight: 1.35 }}>
+                        Auto-coded indicator from open news data, not verified events.
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -332,6 +338,7 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
             onAoiChange={(next) => onSaveConfigRef.current({ ...configRef.current, aoi: next })}
             homeNonce={homeNonce}
             onProvenance={setProvenance}
+            onCountrySelect={() => {}}
           />
         </div>
 
