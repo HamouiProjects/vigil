@@ -26,7 +26,7 @@ const socialAccountsOf = (w) =>
     ? w.config.subs.map(x => ({ id: x.id, platform: 'reddit', value: x.name, enabled: x.enabled }))
     : SOCIAL_DEFAULT_ACCOUNTS)
 
-export default function SuggestSourcesPanel({ onClose }) {
+export default function SuggestSourcesPanel({ onClose, initialTopics, initialRegions }) {
   const activeWs = useShellStore(s => s.activeWs)
   const workspaces = useShellStore(s => s.workspaces)
   const updateWidgetConfig = useShellStore(s => s.updateWidgetConfig)
@@ -66,8 +66,8 @@ export default function SuggestSourcesPanel({ onClose }) {
     return new Set(socialAccountsOf(target).map(a => `${a.platform}:${String(a.value || '').toLowerCase()}`))
   }, [ws])
 
-  const [topics, setTopics] = useState('')
-  const [regions, setRegions] = useState('')
+  const [topics, setTopics] = useState(initialTopics ?? '')
+  const [regions, setRegions] = useState(initialRegions ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)

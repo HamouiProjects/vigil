@@ -209,6 +209,19 @@ function countryFeatureAtLngLat(lng, lat, geo, bboxes) {
   return null
 }
 
+function containedMarkers(ref, geometry, toItem) {
+  const features = ref?.current?.features
+  if (!features?.length) return []
+  const out = []
+  for (const f of features) {
+    const coords = f.geometry?.coordinates
+    if (!coords || coords.length < 2) continue
+    if (!pointInGeometry(coords[0], coords[1], geometry)) continue
+    out.push(toItem(f, coords))
+  }
+  return out
+}
+
 function countryNameAtLngLat(lng, lat, geo) {
   if (!geo?.features) return null
   for (const f of geo.features) {
@@ -1341,19 +1354,56 @@ export default function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi 
     map.on('click', (e) => {
       const markerHits = map.queryRenderedFeatures(e.point, { layers: DATA_MARKER_LAYERS })
       if (markerHits.length) return
-      if (layersRef.current?.conflict) {
-        const feat = countryFeatureAtLngLat(
-          e.lngLat.lng,
-          e.lngLat.lat,
-          countriesGeoRef.current,
-          countryBBoxesRef.current,
-        )
-        const props = feat?.properties
-        if (props) onCountrySelectRef.current?.({ name: countryNameFromProps(props), iso3: props?.ISO_A3 })
-        return
+      const feat = countryFeatureAtLngLat(
+        e.lngLat.lng,
+        e.lngLat.lat,
+        countriesGeoRef.current,
+        countryBBoxesRef.current,
+      )
+      if (!feat) return
+      const geometry = feat.geometry
+      const onLayers = layersRef.current
+      const indicators = {}
+      if (onLayers?.conflict) {
+        const items = containedMarkers(conflictGeoRef, geometry, (f, coords) => {
+          const p = f.properties || {}
+          return { label: p.place || 'Conflict event', kind: p.kind || '', coords }
+        })
+        if (items.length) indicators.conflict = items
       }
-      const country = countryNameAtLngLat(e.lngLat.lng, e.lngLat.lat, countriesGeoRef.current)
-      if (country) dispatchNewsSearch(country)
+      if (onLayers?.wildfires) {
+        const items = containedMarkers(wildfiresGeoRef, geometry, (_f, coords) => ({
+          label: 'Fire detection',
+          coords,
+        }))
+        if (items.length) indicators.wildfires = items
+      }
+      if (onLayers?.earthquakes) {
+        const items = containedMarkers(quakesGeoRef, geometry, (f, coords) => {
+          const p = f.properties || {}
+          return { label: p.place || 'Earthquake', mag: p.mag, coords }
+        })
+        if (items.length) indicators.earthquakes = items
+      }
+      if (onLayers?.storms) {
+        const items = containedMarkers(stormsGeoRef, geometry, (f, coords) => {
+          const p = f.properties || {}
+          return { label: p.name || p.eventname || 'Storm', coords }
+        })
+        if (items.length) indicators.storms = items
+      }
+      if (onLayers?.aircraft) {
+        const items = containedMarkers(aircraftGeoRef, geometry, (f, coords) => {
+          const p = f.properties || {}
+          return { label: p.callsign || p.hex || 'Aircraft', coords }
+        })
+        if (items.length) indicators.aircraft = items
+      }
+      onCountrySelectRef.current?.({
+        name: countryNameFromProps(feat.properties),
+        iso3: feat.properties?.ISO_A3,
+        indicators,
+      })
     })
 
     const processCountryHover = () => {

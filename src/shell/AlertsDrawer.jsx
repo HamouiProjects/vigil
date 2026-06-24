@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 
 const SEVERITIES = ['low', 'normal', 'high']
@@ -35,7 +35,7 @@ function buildChannels(emailOn, webhookOn, telegramOn, canWebhook) {
   return ch
 }
 
-export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, onActivityRead }) {
+export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, onActivityRead, initialKeyword }) {
   const [section, setSection] = useState('rules')
   const [rules, setRules] = useState([])
   const [rulesLoading, setRulesLoading] = useState(false)
@@ -102,6 +102,16 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
       setEventsLoaded(true)
     }
   }, [onActivityRead])
+
+  const prevOpenRef = useRef(false)
+
+  useEffect(() => {
+    if (open && !prevOpenRef.current && initialKeyword) {
+      setKeyword(initialKeyword)
+      setCreating(true)
+    }
+    prevOpenRef.current = open
+  }, [open, initialKeyword])
 
   useEffect(() => {
     if (!open) return undefined

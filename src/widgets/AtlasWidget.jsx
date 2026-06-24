@@ -1,5 +1,46 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Bell } from 'lucide-react'
 import AtlasWorldGlobe, { LAYER_COLORS, LAYER_ORDER, LAYER_SWATCH_CSS, formatRelativeTime } from './AtlasWorldGlobe'
+import { GN_SEARCH_URL } from '../lib/feedSources.js'
+
+const INDICATOR_LAYER_LABELS = {
+  conflict: 'Conflict',
+  wildfires: 'Wildfires',
+  earthquakes: 'Earthquakes',
+  storms: 'Storms',
+  aircraft: 'Aircraft',
+}
+
+function stripHtml(text) {
+  return String(text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function newsExcerpt(description, title) {
+  const s = stripHtml(description)
+  if (!s) return null
+  if (title && s === stripHtml(title)) return null
+  if (s.length <= 140) return s
+  let cut = s.slice(0, 140)
+  const lastSpace = cut.lastIndexOf(' ')
+  if (lastSpace > 100) cut = cut.slice(0, lastSpace)
+  return `${cut.replace(/[\s.,;:!?]+$/, '')}…`
+}
+
+function newsRelativeDate(pubDate) {
+  const rel = formatRelativeTime(pubDate)
+  if (rel) return rel
+  if (!pubDate) return null
+  const t = new Date(pubDate).getTime()
+  if (Number.isNaN(t)) return null
+  const diffSec = Math.max(0, Math.floor((Date.now() - t) / 1000))
+  if (diffSec < 60) return 'just now'
+  const m = Math.floor(diffSec / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  return `${d}d ago`
+}
 
 const DEFAULT_GLOBE_LAYERS = { wildfires: false, earthquakes: true, storms: false, aircraft: false, conflict: false }
 
@@ -98,6 +139,14 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
   const [refreshNonce, setRefreshNonce] = useState(0)
   const [refreshSpinning, setRefreshSpinning] = useState(false)
   const [homeNonce, setHomeNonce] = useState(0)
+  const [countrySel, setCountrySel] = useState(null)
+  const [sidebarWidth, setSidebarWidth] = useState(360)
+  const [sidebarVisible, setSidebarVisible] = useState(false)
+  const [newsItems, setNewsItems] = useState([])
+  const [newsLoading, setNewsLoading] = useState(false)
+
+  const globeContainerRef = useRef(null)
+  const sidebarDragRef = useRef(false)
 
   const sourcesPanelRef = useRef(null)
   const sourcesToggleRef = useRef(null)
@@ -134,6 +183,69 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
     document.addEventListener('mousedown', onPointerDown)
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [showSources])
+
+  useEffect(() => {
+    if (!countrySel) {
+      setSidebarVisible(false)
+      return undefined
+    }
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduced) setSidebarVisible(true)
+    else requestAnimationFrame(() => setSidebarVisible(true))
+
+    const onKey = (e) => {
+      if (e.key === 'Escape') setCountrySel(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [countrySel])
+
+  useEffect(() => {
+    if (!countrySel?.name) {
+      setNewsItems([])
+      setNewsLoading(false)
+      return undefined
+    }
+    let cancelled = false
+    setNewsLoading(true)
+    setNewsItems([])
+    fetch(`/api/rss?url=${encodeURIComponent(GN_SEARCH_URL(countrySel.name))}`, {
+      signal: AbortSignal.timeout(12000),
+    })
+      .then((res) => (res.ok ? res.json() : { items: [] }))
+      .then((data) => {
+        if (!cancelled) setNewsItems(Array.isArray(data?.items) ? data.items : [])
+      })
+      .catch(() => {
+        if (!cancelled) setNewsItems([])
+      })
+      .finally(() => {
+        if (!cancelled) setNewsLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [countrySel?.name])
+
+  const onSidebarResizeStart = useCallback((e) => {
+    e.preventDefault()
+    sidebarDragRef.current = true
+    const container = globeContainerRef.current
+    if (!container) return
+    const containerLeft = container.getBoundingClientRect().left
+    const containerWidth = container.getBoundingClientRect().width
+
+    const onMove = (ev) => {
+      if (!sidebarDragRef.current) return
+      const next = ev.clientX - containerLeft
+      setSidebarWidth(Math.min(Math.max(next, 280), Math.min(containerWidth - 40, 720)))
+    }
+    const onUp = () => {
+      sidebarDragRef.current = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [])
 
   useEffect(() => {
     setActions?.(
@@ -236,7 +348,7 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
         </div>
       )}
 
-      <div style={{ flex: 1, minHeight: 0, width: '100%', position: 'relative', overflow: 'hidden' }}>
+      <div ref={globeContainerRef} style={{ flex: 1, minHeight: 0, width: '100%', position: 'relative', overflow: 'hidden' }}>
         {showSources && (
           <div
             ref={sourcesPanelRef}
@@ -328,6 +440,232 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
           </div>
         )}
 
+        {countrySel && (
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: sidebarWidth,
+              zIndex: 26,
+              display: 'flex',
+              flexDirection: 'column',
+              background: 'var(--color-surface-1)',
+              borderRight: '1px solid var(--color-border)',
+              transform: sidebarVisible ? 'translateX(0)' : 'translateX(-100%)',
+              transition: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                ? 'none'
+                : 'transform 0.2s ease',
+              fontFamily: 'var(--font-sans)',
+              fontSize: 12,
+              lineHeight: 1.45,
+              color: 'var(--color-text-secondary)',
+              overflow: 'hidden',
+            }}
+            onPointerDownCapture={e => e.stopPropagation()}
+          >
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              onMouseDown={onSidebarResizeStart}
+              style={{
+                position: 'absolute',
+                right: 0,
+                top: 0,
+                bottom: 0,
+                width: 6,
+                cursor: 'col-resize',
+                zIndex: 2,
+              }}
+            />
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 12px',
+              borderBottom: '1px solid var(--color-border)',
+              flexShrink: 0,
+            }}>
+              <div style={{ fontWeight: 600, color: 'var(--color-text-primary)', fontSize: 14 }}>
+                {countrySel.name || 'Unknown'}
+              </div>
+              <button
+                type="button"
+                onClick={() => setCountrySel(null)}
+                title="Close"
+                style={{
+                  width: 22,
+                  height: 22,
+                  padding: 0,
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--color-text-muted)',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  lineHeight: 1,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 12px' }}>
+              {countrySel.indicators && LAYER_ORDER.some((k) => countrySel.indicators[k]?.length > 0) && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{
+                    color: 'var(--color-text-muted)',
+                    fontSize: 10,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    marginBottom: 8,
+                  }}>
+                    Indicators
+                  </div>
+                  {LAYER_ORDER.filter((k) => countrySel.indicators[k]?.length > 0).map((layer) => {
+                    const items = countrySel.indicators[layer]
+                    const swatch = LAYER_SWATCH_CSS[layer]
+                    return (
+                      <div key={layer} style={{ marginBottom: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <span
+                            aria-hidden="true"
+                            style={{ width: 8, height: 8, borderRadius: 2, background: swatch, flexShrink: 0 }}
+                          />
+                          <span style={{ flex: 1 }}>{INDICATOR_LAYER_LABELS[layer]}</span>
+                          <span style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                            {items.length}
+                          </span>
+                        </div>
+                        {items.slice(0, 5).map((item, i) => (
+                          <div
+                            key={i}
+                            style={{ marginLeft: 14, fontSize: 11, color: swatch, marginBottom: 2 }}
+                          >
+                            {item.label}
+                          </div>
+                        ))}
+                        {layer === 'conflict' && (
+                          <div style={{ marginLeft: 14, color: 'var(--color-text-muted)', fontSize: 10, lineHeight: 1.35, marginTop: 4 }}>
+                            Auto-coded indicator from open news data, not verified events
+                          </div>
+                        )}
+                        {layer === 'aircraft' && (
+                          <div style={{ marginLeft: 14, color: 'var(--color-text-muted)', fontSize: 10, lineHeight: 1.35, marginTop: 4 }}>
+                            Transponder positions, an indicator, not confirmed movements
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{
+                  color: 'var(--color-text-muted)',
+                  fontSize: 10,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  marginBottom: 8,
+                }}>
+                  News
+                </div>
+                {newsLoading && (
+                  <div style={{ color: 'var(--color-text-muted)', fontSize: 11 }}>Loading…</div>
+                )}
+                {!newsLoading && newsItems.length === 0 && (
+                  <div style={{ color: 'var(--color-text-muted)', fontSize: 11 }}>No recent coverage</div>
+                )}
+                {!newsLoading && newsItems.map((item, i) => {
+                  const excerpt = newsExcerpt(item.description, item.title)
+                  const date = newsRelativeDate(item.pubDate)
+                  return (
+                    <div key={i} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--color-border)' }}>
+                      <div style={{ fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>
+                        {item.title}
+                      </div>
+                      {excerpt && (
+                        <p style={{ margin: '0 0 4px', color: 'var(--color-text-secondary)', fontSize: 11 }}>
+                          {excerpt}
+                        </p>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, color: 'var(--color-text-muted)' }}>
+                        {item.author && item.link && (
+                          <a
+                            href={item.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'var(--color-brand)', textDecoration: 'none' }}
+                          >
+                            {item.author}
+                          </a>
+                        )}
+                        {item.author && !item.link && (
+                          <span>{item.author}</span>
+                        )}
+                        {date && <span>{date}</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div style={{
+              padding: '10px 12px',
+              borderTop: '1px solid var(--color-border)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              flexShrink: 0,
+            }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const topic = countrySel.name
+                  setCountrySel(null)
+                  window.dispatchEvent(new CustomEvent('vigil:suggest-sources', { detail: { topic } }))
+                }}
+                style={{
+                  padding: '6px 10px',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 3,
+                  background: 'var(--color-surface-2)',
+                  color: 'var(--color-text-secondary)',
+                  fontFamily: 'inherit',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                }}
+              >
+                Suggest sources
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const keyword = countrySel.name
+                  setCountrySel(null)
+                  window.dispatchEvent(new CustomEvent('vigil:add-alert', { detail: { keyword } }))
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  padding: '6px 10px',
+                  border: '1px solid var(--color-brand)',
+                  borderRadius: 3,
+                  background: 'var(--color-brand-tint)',
+                  color: 'var(--color-brand)',
+                  fontFamily: 'inherit',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                }}
+              >
+                <Bell size={14} aria-hidden />
+                Add to Alerts
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* WORLD globe: stays mounted; paused when it is not the active tab so its pollers stop */}
         <div style={{ display: mapMode === 'world' ? 'block' : 'none', position: 'absolute', inset: 0 }}>
           <AtlasWorldGlobe
@@ -338,7 +676,7 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
             onAoiChange={(next) => onSaveConfigRef.current({ ...configRef.current, aoi: next })}
             homeNonce={homeNonce}
             onProvenance={setProvenance}
-            onCountrySelect={() => {}}
+            onCountrySelect={setCountrySel}
           />
         </div>
 

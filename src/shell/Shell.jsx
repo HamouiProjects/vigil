@@ -127,6 +127,8 @@ export default function Shell() {
   const [showBrief, setShowBrief] = useState(false)
   const [showSuggest, setShowSuggest] = useState(false)
   const [showAlerts, setShowAlerts] = useState(false)
+  const [suggestPreset, setSuggestPreset] = useState(null)
+  const [alertPreset, setAlertPreset] = useState(null)
   const [unreadAlerts, setUnreadAlerts] = useState(0)
   const [account, setAccount] = useState(null)
   const [themePref, setThemePrefState] = useState(getThemePref())
@@ -150,6 +152,23 @@ export default function Shell() {
   useEffect(() => {
     const { globalLive: live, setGlobalLive } = useShellStore.getState()
     if (typeof live !== 'boolean') setGlobalLive(true)
+  }, [])
+
+  useEffect(() => {
+    const onSuggest = (e) => {
+      setSuggestPreset({ topics: e.detail?.topic || '' })
+      setShowSuggest(true)
+    }
+    const onAlert = (e) => {
+      setAlertPreset({ keyword: e.detail?.keyword || '' })
+      setShowAlerts(true)
+    }
+    window.addEventListener('vigil:suggest-sources', onSuggest)
+    window.addEventListener('vigil:add-alert', onAlert)
+    return () => {
+      window.removeEventListener('vigil:suggest-sources', onSuggest)
+      window.removeEventListener('vigil:add-alert', onAlert)
+    }
   }, [])
 
   useEffect(() => {
@@ -601,10 +620,16 @@ export default function Shell() {
           onUpgrade={() => setShowUpgrade(true)}
         />
       )}
-      {showSuggest && <SuggestSourcesPanel onClose={() => setShowSuggest(false)} />}
+      {showSuggest && (
+        <SuggestSourcesPanel
+          initialTopics={suggestPreset?.topics}
+          onClose={() => { setShowSuggest(false); setSuggestPreset(null) }}
+        />
+      )}
       <AlertsDrawer
         open={showAlerts}
-        onClose={() => setShowAlerts(false)}
+        initialKeyword={alertPreset?.keyword}
+        onClose={() => { setShowAlerts(false); setAlertPreset(null) }}
         entitlements={entitlements}
         onUpgrade={() => setShowUpgrade(true)}
         onActivityRead={() => setUnreadAlerts(0)}
