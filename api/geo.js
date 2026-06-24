@@ -244,7 +244,7 @@ async function fetchAircraft() {
 }
 
 async function fetchConflict() {
-  const res = await fetch(getGdeltConflictUrl(), { signal: AbortSignal.timeout(12000) })
+  const res = await fetch(getGdeltConflictUrl(), { headers: AIRCRAFT_HEADERS, signal: AbortSignal.timeout(12000) })
   let raw = null
   try {
     raw = await res.json()
@@ -310,7 +310,7 @@ async function handleDebugPassthrough(req, res, source) {
   }
 
   try {
-    const upstream = await fetch(upstreamUrl, { headers: source === 'aircraft' ? AIRCRAFT_HEADERS : undefined, signal: AbortSignal.timeout(8000) })
+    const upstream = await fetch(upstreamUrl, { headers: (source === 'aircraft' || source === 'conflict') ? AIRCRAFT_HEADERS : undefined, signal: AbortSignal.timeout(8000) })
     const contentType = upstream.headers.get('content-type') || ''
     const text = await upstream.text()
     return res.status(200).json({
