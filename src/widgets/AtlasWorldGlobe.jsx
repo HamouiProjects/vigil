@@ -1086,6 +1086,8 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
   const interactingRef = useRef(false)
   const idleTimerRef = useRef(null)
   const lngRef = useRef(0)
+  const spinRef = useRef(null)
+  const spinningRef = useRef(false)
   const quakesGeoRef = useRef(null)
   const stormsGeoRef = useRef(null)
   const aircraftGeoRef = useRef(null)
@@ -1110,6 +1112,29 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
 
   pausedRef.current = paused
   layersRef.current = layers
+
+  const stopSpin = () => {
+    if (spinRef.current) cancelAnimationFrame(spinRef.current)
+    spinRef.current = null
+    spinningRef.current = false
+  }
+  const startSpin = () => {
+    const map = mapRef.current
+    if (!map) return
+    stopSpin()
+    spinningRef.current = true
+    const lat = DEFAULT_VIEW.center[1]
+    lngRef.current = map.getCenter().lng
+    const step = () => {
+      if (!spinningRef.current) return
+      let lng = lngRef.current + 0.055
+      if (lng > 180) lng -= 360
+      lngRef.current = lng
+      map.setCenter([lng, lat])
+      spinRef.current = requestAnimationFrame(step)
+    }
+    spinRef.current = requestAnimationFrame(step)
+  }
 
   const patchProvenance = (layer, patch) => {
     setProvenance((prev) => {
@@ -1943,6 +1968,7 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
 
     let aoiSaveTimer = null
     const persistAoi = () => {
+      if (spinningRef.current) return
       const m = mapRef.current
       if (!m || typeof onAoiChangeRef.current !== 'function') return
       const c = m.getCenter()
@@ -1959,6 +1985,10 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
       if (!map.isStyleLoaded()) tryAdvanceStyle()
     })
     map.on('moveend', onMoveEndPersist)
+    map.on('mousedown', stopSpin)
+    map.on('dragstart', stopSpin)
+    map.on('wheel', stopSpin)
+    map.on('touchstart', stopSpin)
 
     let fsResizeTimer = null
     const onFullscreenChange = () => {
@@ -1982,6 +2012,7 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
       .catch(() => {})
 
     return () => {
+      stopSpin()
       themeObserver.disconnect()
       popup?.remove()
       openAircraftRef.current = null
@@ -2002,8 +2033,16 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
     if (!homeNonce) return
     const m = mapRef.current
     if (!m) return
+    stopSpin()
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     m.easeTo({ center: DEFAULT_VIEW.center, zoom: DEFAULT_VIEW.zoom, duration: reduced ? 0 : 600 })
+    if (reduced) return
+    const startTimer = setTimeout(() => {
+      // Persist home explicitly (the debounced moveend save is suppressed once spinning), then spin.
+      onAoiChangeRef.current?.({ center: [DEFAULT_VIEW.center[0], DEFAULT_VIEW.center[1]], zoom: DEFAULT_VIEW.zoom })
+      startSpin()
+    }, 650)
+    return () => clearTimeout(startTimer)
   }, [homeNonce])
 
   return (
