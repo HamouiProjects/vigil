@@ -29,7 +29,12 @@ const COUNT_NOUNS = {
 const indicatorRowText = (layer, item) => {
   if (layer === 'earthquakes') return item.mag != null ? `M${item.mag} · ${item.label}` : item.label
   if (layer === 'storms') return item.alertlevel ? `${item.label} · ${ALERT_CAP(item.alertlevel)}` : item.label
-  if (layer === 'wildfires') return item.confidence ? `${item.label} · ${CONF_LABEL(item.confidence)}` : item.label
+  if (layer === 'wildfires') {
+    const parts = []
+    if (item.frp != null && item.frp !== '' && !Number.isNaN(Number(item.frp))) parts.push(`${item.frp} MW`)
+    if (item.confidence) parts.push(CONF_LABEL(item.confidence))
+    return parts.length ? parts.join(' · ') : item.label
+  }
   if (layer === 'conflict') return item.kind ? `${item.label} · ${item.kind}` : item.label
   return item.label
 }

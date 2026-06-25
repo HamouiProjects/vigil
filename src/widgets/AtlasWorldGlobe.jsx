@@ -920,13 +920,28 @@ function buildStormPopupHtml(props, prov) {
   })
 }
 
+// Map FIRMS confidence codes l/n/h to readable labels, parity with the sidebar.
+function confidenceLabel(v) {
+  const s = String(v).toLowerCase()
+  if (s === 'l') return 'Low'
+  if (s === 'n') return 'Nominal'
+  if (s === 'h') return 'High'
+  return String(v)
+}
+
+function fmtAcqTime(t) {
+  const s = String(t ?? '').padStart(4, '0')
+  if (!/^\d{4}$/.test(s)) return t
+  return `${s.slice(0, 2)}:${s.slice(2)}`
+}
+
 function buildWildfirePopupHtml(props, prov) {
   const rows = []
   if (props.frp != null && props.frp !== '' && !Number.isNaN(Number(props.frp))) {
     rows.push(['Radiative power', `${props.frp} MW`])
   }
-  if (props.confidence) rows.push(['Confidence', props.confidence])
-  const detected = [props.acq_date, props.acq_time].filter(Boolean).join(' ')
+  if (props.confidence) rows.push(['Confidence', confidenceLabel(props.confidence)])
+  const detected = [props.acq_date, props.acq_time != null && props.acq_time !== '' ? fmtAcqTime(props.acq_time) : null].filter(Boolean).join(' ')
   if (detected) rows.push(['Detected', `${detected} UTC`])
 
   return buildPopupCard({
@@ -1392,6 +1407,7 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
         const items = containedMarkers(wildfiresGeoRef, geometry, (f, coords) => ({
           label: 'Fire detection',
           confidence: f.properties?.confidence,
+          frp: f.properties?.frp,
           coords,
         }))
         if (items.length) indicators.wildfires = items
@@ -1944,6 +1960,14 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
     })
     map.on('moveend', onMoveEndPersist)
 
+    let fsResizeTimer = null
+    const onFullscreenChange = () => {
+      requestAnimationFrame(() => mapRef.current?.resize())
+      clearTimeout(fsResizeTimer)
+      fsResizeTimer = setTimeout(() => mapRef.current?.resize(), 300)
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+
     scheduleWatchdog()
 
     fetch(COUNTRIES_GEO_URL)
@@ -1966,6 +1990,8 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
       cancelAnimationFrame(hoverRAFRef.current)
       clearTimeout(idleTimerRef.current)
       clearTimeout(aoiSaveTimer)
+      document.removeEventListener('fullscreenchange', onFullscreenChange)
+      clearTimeout(fsResizeTimer)
       clearWatchdog()
       map.remove()
       mapRef.current = null
