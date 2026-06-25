@@ -1405,11 +1405,24 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
         if (items.length) indicators.earthquakes = items
       }
       if (onLayers?.storms) {
-        const items = containedMarkers(stormsGeoRef, geometry, (f, coords) => {
+        const cname = (countryNameFromProps(feat.properties) || '').trim().toLowerCase()
+        const ciso = (feat.properties?.ISO_A3 || '').trim().toUpperCase()
+        const seen = new Set()
+        const stormItems = []
+        for (const f of (stormsGeoRef.current?.features || [])) {
           const p = f.properties || {}
-          return { label: p.name || p.eventname || 'Storm', coords }
-        }, featurePoint)
-        if (items.length) indicators.storms = items
+          const stormCountries = (p.country || '').toLowerCase().split(/[,;/]/).map((s) => s.trim()).filter(Boolean)
+          const nameMatch = cname && stormCountries.includes(cname)
+          const isoMatch = ciso && ciso !== '-99' && (p.iso3 || '').trim().toUpperCase() === ciso
+          const pt = featurePoint(f)
+          const inPolygon = pt && pt.length >= 2 && pointInGeometry(pt[0], pt[1], geometry)
+          if (!nameMatch && !isoMatch && !inPolygon) continue
+          const id = p.eventid || p.name || p.eventname || 'storm'
+          if (seen.has(id)) continue
+          seen.add(id)
+          stormItems.push({ label: p.name || p.eventname || 'Storm', coords: pt })
+        }
+        if (stormItems.length) indicators.storms = stormItems
       }
       if (onLayers?.aircraft) {
         const items = containedMarkers(aircraftGeoRef, geometry, (f, coords) => {
