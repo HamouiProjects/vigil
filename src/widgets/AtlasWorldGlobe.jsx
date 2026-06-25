@@ -986,10 +986,8 @@ function buildConflictPopupHtml(props, prov) {
   const place = (props.place || '').trim()
   const titleRows = place ? [['', place]] : []
   const rel = formatRelativeTime(prov?.fetchedAt)
-  const footerExtra = [
-    'Machine-coded from news reports, an indicator, not confirmed events.',
-    rel ? `Updated ${rel}` : null,
-  ].filter(Boolean).join(' · ')
+  const summary = place ? `${kind} reported near ${place}.` : `${kind} reported.`
+  const footerExtra = [summary, rel ? `Updated ${rel}` : null].filter(Boolean).join(' · ')
 
   return buildPopupCard({
     dotColor: 'var(--color-conflict-mid)',
@@ -997,8 +995,6 @@ function buildConflictPopupHtml(props, prov) {
     title: kind,
     titleRows,
     footerExtra,
-    sourceName: prov?.sourceName,
-    sourceUrl: prov?.sourceUrl,
   })
 }
 
@@ -1060,9 +1056,11 @@ void fitBoundsStub
 const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi = null, onAoiChange, homeNonce = 0, onProvenance, onCountrySelect }, ref) {
   const wrapRef = useRef(null)
   const openAircraftRef = useRef(null)
+  const focusFeatureRef = useRef(null)
 
   useImperativeHandle(ref, () => ({
     openAircraftPopup: (hex, leftPad) => openAircraftRef.current?.(hex, leftPad),
+    focusFeature: (layer, idOrCoords, leftPad) => focusFeatureRef.current?.(layer, idOrCoords, leftPad),
   }), [])
   const containerRef = useRef(null)
   const countryReadoutRef = useRef(null)
@@ -1391,8 +1389,9 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
         if (items.length) indicators.conflict = items
       }
       if (onLayers?.wildfires) {
-        const items = containedMarkers(wildfiresGeoRef, geometry, (_f, coords) => ({
+        const items = containedMarkers(wildfiresGeoRef, geometry, (f, coords) => ({
           label: 'Fire detection',
+          confidence: f.properties?.confidence,
           coords,
         }))
         if (items.length) indicators.wildfires = items
@@ -1420,7 +1419,7 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
           const id = p.eventid || p.name || p.eventname || 'storm'
           if (seen.has(id)) continue
           seen.add(id)
-          stormItems.push({ label: p.name || p.eventname || 'Storm', coords: pt })
+          stormItems.push({ label: p.name || p.eventname || 'Storm', alertlevel: p.alertlevel, coords: pt })
         }
         if (stormItems.length) indicators.storms = stormItems
       }
@@ -1437,6 +1436,51 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
         indicators,
       })
     })
+
+    const findByPoint = (geoRef, coords) => {
+      const feats = geoRef.current?.features || []
+      const lng = coords[0]
+      const lat = coords[1]
+      let best = null
+      let bestD = Infinity
+      for (const f of feats) {
+        const p = featurePoint(f)
+        if (!p || p.length < 2) continue
+        const d = Math.abs(p[0] - lng) + Math.abs(p[1] - lat)
+        if (d < bestD) { bestD = d; best = f }
+      }
+      return bestD <= 0.0005 ? best : null
+    }
+
+    const focusFeatureByCoords = (layer, idOrCoords, leftPad) => {
+      if (layer === 'aircraft') { openAircraftRef.current?.(idOrCoords, leftPad); return }
+      const coords = idOrCoords
+      if (!Array.isArray(coords) || coords.length < 2) return
+      let f = null
+      let html = null
+      if (layer === 'earthquakes') {
+        f = findByPoint(quakesGeoRef, coords)
+        if (f) html = buildEarthquakePopupHtml(f, provenanceRef.current.earthquakes)
+      } else if (layer === 'storms') {
+        f = findByPoint(stormsGeoRef, coords)
+        if (f) html = buildStormPopupHtml(f.properties || {}, provenanceRef.current.storms)
+      } else if (layer === 'wildfires') {
+        f = findByPoint(wildfiresGeoRef, coords)
+        if (f) html = buildWildfirePopupHtml(f.properties || {}, provenanceRef.current.wildfires)
+      } else if (layer === 'conflict') {
+        f = findByPoint(conflictGeoRef, coords)
+        if (f) html = buildConflictPopupHtml(f.properties || {}, provenanceRef.current.conflict)
+      }
+      if (!f || !html) return
+      map.easeTo({ center: coords, zoom: Math.max(map.getZoom(), 4), duration: 800, padding: { left: leftPad || 0 } })
+      popup?.remove()
+      popup = new maplibregl.Popup({ closeButton: true, maxWidth: '280px', className: 'vigil-popup' })
+        .setLngLat(coords)
+        .setHTML(html)
+        .addTo(map)
+      wirePopupDismiss(popup, map)
+    }
+    focusFeatureRef.current = focusFeatureByCoords
 
     const processCountryHover = () => {
       hoverRAFRef.current = 0
@@ -1917,6 +1961,7 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
       themeObserver.disconnect()
       popup?.remove()
       openAircraftRef.current = null
+      focusFeatureRef.current = null
       cancelAnimationFrame(rafRef.current)
       cancelAnimationFrame(hoverRAFRef.current)
       clearTimeout(idleTimerRef.current)

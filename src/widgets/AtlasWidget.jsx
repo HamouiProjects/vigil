@@ -11,6 +11,29 @@ const INDICATOR_LAYER_LABELS = {
   aircraft: 'Aircraft',
 }
 
+const ALERT_CAP = (v) => (v ? String(v).charAt(0).toUpperCase() + String(v).slice(1) : '')
+const CONF_LABEL = (v) => {
+  const s = String(v).toLowerCase()
+  if (s === 'l') return 'Low'
+  if (s === 'n') return 'Nominal'
+  if (s === 'h') return 'High'
+  return String(v)
+}
+const COUNT_NOUNS = {
+  earthquakes: ['earthquake', 'earthquakes'],
+  storms: ['tropical cyclone', 'tropical cyclones'],
+  aircraft: ['military aircraft', 'military aircraft'],
+  wildfires: ['fire detection', 'fire detections'],
+  conflict: ['reported conflict event', 'reported conflict events'],
+}
+const indicatorRowText = (layer, item) => {
+  if (layer === 'earthquakes') return item.mag != null ? `M${item.mag} · ${item.label}` : item.label
+  if (layer === 'storms') return item.alertlevel ? `${item.label} · ${ALERT_CAP(item.alertlevel)}` : item.label
+  if (layer === 'wildfires') return item.confidence ? `${item.label} · ${CONF_LABEL(item.confidence)}` : item.label
+  if (layer === 'conflict') return item.kind ? `${item.label} · ${item.kind}` : item.label
+  return item.label
+}
+
 function stripHtml(text) {
   return String(text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 }
@@ -511,6 +534,28 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
               </button>
             </div>
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 12px' }}>
+              {(() => {
+                const ind = countrySel.indicators || {}
+                const phrase = LAYER_ORDER
+                  .filter((k) => ind[k]?.length > 0)
+                  .map((k) => {
+                    const n = ind[k].length
+                    const nouns = COUNT_NOUNS[k]
+                    return `${n} ${n === 1 ? nouns[0] : nouns[1]}`
+                  })
+                  .join(', ')
+                const top = !newsLoading && newsItems[0] ? nsCleanTitle(newsItems[0].title) : null
+                return (
+                  <div style={{ marginBottom: 14, fontSize: 12, lineHeight: 1.45, color: 'var(--color-text-secondary)' }}>
+                    {phrase
+                      ? <div>{phrase}.</div>
+                      : <div style={{ color: 'var(--color-text-muted)' }}>No active indicators in view for this country.</div>}
+                    {top && (
+                      <div style={{ marginTop: 4, color: 'var(--color-text-muted)' }}>Top headline: {top}</div>
+                    )}
+                  </div>
+                )
+              })()}
               {countrySel.indicators && LAYER_ORDER.some((k) => countrySel.indicators[k]?.length > 0) && (
                 <div style={{ marginBottom: 14 }}>
                   <div style={{
@@ -538,20 +583,14 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
                           </span>
                         </div>
                         {items.slice(0, 5).map((item, i) => (
-                          layer === 'aircraft' ? (
-                            <button
-                              key={i}
-                              type="button"
-                              onClick={() => worldGlobeRef.current?.openAircraftPopup(item.hex, sidebarWidth)}
-                              style={{ display: 'block', width: '100%', textAlign: 'left', marginLeft: 14, fontSize: 11, color: swatch, marginBottom: 2, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', lineHeight: 'inherit' }}
-                            >
-                              {item.label}
-                            </button>
-                          ) : (
-                            <div key={i} style={{ marginLeft: 14, fontSize: 11, color: swatch, marginBottom: 2 }}>
-                              {layer === 'conflict' && item.kind ? `${item.label} · ${item.kind}` : item.label}
-                            </div>
-                          )
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => worldGlobeRef.current?.focusFeature(layer, layer === 'aircraft' ? item.hex : item.coords, sidebarWidth)}
+                            style={{ display: 'block', width: '100%', textAlign: 'left', marginLeft: 14, fontSize: 11, color: swatch, marginBottom: 2, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', lineHeight: 'inherit' }}
+                          >
+                            {indicatorRowText(layer, item)}
+                          </button>
                         ))}
                       </div>
                     )
