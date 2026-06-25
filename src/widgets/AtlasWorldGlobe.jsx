@@ -1997,6 +1997,15 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
       fsResizeTimer = setTimeout(() => mapRef.current?.resize(), 300)
     }
     document.addEventListener('fullscreenchange', onFullscreenChange)
+    // Keep the MapLibre canvas in sync with its container box so the globe stays centered.
+    // Fullscreen enter/exit on a shared node, grid reflow, panel resize, and the initial
+    // layout settle all change the box, and resize() re-centers. rAF-debounced.
+    let roRaf = null
+    const ro = new ResizeObserver(() => {
+      if (roRaf) cancelAnimationFrame(roRaf)
+      roRaf = requestAnimationFrame(() => mapRef.current?.resize())
+    })
+    ro.observe(container)
 
     scheduleWatchdog()
 
@@ -2023,6 +2032,8 @@ const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, re
       clearTimeout(aoiSaveTimer)
       document.removeEventListener('fullscreenchange', onFullscreenChange)
       clearTimeout(fsResizeTimer)
+      ro.disconnect()
+      if (roRaf) cancelAnimationFrame(roRaf)
       clearWatchdog()
       map.remove()
       mapRef.current = null
