@@ -2804,6 +2804,14 @@ button.status-dot:hover { opacity: 0.8; }
   justify-content: center;
   text-align: center;
 }
+.tour-spotlight {
+  position: fixed;
+  z-index: 1190;
+  border-radius: 5px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  animation: modal-overlay-in 160ms ease;
+}
 .tour-tooltip {
   position: fixed;
   z-index: 1200;
@@ -2921,12 +2929,14 @@ button.status-dot:hover { opacity: 0.8; }
 }
 .welcome-tour--instant,
 .welcome-tour--instant.welcome-overlay,
-.welcome-tour--instant.tour-tooltip {
+.welcome-tour--instant.tour-tooltip,
+.welcome-tour--instant.tour-spotlight {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .welcome-overlay,
-  .tour-tooltip {
+  .tour-tooltip,
+  .tour-spotlight {
     animation: none;
   }
 }

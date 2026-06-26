@@ -13,9 +13,9 @@ const PHASE_UNLOCK = 7
 // Walk steps in setup-workflow order: make a room, fill it, then act on it.
 const WALK_STEPS = [
   { phase: PHASE_NEWROOM, selector: '[data-tour="newroom"]', title: 'Your rooms', body: 'You are in a ready-made room. Spin up another any time with +.' },
-  { phase: PHASE_ADDWIDGET, selector: '[data-tour="addwidget"]', title: 'Add a widget', body: 'Drop in feeds, charts, maps, and more to build out a room.' },
-  { phase: PHASE_SUGGEST, selector: '[data-tour="suggest"]', title: 'Suggest sources', body: 'Give a topic and a region, get real sources to furnish the room.' },
-  { phase: PHASE_BRIEF, selector: '[data-tour="brief"]', title: 'Room brief', body: 'One-click brief over the whole room, cited to its own sources.' },
+  { phase: PHASE_ADDWIDGET, selector: '[data-tour="addwidget"]', title: 'Add a widget', body: 'Add feeds, charts, maps, and more, then arrange the room around what you actually track.' },
+  { phase: PHASE_SUGGEST, selector: '[data-tour="suggest"]', title: 'Suggest sources', body: 'Give a topic or a region, get real sources to add to your widgets. A good start, then add your own.' },
+  { phase: PHASE_BRIEF, selector: '[data-tour="brief"]', title: 'Room brief', body: 'A one-click brief that summarizes your whole room, every source and widget in it, cited to each.' },
   { phase: PHASE_ALARMS, selector: '[data-tour="alarms"]', title: 'Alarms', body: 'Set alarms on what you track. Available on paid plans.' },
   { phase: PHASE_SHARE, selector: '[data-tour="share"]', title: 'Share', body: 'Hand a colleague a link to this room.' },
 ]
@@ -212,7 +212,18 @@ function AnchoredTooltipStep({
   const placement = tooltipPos ? tooltipPlacement : initialPos.placement
 
   return (
-    <TourDialog
+    <>
+      <div
+        className={`tour-spotlight${motionClass}`}
+        style={{
+          top: anchorRect.top - 4,
+          left: anchorRect.left - 4,
+          width: anchorRect.width + 8,
+          height: anchorRect.height + 8,
+        }}
+        aria-hidden="true"
+      />
+      <TourDialog
       className={`tour-tooltip tour-tooltip--${placement}${motionClass}`}
       style={{ top: pos.top, left: pos.left, '--tour-caret-x': `${caretX}px` }}
       labelId={labelId}
@@ -242,6 +253,7 @@ function AnchoredTooltipStep({
         </div>
       </div>
     </TourDialog>
+    </>
   )
 }
 
