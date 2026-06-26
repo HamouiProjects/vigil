@@ -1,10 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { track } from '@vercel/analytics'
+import { ensureSession } from '../data/session.js'
 import { LAND } from './landData.js'
 import GlobeGlyph from '../brand/GlobeGlyph.jsx'
 import './landing.css'
-
-const DEMO_URL = '/?r=91dd31b84220'
 
 const CARDS = [
   {
@@ -31,6 +30,7 @@ function hexToRgb(value) {
 export default function Landing() {
   const canvasRef = useRef(null)
   const rafRef = useRef(0)
+  const [entering, setEntering] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -144,9 +144,17 @@ export default function Landing() {
     }
   }, [])
 
-  function handleEnter() {
+  async function handleEnter() {
+    if (entering) return
+    setEntering(true)
     track('demo_click')
-    window.location.href = DEMO_URL
+    try {
+      await ensureSession()
+      window.location.href = '/'
+    } catch (e) {
+      console.error(e)
+      setEntering(false)
+    }
   }
 
   function onHeroKey(e) {

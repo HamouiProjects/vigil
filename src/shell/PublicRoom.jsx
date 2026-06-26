@@ -59,12 +59,19 @@ export default function PublicRoom({ slug }) {
     return () => { cancelled = true }
   }, [slug])
 
+  useEffect(() => {
+    if (!notFound) return undefined
+    let done = false
+    ensureSession().then(() => { if (!done) window.location.href = '/' }).catch(() => {})
+    return () => { done = true }
+  }, [notFound])
+
   if (loading) {
     return <div style={loaderStyle}>Loading room…</div>
   }
 
   if (notFound || !room) {
-    return <div style={loaderStyle}>This room is not available.</div>
+    return <div style={loaderStyle}>Room unavailable. Taking you to your room.</div>
   }
 
   return (

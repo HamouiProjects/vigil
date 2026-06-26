@@ -3,7 +3,8 @@ import { useShellStore } from '../state/shellStore.js'
 import { resolveEntitlements } from '../entitlements/resolve.js'
 import { devOverride } from '../entitlements/devOverride.js'
 import { ensureSession } from './session.js'
-import { loadWorkspaces, saveWorkspaces } from './workspacesRepo.js'
+import { cloneRoom, loadWorkspaces, saveWorkspaces } from './workspacesRepo.js'
+import { BL10_TEMPLATE } from './seedTemplate.js'
 import { loadSubscription } from './subscriptionRepo.js'
 import { listSources } from './sourcesRepo.js'
 
@@ -23,11 +24,10 @@ export function useShellPersistence() {
           )
         }
 
-        const [wss0, srcs] = await Promise.all([loadWorkspaces(uid), listSources(uid)])
-        let wss = wss0
+        let [wss, srcs] = await Promise.all([loadWorkspaces(uid), listSources(uid)])
         if (!wss.length) {
-          wss = useShellStore.getState().workspaces
-          await saveWorkspaces(uid, wss)
+          await cloneRoom(uid, BL10_TEMPLATE)
+          ;[wss, srcs] = await Promise.all([loadWorkspaces(uid), listSources(uid)])
         }
 
         let savedActive = null
