@@ -2840,7 +2840,7 @@ button.status-dot:hover { opacity: 0.8; }
   content: '';
   position: absolute;
   top: -6px;
-  left: 24px;
+  left: var(--tour-caret-x, 24px);
   width: 10px;
   height: 10px;
   background: var(--color-surface-2);
@@ -2852,7 +2852,7 @@ button.status-dot:hover { opacity: 0.8; }
   content: '';
   position: absolute;
   bottom: -6px;
-  left: 24px;
+  left: var(--tour-caret-x, 24px);
   width: 10px;
   height: 10px;
   background: var(--color-surface-2);

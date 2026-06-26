@@ -343,6 +343,7 @@ export default function Shell() {
     setSeenOnboarding(true)
     try { localStorage.setItem('vigil_seen_onboarding', '1') } catch {}
     supabase.auth.updateUser({ data: { seen_onboarding: true } }).catch(() => {})
+    try { window.dispatchEvent(new Event('vigil:onboarding-done')) } catch {}
   }
 
   const setNavCollapsedPersisted = (v) => {
@@ -577,15 +578,16 @@ export default function Shell() {
                 </div>
               )
             })}
-            <button className="ws-add-btn" onClick={handleAddWorkspace} title="New workspace">+</button>
+            <button className="ws-add-btn" data-tour="newroom" onClick={handleAddWorkspace} title="New workspace">+</button>
           </div>
         </div>
 
         <div className="navbar-right" style={{ position: 'relative', zIndex: 110 }}>
-          <button type="button" className="nav-add-btn btn-secondary" onClick={handleShare}>Share</button>
+          <button type="button" className="nav-add-btn btn-secondary" data-tour="share" onClick={handleShare}>Share</button>
           <button
             type="button"
             className="nav-add-btn btn-secondary alerts-bell-btn"
+            data-tour="alarms"
             onClick={() => setShowAlerts((open) => !open)}
             title="Alerts"
             aria-label="Alerts"
@@ -601,7 +603,7 @@ export default function Shell() {
           <button type="button" className="nav-add-btn btn-secondary" data-tour="suggest" onClick={() => setShowSuggest(true)}>
             Suggest sources
           </button>
-          <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowWidgetPicker(true)}>
+          <button type="button" className="nav-add-btn btn-secondary" data-tour="addwidget" onClick={() => setShowWidgetPicker(true)}>
             + Add Widget
           </button>
           <ShellGlobalLiveToggle />
@@ -658,8 +660,6 @@ export default function Shell() {
           open={showWelcome}
           onClose={() => setShowWelcome(false)}
           onDone={markOnboardingSeen}
-          onOpenBrief={() => setShowBrief(true)}
-          onOpenSuggest={() => setShowSuggest(true)}
           onUpgrade={() => setShowUpgrade(true)}
         />
       )}

@@ -22,13 +22,27 @@ function AppSplash() {
   )
 }
 
+function hasSeenOnboarding() {
+  try { return localStorage.getItem('vigil_seen_onboarding') === '1' } catch { return false }
+}
+
 // Anon clone sessions are browser-bound: edits persist locally but are lost on
 // another device or once the anon session clears. Calm, dismissible nudge that
 // invites the user to keep the room by signing in. Anon persistence is untouched.
 function AnonKeepRoomNudge() {
+  // Wait for the welcome tour to finish before nudging, so a first-time visitor
+  // does not get the tour and the keep-room prompt stacked on top of each other.
+  const [tourPending, setTourPending] = useState(() => !hasSeenOnboarding())
   const [dismissed, setDismissed] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
   const [authView, setAuthView] = useState('signup')
+
+  useEffect(() => {
+    if (!tourPending) return undefined
+    function onDone() { setTourPending(false) }
+    window.addEventListener('vigil:onboarding-done', onDone)
+    return () => window.removeEventListener('vigil:onboarding-done', onDone)
+  }, [tourPending])
 
   // Calm exit intent: when the cursor leaves through the top of the viewport
   // (toward the tab bar / close), resurface the nudge if it was dismissed.
@@ -51,7 +65,7 @@ function AnonKeepRoomNudge() {
 
   return (
     <>
-      {!dismissed && !showAuth && (
+      {!tourPending && !dismissed && !showAuth && (
         <div className="modal-overlay" onClick={() => setDismissed(true)}>
           <div
             role="status"

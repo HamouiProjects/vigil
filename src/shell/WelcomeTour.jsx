@@ -2,14 +2,23 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useFocusTrap } from '../hooks/useFocusTrap.js'
 
 const PHASE_WELCOME = 0
-const PHASE_BRIEF = 1
-const PHASE_SUGGEST = 2
-const PHASE_UNLOCK = 3
+const PHASE_NEWROOM = 1
+const PHASE_ADDWIDGET = 2
+const PHASE_SUGGEST = 3
+const PHASE_BRIEF = 4
+const PHASE_ALARMS = 5
+const PHASE_SHARE = 6
+const PHASE_UNLOCK = 7
 
-const TOUR_TARGETS = {
-  [PHASE_BRIEF]: '[data-tour="brief"]',
-  [PHASE_SUGGEST]: '[data-tour="suggest"]',
-}
+// Walk steps in setup-workflow order: make a room, fill it, then act on it.
+const WALK_STEPS = [
+  { phase: PHASE_NEWROOM, selector: '[data-tour="newroom"]', title: 'Your rooms', body: 'You are in a ready-made room. Spin up another any time with +.' },
+  { phase: PHASE_ADDWIDGET, selector: '[data-tour="addwidget"]', title: 'Add a widget', body: 'Drop in feeds, charts, maps, and more to build out a room.' },
+  { phase: PHASE_SUGGEST, selector: '[data-tour="suggest"]', title: 'Suggest sources', body: 'Give a topic and a region, get real sources to furnish the room.' },
+  { phase: PHASE_BRIEF, selector: '[data-tour="brief"]', title: 'Room brief', body: 'One-click brief over the whole room, cited to its own sources.' },
+  { phase: PHASE_ALARMS, selector: '[data-tour="alarms"]', title: 'Alarms', body: 'Set alarms on what you track. Available on paid plans.' },
+  { phase: PHASE_SHARE, selector: '[data-tour="share"]', title: 'Share', body: 'Hand a colleague a link to this room.' },
+]
 
 const UNLOCK_FEATURES = [
   'Alerts',
@@ -50,6 +59,11 @@ function computeTooltipPosition(targetRect, tooltipWidth, tooltipHeight) {
   }
 
   return { top, left, placement }
+}
+
+function caretOffset(targetRect, tooltipLeft, tooltipWidth) {
+  const center = targetRect.left + targetRect.width / 2 - tooltipLeft
+  return Math.max(14, Math.min(center, tooltipWidth - 14))
 }
 
 function TourDialog({ className, style, labelId, descId, primaryRef, dialogRef, children }) {
@@ -108,7 +122,7 @@ function WelcomeStep({ motionClass, onStartTour, onDismiss }) {
             className="nav-add-btn btn-primary welcome-card-btn"
             onClick={onStartTour}
           >
-            Take the 30-second tour
+            Take the quick tour
           </button>
           <button
             type="button"
@@ -134,9 +148,8 @@ function AnchoredTooltipStep({
   title,
   body,
   primaryLabel,
-  onPrimary,
-  onNext,
-  onSkip,
+  onAdvance,
+  onEnd,
 }) {
   const primaryRef = useRef(null)
   const dialogRef = useRef(null)
@@ -144,6 +157,7 @@ function AnchoredTooltipStep({
   const [anchorRect, setAnchorRect] = useState(null)
   const [tooltipPlacement, setTooltipPlacement] = useState('below')
   const [tooltipPos, setTooltipPos] = useState(null)
+  const [caretX, setCaretX] = useState(24)
 
   const measure = useCallback(() => {
     const el = document.querySelector(selector)
@@ -151,7 +165,7 @@ function AnchoredTooltipStep({
       setAnchorRect(null)
       if (!skippedRef.current) {
         skippedRef.current = true
-        onSkip()
+        onAdvance()
       }
       return
     }
@@ -168,7 +182,8 @@ function AnchoredTooltipStep({
     const pos = computeTooltipPosition(rect, w, h)
     setTooltipPos({ top: pos.top, left: pos.left })
     setTooltipPlacement(pos.placement)
-  }, [selector, onSkip])
+    setCaretX(caretOffset(rect, pos.left, w))
+  }, [selector, onAdvance])
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
@@ -199,7 +214,7 @@ function AnchoredTooltipStep({
   return (
     <TourDialog
       className={`tour-tooltip tour-tooltip--${placement}${motionClass}`}
-      style={{ top: pos.top, left: pos.left }}
+      style={{ top: pos.top, left: pos.left, '--tour-caret-x': `${caretX}px` }}
       labelId={labelId}
       descId={descId}
       primaryRef={primaryRef}
@@ -217,14 +232,11 @@ function AnchoredTooltipStep({
             ref={primaryRef}
             type="button"
             className="nav-add-btn btn-primary"
-            onClick={onPrimary}
+            onClick={onAdvance}
           >
             {primaryLabel}
           </button>
-          <button type="button" className="nav-add-btn btn-secondary" onClick={onNext}>
-            Next
-          </button>
-          <button type="button" className="tour-skip" onClick={onSkip}>
+          <button type="button" className="tour-skip" onClick={onEnd}>
             Skip
           </button>
         </div>
@@ -233,7 +245,7 @@ function AnchoredTooltipStep({
   )
 }
 
-function UnlockStep({ motionClass, onUpgrade, onDismiss, onSkip }) {
+function UnlockStep({ motionClass, onUpgrade, onDismiss }) {
   const primaryRef = useRef(null)
 
   return (
@@ -269,7 +281,7 @@ function UnlockStep({ motionClass, onUpgrade, onDismiss, onSkip }) {
             Done
           </button>
         </div>
-        <button type="button" className="tour-skip" onClick={onSkip}>
+        <button type="button" className="tour-skip" onClick={onDismiss}>
           Skip
         </button>
       </TourDialog>
@@ -281,8 +293,6 @@ export default function WelcomeTour({
   open,
   onClose,
   onDone,
-  onOpenBrief,
-  onOpenSuggest,
   onUpgrade,
 }) {
   const [phase, setPhase] = useState(PHASE_WELCOME)
@@ -306,14 +316,6 @@ export default function WelcomeTour({
     return () => document.removeEventListener('keydown', onKey)
   }, [open, dismiss])
 
-  function skipStep() {
-    if (phase === PHASE_UNLOCK) {
-      dismiss()
-    } else {
-      setPhase((p) => p + 1)
-    }
-  }
-
   if (!open) return null
 
   const motionClass = reducedMotion ? ' welcome-tour--instant' : ''
@@ -322,48 +324,27 @@ export default function WelcomeTour({
     return (
       <WelcomeStep
         motionClass={motionClass}
-        onStartTour={() => setPhase(PHASE_BRIEF)}
+        onStartTour={() => setPhase(PHASE_NEWROOM)}
         onDismiss={dismiss}
       />
     )
   }
 
-  if (phase === PHASE_BRIEF) {
+  const walk = WALK_STEPS.find((s) => s.phase === phase)
+  if (walk) {
+    const isLast = walk.phase === PHASE_SHARE
+    const advance = () => setPhase(isLast ? PHASE_UNLOCK : phase + 1)
     return (
       <AnchoredTooltipStep
         motionClass={motionClass}
-        selector={TOUR_TARGETS[PHASE_BRIEF]}
-        labelId="tour-brief-title"
-        descId="tour-brief-desc"
-        title="Room brief"
-        body="One-click brief over the whole room."
-        primaryLabel="Open Brief"
-        onPrimary={() => {
-          onOpenBrief()
-          setPhase(PHASE_SUGGEST)
-        }}
-        onNext={() => setPhase(PHASE_SUGGEST)}
-        onSkip={skipStep}
-      />
-    )
-  }
-
-  if (phase === PHASE_SUGGEST) {
-    return (
-      <AnchoredTooltipStep
-        motionClass={motionClass}
-        selector={TOUR_TARGETS[PHASE_SUGGEST]}
-        labelId="tour-suggest-title"
-        descId="tour-suggest-desc"
-        title="Suggest sources"
-        body="Make this room yours."
-        primaryLabel="Suggest sources"
-        onPrimary={() => {
-          onOpenSuggest()
-          setPhase(PHASE_UNLOCK)
-        }}
-        onNext={() => setPhase(PHASE_UNLOCK)}
-        onSkip={skipStep}
+        selector={walk.selector}
+        labelId={`tour-${walk.phase}-title`}
+        descId={`tour-${walk.phase}-desc`}
+        title={walk.title}
+        body={walk.body}
+        primaryLabel={isLast ? 'Finish' : 'Next'}
+        onAdvance={advance}
+        onEnd={dismiss}
       />
     )
   }
@@ -373,7 +354,6 @@ export default function WelcomeTour({
       motionClass={motionClass}
       onUpgrade={onUpgrade}
       onDismiss={dismiss}
-      onSkip={skipStep}
     />
   )
 }
