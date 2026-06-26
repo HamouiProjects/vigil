@@ -11,6 +11,7 @@ import UpgradeModal from './UpgradeModal.jsx'
 import WidgetPicker from './WidgetPicker.jsx'
 import BriefPanel from './BriefPanel.jsx'
 import SuggestSourcesPanel from './SuggestSourcesPanel.jsx'
+import WelcomeTour from './WelcomeTour.jsx'
 import AlertsDrawer from './AlertsDrawer.jsx'
 import { Bell } from 'lucide-react'
 import AccountMenu from './AccountMenu.jsx'
@@ -133,6 +134,10 @@ export default function Shell() {
   const [account, setAccount] = useState(null)
   const [themePref, setThemePrefState] = useState(getThemePref())
   const [showAuth, setShowAuth] = useState(false)
+  const [showWelcome, setShowWelcome] = useState(false)
+  const [seenOnboarding, setSeenOnboarding] = useState(() => {
+    try { return localStorage.getItem('vigil_seen_onboarding') === '1' } catch { return false }
+  })
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [authView, setAuthView] = useState('login')
   const [navCollapsed, setNavCollapsed] = useState(() => { try { return localStorage.getItem('vigil_nav_collapsed') === '1' } catch { return false } })
@@ -163,11 +168,17 @@ export default function Shell() {
       setAlertPreset({ keyword: e.detail?.keyword || '' })
       setShowAlerts(true)
     }
+    const onStartTour = () => {
+      setSettingsOpen(false)
+      setShowWelcome(true)
+    }
     window.addEventListener('vigil:suggest-sources', onSuggest)
     window.addEventListener('vigil:add-alert', onAlert)
+    window.addEventListener('vigil:start-tour', onStartTour)
     return () => {
       window.removeEventListener('vigil:suggest-sources', onSuggest)
       window.removeEventListener('vigil:add-alert', onAlert)
+      window.removeEventListener('vigil:start-tour', onStartTour)
     }
   }, [])
 
@@ -231,8 +242,18 @@ export default function Shell() {
         setTickerCollapsed(rcTicker)
         try { localStorage.setItem('vigil_ticker_collapsed', rcTicker ? '1' : '0') } catch {}
       }
+      if (data?.user?.user_metadata?.seen_onboarding === true) {
+        setSeenOnboarding(true)
+        try { localStorage.setItem('vigil_seen_onboarding', '1') } catch {}
+      }
     })
   }, [uid])
+
+  useEffect(() => {
+    if (loaded && !seenOnboarding && !showAuth) {
+      setShowWelcome(true)
+    }
+  }, [loaded, seenOnboarding, showAuth])
 
   useEffect(() => {
     if (!uid) return
@@ -316,6 +337,12 @@ export default function Shell() {
     if (!u) return
     await supabase.auth.updateUser({ data: { username: u } })
     setAccount(a => (a ? { ...a, username: u } : a))
+  }
+
+  const markOnboardingSeen = () => {
+    setSeenOnboarding(true)
+    try { localStorage.setItem('vigil_seen_onboarding', '1') } catch {}
+    supabase.auth.updateUser({ data: { seen_onboarding: true } }).catch(() => {})
   }
 
   const setNavCollapsedPersisted = (v) => {
@@ -568,10 +595,10 @@ export default function Shell() {
               <span className="alerts-bell-badge">{unreadAlerts > 9 ? '9+' : unreadAlerts}</span>
             )}
           </button>
-          <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowBrief(true)}>
+          <button type="button" className="nav-add-btn btn-secondary" data-tour="brief" onClick={() => setShowBrief(true)}>
             Brief
           </button>
-          <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowSuggest(true)}>
+          <button type="button" className="nav-add-btn btn-secondary" data-tour="suggest" onClick={() => setShowSuggest(true)}>
             Suggest sources
           </button>
           <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShowWidgetPicker(true)}>
@@ -593,7 +620,7 @@ export default function Shell() {
 
       <LatestTicker collapsed={tickerCollapsed} onSetCollapsed={setTickerCollapsedPersisted} />
 
-      <div ref={scrollRef} className={`shell-grid-scroll${!globalLive ? ' is-paused-dim' : ''}`} style={{ width: '100%', flex: 1, minHeight: 0, position: 'relative', overflow: 'auto' }}>
+      <div ref={scrollRef} className={`shell-grid-scroll${!globalLive ? ' is-paused-dim' : ''}`} data-tour="room" style={{ width: '100%', flex: 1, minHeight: 0, position: 'relative', overflow: 'auto' }}>
         <Grid />
         <div aria-hidden="true" style={{ height: 36 }} />
       </div>
@@ -624,6 +651,16 @@ export default function Shell() {
         <SuggestSourcesPanel
           initialTopics={suggestPreset?.topics}
           onClose={() => { setShowSuggest(false); setSuggestPreset(null) }}
+        />
+      )}
+      {showWelcome && (
+        <WelcomeTour
+          open={showWelcome}
+          onClose={() => setShowWelcome(false)}
+          onDone={markOnboardingSeen}
+          onOpenBrief={() => setShowBrief(true)}
+          onOpenSuggest={() => setShowSuggest(true)}
+          onUpgrade={() => setShowUpgrade(true)}
         />
       )}
       <AlertsDrawer

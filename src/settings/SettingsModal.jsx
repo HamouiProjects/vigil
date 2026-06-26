@@ -338,6 +338,13 @@ function AppearanceSection({ themePref, onSetTheme, savedFlash }) {
         </button>
       ))}
       <p className="settings-microcopy">Follows your device by default.</p>
+      <button
+        type="button"
+        className="settings-option-row"
+        onClick={() => window.dispatchEvent(new CustomEvent('vigil:start-tour'))}
+      >
+        <span>Replay welcome tour</span>
+      </button>
     </>
   )
 }
