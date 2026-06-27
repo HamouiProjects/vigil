@@ -64,6 +64,11 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
     [rules],
   )
 
+  const severityByAlertId = useMemo(
+    () => Object.fromEntries(rules.map((r) => [r.id, r.severity])),
+    [rules],
+  )
+
   const loadRules = useCallback(async () => {
     setRulesLoading(true)
     try {
@@ -455,6 +460,7 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
                 <ul className="alerts-activity-list">
                   {events.map((ev) => {
                     const kw = keywordByAlertId[ev.alert_id]
+                    const sev = severityByAlertId[ev.alert_id] || 'normal'
                     return (
                       <li
                         key={ev.id}
@@ -463,6 +469,12 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
                         {!ev.read_at && <span className="alerts-activity-dot" aria-hidden />}
                         <div className="alerts-activity-main">
                           <div className="alerts-activity-top">
+                            <span
+                              className="alerts-severity-dot"
+                              style={{ background: severityColor(sev) }}
+                              title={sev}
+                              aria-label={`Priority: ${sev}`}
+                            />
                             {ev.source && <span className="alerts-activity-source">{ev.source}</span>}
                             {kw && <span className="alerts-activity-tag">{kw}</span>}
                             <span className="alerts-activity-time">{timeAgo(ev.matched_at)}</span>

@@ -394,24 +394,37 @@ const GN_SEARCH = (q) =>
 const outletOf = (t) => { const p = String(t ?? '').split(' - '); return p.length > 1 ? p[p.length - 1].trim() : '' }
 const titleOf = (t) => { const p = String(t ?? '').split(' - '); return p.length > 1 ? p.slice(0, -1).join(' - ').trim() : String(t ?? '') }
 
-function renderAlertEmailHtml({ keyword, region, items }) {
-  const scope = region ? ` in ${esc(region)}` : ''
+// Priority color for document/plain-text surfaces (email/telegram/webhook do not follow the app theme).
+// Fixed hexes mirror the in-app semantic tokens: high=error, low=muted, normal=warning.
+function emailSeverityHex(sev) {
+  if (sev === 'high') return '#AE2E27'
+  if (sev === 'low') return '#6b7280'
+  return '#6F4D08'
+}
+function severityCircle(sev) {
+  if (sev === 'high') return '🔴'
+  if (sev === 'low') return '⚪'
+  return '🟠'
+}
+
+function renderAlertEmailHtml({ keyword, region, items, severity }) {
+  const dot = `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${emailSeverityHex(severity)};margin-right:8px;vertical-align:middle;"></span>`
+  const ctx = `${region ? `in ${esc(region)} . ` : ''}${items.length} new ${items.length === 1 ? 'item' : 'items'}`
   let html = `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;line-height:1.5;max-width:640px;">
 <img src="https://thevigilroom.com/email-logo.png" alt="Vigil" width="120" style="display:block;margin:0 0 16px;" />
 <div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;">
-<div style="font-size:18px;font-weight:bold;color:#1a1a1a;">New items matching your alert</div>
-<div style="font-size:13px;color:#4b5563;margin-top:4px;">${esc(keyword)}${scope} . ${items.length} new ${items.length === 1 ? 'item' : 'items'}</div>
-</div>
-<ul style="margin:0 0 12px;padding-left:20px;">`
+<div style="font-size:16px;font-weight:bold;color:#1a1a1a;">${dot}${esc(keyword)}</div>
+<div style="font-size:13px;color:#4b5563;margin-top:4px;">${ctx}</div>
+</div>`
   for (const it of items) {
     const label = esc(it.source || 'Source')
-    html += `<li style="margin-bottom:8px;font-size:14px;">`
-    if (isHttpUrl(it.url)) html += `<a href="${esc(it.url)}" style="color:#1d4ed8;text-decoration:none;">${esc(it.title || it.url)}</a> <span style="color:#6b7280;">(${label})</span>`
-    else html += `${esc(it.title || '')} (${label})`
-    html += `</li>`
+    html += `<div style="margin:0 0 14px;">`
+    html += `<div style="font-size:14px;font-weight:bold;color:#1a1a1a;margin:0 0 3px;">${esc(it.title || '')}</div>`
+    if (isHttpUrl(it.url)) html += `<div style="font-size:13px;"><a href="${esc(it.url)}" style="color:#1d4ed8;text-decoration:none;">${label}</a></div>`
+    else html += `<div style="font-size:13px;color:#6b7280;">${label}</div>`
+    html += `</div>`
   }
-  html += `</ul>
-<p style="font-size:12px;color:#6b7280;margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb;">Vigil tracks, it does not verify. You are receiving this because you set an alert in Vigil.</p>
+  html += `<p style="font-size:12px;color:#6b7280;margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb;">Vigil tracks, it does not verify. You are receiving this because you set an alert in Vigil.</p>
 </body></html>`
   return html
 }
@@ -450,7 +463,7 @@ async function fetchMatches(keyword, region) {
   return out
 }
 
-async function sendAlertEmail(to, keyword, region, items) {
+async function sendAlertEmail(to, keyword, region, items, severity) {
   const key = process.env.RESEND_API_KEY
   if (!key) return false
   const scope = region ? ` in ${region}` : ''
@@ -462,7 +475,7 @@ async function sendAlertEmail(to, keyword, region, items) {
         from: 'Vigil Alerts <brief@thevigilroom.com>',
         to: [to],
         subject: `New items matching "${keyword}"${scope}`,
-        html: renderAlertEmailHtml({ keyword, region, items }),
+        html: renderAlertEmailHtml({ keyword, region, items, severity }),
         text: renderAlertEmailText({ keyword, region, items }),
       }),
       signal: AbortSignal.timeout(30000),
@@ -471,10 +484,15 @@ async function sendAlertEmail(to, keyword, region, items) {
   } catch { return false }
 }
 
-async function sendAlertWebhook(webhookUrl, keyword, region, items) {
+async function sendAlertWebhook(webhookUrl, keyword, region, items, severity) {
   const scope = region ? ` in ${region}` : ''
-  const lines = items.slice(0, 10).map((it) => `• ${it.title || it.url}${it.source ? ` (${it.source})` : ''}${it.url ? `\n${it.url}` : ''}`)
-  const text = `New items matching "${keyword}"${scope}\n\n${lines.join('\n')}\n\nVigil tracks, it does not verify.`
+  const head = `${severityCircle(severity)} *${keyword}*${scope}\n${items.length} new ${items.length === 1 ? 'item' : 'items'}`
+  const lines = items.slice(0, 10).map((it) => {
+    const title = it.title || ''
+    const source = it.source || 'Source'
+    return isHttpUrl(it.url) ? `• ${title} <${it.url}|${source}>` : `• ${title}`
+  })
+  const text = `${head}\n\n${lines.join('\n')}\n\nVigil tracks, it does not verify.`
   try {
     const resp = await safeFetch(webhookUrl, {
       method: 'POST',
@@ -489,31 +507,42 @@ async function sendAlertWebhook(webhookUrl, keyword, region, items) {
   }
 }
 
-function renderAlertTelegramText(keyword, region, items) {
-  const scope = region ? ` in ${region}` : ''
+// Telegram parse_mode 'HTML' only needs &, <, > escaped (applies to text and href values alike).
+function escTelegram(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function renderAlertTelegramText(keyword, region, items, severity) {
+  const scope = region ? ` in ${escTelegram(region)}` : ''
+  const head = `${severityCircle(severity)} <b>${escTelegram(keyword)}</b>${scope}\n${items.length} new ${items.length === 1 ? 'item' : 'items'}`
   const footer = '\n\nVigil tracks, it does not verify.'
-  const header = `New items matching "${keyword}"${scope}\n\n`
   const maxLen = 4096
-  const lines = []
+  const blocks = []
   for (const it of items) {
-    const url = isHttpUrl(it.url) ? it.url : null
-    const line = `• ${it.title || it.url || ''}${it.source ? ` (${it.source})` : ''}${url ? `\n${url}` : ''}`
-    const candidate = header + [...lines, line].join('\n') + footer
+    const title = escTelegram(it.title || '')
+    const source = escTelegram(it.source || 'Source')
+    const link = isHttpUrl(it.url) ? `<a href="${escTelegram(it.url)}">${source}</a>` : source
+    const block = `${title}\n${link}`
+    const candidate = head + '\n\n' + [...blocks, block].join('\n\n') + footer
     if (candidate.length > maxLen) break
-    lines.push(line)
+    blocks.push(block)
   }
-  return header + lines.join('\n') + footer
+  const body = blocks.length ? '\n\n' + blocks.join('\n\n') : ''
+  return head + body + footer
 }
 
 async function sendAlertTelegram(chatId, alert, items) {
   const token = process.env.TELEGRAM_BOT_TOKEN
   if (!token || !chatId) return false
-  const text = renderAlertTelegramText(alert.keyword, alert.region, items)
+  const text = renderAlertTelegramText(alert.keyword, alert.region, items, alert.severity)
   try {
     const resp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text }),
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
       signal: AbortSignal.timeout(10000),
     })
     return resp.ok
@@ -545,7 +574,7 @@ async function runAlertMatch() {
 
   const { data: rules, error: rulesErr } = await supabase
     .from('alerts')
-    .select('id, user_id, keyword, region, channels, webhook_url')
+    .select('id, user_id, keyword, region, channels, webhook_url, severity')
     .eq('active', true)
     .limit(40)
   if (rulesErr) return { error: 'DB_ERROR', status: 500 }
@@ -596,15 +625,15 @@ async function runAlertMatch() {
     const channels = Array.isArray(rule.channels) ? rule.channels : []
     const mapped = fresh.map((f) => ({ url: f.item_url, title: f.item_title, source: f.source }))
     if (channels.includes('email') && u.email && u.notifyAlertEmail) {
-      const sent = await sendAlertEmail(u.email, rule.keyword, rule.region, mapped)
+      const sent = await sendAlertEmail(u.email, rule.keyword, rule.region, mapped, rule.severity)
       if (sent) emailed += 1
     }
     if (u.canWebhook && rule.webhook_url && (channels.includes('webhook') || channels.includes('slack'))) {
-      const ok = await sendAlertWebhook(rule.webhook_url, rule.keyword, rule.region, mapped)
+      const ok = await sendAlertWebhook(rule.webhook_url, rule.keyword, rule.region, mapped, rule.severity)
       if (ok) posted += 1
     }
     if (channels.includes('telegram') && u.telegramChatId) {
-      const sent = await sendAlertTelegram(u.telegramChatId, { keyword: rule.keyword, region: rule.region }, mapped)
+      const sent = await sendAlertTelegram(u.telegramChatId, { keyword: rule.keyword, region: rule.region, severity: rule.severity }, mapped)
       if (sent) telegramSent += 1
     }
   }
