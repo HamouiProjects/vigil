@@ -45,7 +45,7 @@ export const BL10_TEMPLATE = {
     { id: 'e0c3e631-d3d4-49be-9668-51ad001e6a49', type: 'rss', identifier: 'https://www.politico.eu/feed/', label: 'Politico Europe', meta: { color: '#0984e3' } },
     { id: '9268bcb4-7d7d-4dc6-ba06-d72c17361b31', type: 'rss', identifier: 'https://www.scmp.com/rss/4/feed', label: 'SCMP', meta: { color: '#e63946' } },
     { id: 'abd14b29-017e-4cce-ab2b-e7c01268af13', type: 'rss', identifier: 'http://www.chinadaily.com.cn/rss/china_rss.xml', label: 'China Daily', meta: { color: '#00b894' } },
-    { id: '4f213925-3fa8-41c5-9a30-c0db419ecae6', type: 'rss', identifier: 'https://euobserver.com/rss.xml', label: 'Euractiv', meta: { color: '#fdcb6e' } },
+    { id: '4f213925-3fa8-41c5-9a30-c0db419ecae6', type: 'rss', identifier: 'https://rss.dw.com/rdf/rss-en-eu', label: 'Deutsche Welle', meta: { color: '#fdcb6e' } },
     { id: 'b5fc0af7-2873-43ba-a808-c3b0db9fbdc4', type: 'rss', identifier: 'https://merics.org/en/rss', label: 'MERICS', meta: { color: '#a29bfe' } },
   ],
 }
