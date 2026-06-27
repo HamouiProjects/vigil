@@ -574,7 +574,7 @@ async function runAlertMatch() {
 
   const { data: rules, error: rulesErr } = await supabase
     .from('alerts')
-    .select('id, user_id, keyword, region, channels, webhook_url, severity')
+    .select('id, user_id, keyword, region, channels, webhook_url, severity, snoozed_until')
     .eq('active', true)
     .limit(40)
   if (rulesErr) return { error: 'DB_ERROR', status: 500 }
@@ -602,6 +602,9 @@ async function runAlertMatch() {
       userCache.set(rule.user_id, u)
     }
     if (!u.canAlert) continue
+
+    // Skip rules under an active snooze; they auto-resume once snoozed_until passes.
+    if (rule.snoozed_until && new Date(rule.snoozed_until).getTime() > Date.now()) continue
 
     const items = await fetchMatches(rule.keyword, rule.region)
     if (!items.length) continue

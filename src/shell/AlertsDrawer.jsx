@@ -44,6 +44,7 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
   const [eventsLoaded, setEventsLoaded] = useState(false)
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState('')
+  const [snoozeOpenFor, setSnoozeOpenFor] = useState(null)
 
   const [keyword, setKeyword] = useState('')
   const [region, setRegion] = useState('')
@@ -58,6 +59,8 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
   const canWebhook = entitlements.capabilities.has('alerts_webhook')
   const cap = entitlements.limits.alertRules ?? 0
   const atCap = canAlert && rules.length >= cap
+
+  const isSnoozed = (rule) => Boolean(rule.snoozed_until && new Date(rule.snoozed_until).getTime() > Date.now())
 
   const keywordByAlertId = useMemo(
     () => Object.fromEntries(rules.map((r) => [r.id, r.keyword])),
@@ -215,6 +218,17 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
       .from('alerts')
       .update({ active: !rule.active })
       .eq('id', rule.id)
+    if (!error) await loadRules()
+  }
+
+  async function handleSnooze(rule, days) {
+    const until = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
+    const { error } = await supabase.from('alerts').update({ snoozed_until: until }).eq('id', rule.id)
+    if (!error) { setSnoozeOpenFor(null); await loadRules() }
+  }
+
+  async function handleUnsnooze(rule) {
+    const { error } = await supabase.from('alerts').update({ snoozed_until: null }).eq('id', rule.id)
     if (!error) await loadRules()
   }
 
@@ -423,8 +437,39 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
                             <span className="alerts-rule-region">{rule.region}</span>
                           )}
                           <span className="alerts-rule-meta">{channelSummary(rule.channels)}</span>
+                          {isSnoozed(rule) && (
+                            <span className="alerts-rule-snoozed">Snoozed until {new Date(rule.snoozed_until).toLocaleDateString()}</span>
+                          )}
                         </div>
                         <div className="alerts-rule-actions">
+                          {isSnoozed(rule) ? (
+                            <button
+                              type="button"
+                              className="alerts-rule-unsnooze"
+                              onClick={() => handleUnsnooze(rule)}
+                              title="Resume this rule now"
+                              aria-label="Unsnooze rule"
+                            >
+                              Unsnooze
+                            </button>
+                          ) : snoozeOpenFor === rule.id ? (
+                            <span className="alerts-rule-snooze-opts">
+                              <button type="button" className="alerts-snooze-chip" onClick={() => handleSnooze(rule, 1)} title="Snooze for 1 day" aria-label="Snooze for 1 day">1d</button>
+                              <button type="button" className="alerts-snooze-chip" onClick={() => handleSnooze(rule, 3)} title="Snooze for 3 days" aria-label="Snooze for 3 days">3d</button>
+                              <button type="button" className="alerts-snooze-chip" onClick={() => handleSnooze(rule, 7)} title="Snooze for 7 days" aria-label="Snooze for 7 days">7d</button>
+                              <button type="button" className="alerts-snooze-chip" onClick={() => setSnoozeOpenFor(null)} title="Cancel snooze" aria-label="Cancel snooze">Cancel</button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="alerts-rule-snooze"
+                              onClick={() => setSnoozeOpenFor(rule.id)}
+                              title="Snooze this rule"
+                              aria-label="Snooze rule"
+                            >
+                              Snooze
+                            </button>
+                          )}
                           <button
                             type="button"
                             className={`alerts-rule-toggle${rule.active ? ' is-on' : ''}`}

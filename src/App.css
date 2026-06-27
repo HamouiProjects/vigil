@@ -2320,6 +2320,16 @@ button.status-dot:hover { opacity: 0.8; }
   opacity: 0.7;
 }
 .alerts-rule-delete:hover { opacity: 1; }
+.alerts-rule-snooze, .alerts-rule-unsnooze, .alerts-snooze-chip {
+  font-family: inherit; font-size: 11px; line-height: 1; padding: 3px 6px;
+  border: 1px solid var(--border); background: transparent; color: var(--text-secondary);
+  border-radius: 3px; cursor: pointer;
+}
+.alerts-rule-snooze:hover, .alerts-rule-unsnooze:hover, .alerts-snooze-chip:hover {
+  border-color: var(--color-border-strong); color: var(--text-primary);
+}
+.alerts-rule-snooze-opts { display: inline-flex; gap: 4px; align-items: center; }
+.alerts-rule-snoozed { font-size: 11px; color: var(--color-text-muted); }
 .alerts-activity-list {
   list-style: none;
   margin: 0;
