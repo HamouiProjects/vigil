@@ -569,6 +569,84 @@ async function sendTelegramPlain(chatId, text) {
   }
 }
 
+// Stable short digest for synthetic alert urls (keeps re-detection suppressed by the alert_events unique constraint).
+function hashShort(s) {
+  return crypto.createHash('sha256').update(String(s)).digest('hex').slice(0, 16)
+}
+
+// Ported verbatim from src/widgets/AtlasWorldGlobe.jsx (handles holes + MultiPolygon). Do not import from a jsx file.
+function pointInRing(lng, lat, ring) {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1]
+    const xj = ring[j][0], yj = ring[j][1]
+    const hit = ((yi > lat) !== (yj > lat)) && (lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi)
+    if (hit) inside = !inside
+  }
+  return inside
+}
+
+function pointInGeometry(lng, lat, geometry) {
+  if (!geometry) return false
+  const polys = geometry.type === 'MultiPolygon' ? geometry.coordinates
+    : geometry.type === 'Polygon' ? [geometry.coordinates] : []
+  for (const poly of polys) {
+    if (!poly?.[0]?.length) continue
+    if (!pointInRing(lng, lat, poly[0])) continue
+    let inHole = false
+    for (let h = 1; h < poly.length; h++) {
+      if (pointInRing(lng, lat, poly[h])) { inHole = true; break }
+    }
+    if (!inHole) return true
+  }
+  return false
+}
+
+// Flatten a user's rooms into a bounded flat list of curated items (computed once per user per run). Alerts carry
+// no workspace_id (Hard Rule 14), so this spans ALL the user's rooms. Bounded to 120 items total.
+async function gatherUserRoomItems(rooms) {
+  const out = []
+  for (const room of (rooms || [])) {
+    if (out.length >= 120) break
+    let groups
+    try {
+      groups = await gatherRoomFeedGroups({ widgets: room.widgets }, { windowMs: 24 * 60 * 60 * 1000 })
+    } catch (e) {
+      console.error('[alert-dispatch] room gather failed', e?.message)
+      continue
+    }
+    for (const g of (groups || [])) {
+      const groupItems = Array.isArray(g?.parts)
+        ? g.parts.flatMap((p) => (Array.isArray(p?.items) ? p.items : []))
+        : (Array.isArray(g?.items) ? g.items : [])
+      for (const it of groupItems) {
+        const url = it?.url || it?.link || ''
+        if (!url) continue
+        out.push({ url, title: String(it?.title || ''), source: String(it?.source || '') })
+        if (out.length >= 120) break
+      }
+      if (out.length >= 120) break
+    }
+  }
+  return out
+}
+
+// Match a freeform region to a Natural Earth country geometry: exact name first, then contains/contained-by.
+// No match (e.g. "Taiwan Strait") yields null, so no Atlas items are emitted, which is correct and honest.
+function resolveCountryGeometry(region, countriesFeatures) {
+  const target = String(region || '').trim().toLowerCase()
+  if (!target) return null
+  const namesOf = (f) => [f?.properties?.NAME, f?.properties?.ADMIN, f?.properties?.NAME_EN, f?.properties?.NAME_LONG]
+    .filter((n) => typeof n === 'string' && n)
+  for (const f of (countriesFeatures || [])) {
+    if (namesOf(f).some((n) => n.toLowerCase() === target)) return f.geometry
+  }
+  for (const f of (countriesFeatures || [])) {
+    if (namesOf(f).some((n) => { const ln = n.toLowerCase(); return ln.includes(target) || target.includes(ln) })) return f.geometry
+  }
+  return null
+}
+
 async function runAlertMatch() {
   if (!supabase) return { error: 'SUPABASE_UNAVAILABLE', status: 503 }
 
@@ -585,6 +663,23 @@ async function runAlertMatch() {
   let posted = 0
   let telegramSent = 0
 
+  // Atlas layers are global, not per-rule: fetch + memoize once so all 40 rules share one fetch each.
+  // Each degrades to [] on any failure. Server-side self-calls target the public apex (Hard Rule 6).
+  let _conflict, _wildfire, _countries
+  const fetchGeoFeatures = async (url) => {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(12000) })
+      const j = await r.json().catch(() => null)
+      return Array.isArray(j?.features) ? j.features : []
+    } catch (e) {
+      console.error('[alert-dispatch] geo fetch failed', url, e?.message)
+      return []
+    }
+  }
+  const getConflict = async () => { if (_conflict === undefined) _conflict = await fetchGeoFeatures('https://thevigilroom.com/api/geo?source=conflict'); return _conflict }
+  const getWildfire = async () => { if (_wildfire === undefined) _wildfire = await fetchGeoFeatures('https://thevigilroom.com/api/geo?source=firms'); return _wildfire }
+  const getCountries = async () => { if (_countries === undefined) _countries = await fetchGeoFeatures('https://thevigilroom.com/ne_110m_admin_0_countries.geojson'); return _countries }
+
   for (const rule of (rules || [])) {
     let u = userCache.get(rule.user_id)
     if (!u) {
@@ -599,6 +694,11 @@ async function runAlertMatch() {
         notifyAlertEmail: ud?.user?.user_metadata?.notify_alert_email !== false,
         telegramChatId: ud?.user?.user_metadata?.telegram_chat_id ? String(ud.user.user_metadata.telegram_chat_id) : null,
       }
+      // Load all of the user's rooms once (alerts span every room, Hard Rule 14), then flatten their curated
+      // items a single time per user per run so the per-rule loop only keyword-matches the cached result.
+      const { data: rooms } = await supabase.from('workspaces').select('id, widgets').eq('user_id', rule.user_id)
+      u.rooms = rooms || []
+      u.roomItems = await gatherUserRoomItems(u.rooms)
       userCache.set(rule.user_id, u)
     }
     if (!u.canAlert) continue
@@ -606,7 +706,61 @@ async function runAlertMatch() {
     // Skip rules under an active snooze; they auto-resume once snoozed_until passes.
     if (rule.snoozed_until && new Date(rule.snoozed_until).getTime() > Date.now()) continue
 
-    const items = await fetchMatches(rule.keyword, rule.region)
+    // Google News floor (existing source layer).
+    const merged = await fetchMatches(rule.keyword, rule.region)
+
+    // B(i) Whole-room match: keep cached curated items whose title contains the keyword (case-insensitive
+    // substring). The room is already the user's curated scope, so region is NOT required for these.
+    const kw = String(rule.keyword || '').trim().toLowerCase()
+    if (kw && u.roomItems?.length) {
+      for (const it of u.roomItems) {
+        if (String(it.title || '').toLowerCase().includes(kw)) merged.push({ url: it.url, title: it.title, source: it.source })
+      }
+    }
+
+    // B(ii) Atlas conflict + wildfire events inside the rule's region (only when region is a non-empty string).
+    if (typeof rule.region === 'string' && rule.region.trim()) {
+      const geometry = resolveCountryGeometry(rule.region, await getCountries())
+      if (geometry) {
+        let cCount = 0
+        for (const f of await getConflict()) {
+          if (cCount >= 10) break
+          const coords = f?.geometry?.coordinates
+          if (!Array.isArray(coords)) continue
+          if (!pointInGeometry(coords[0], coords[1], geometry)) continue
+          const p = f.properties || {}
+          merged.push({
+            url: `vigil:conflict:${p.url ? hashShort(p.url) : `${coords[0]},${coords[1]}`}`,
+            title: `Reported conflict near ${p.place || rule.region}${p.kind ? ` (${p.kind})` : ''}`,
+            source: 'GDELT 2.0',
+          })
+          cCount++
+        }
+        let wCount = 0
+        for (const f of await getWildfire()) {
+          if (wCount >= 10) break
+          const coords = f?.geometry?.coordinates
+          if (!Array.isArray(coords)) continue
+          if (!pointInGeometry(coords[0], coords[1], geometry)) continue
+          const p = f.properties || {}
+          merged.push({
+            url: `vigil:wildfire:${coords[0]},${coords[1]},${p.acq_date},${p.acq_time}`,
+            title: `Wildfire detection near ${rule.region}${Number(p.frp) ? ` (${Math.round(Number(p.frp))} MW)` : ''}`,
+            source: 'NASA FIRMS',
+          })
+          wCount++
+        }
+      }
+    }
+
+    // Dedup the merged source layers by url before the upsert. Synthetic vigil: urls are stable, so the existing
+    // alert_events unique constraint suppresses re-detection exactly like real article urls.
+    const byUrl = new Map()
+    for (const it of merged) {
+      if (!it?.url || byUrl.has(it.url)) continue
+      byUrl.set(it.url, it)
+    }
+    const items = Array.from(byUrl.values())
     if (!items.length) continue
 
     const rows = items.map((it) => ({
