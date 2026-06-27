@@ -520,8 +520,8 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
                               title={sev}
                               aria-label={`Priority: ${sev}`}
                             />
-                            {ev.source && <span className="alerts-activity-source">{ev.source}</span>}
                             {kw && <span className="alerts-activity-tag">{kw}</span>}
+                            {ev.source && <span className="alerts-activity-source">{ev.source}</span>}
                             <span className="alerts-activity-time">{timeAgo(ev.matched_at)}</span>
                           </div>
                           <a
