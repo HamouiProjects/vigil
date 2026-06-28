@@ -1041,6 +1041,73 @@ async function handleEmailSignup(req, res) {
   return res.status(200).json({ ok: true })
 }
 
+async function handleContact(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' })
+
+  const rl = await rateLimit(req, 'contact', 5, 60)
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', String(rl.retryAfter))
+    return res.status(429).json({ error: 'rate_limited' })
+  }
+
+  const body = readBody(req)
+  if (!body) return res.status(400).json({ error: 'INVALID' })
+
+  const { name, email, message } = body
+  const trimmedName = String(name ?? '').trim()
+  const trimmedEmail = typeof email === 'string' ? email.trim() : ''
+  const trimmedMessage = String(message ?? '').trim()
+
+  if (!trimmedName || !isValidSignupEmail(trimmedEmail) || !trimmedMessage) {
+    return res.status(400).json({ error: 'INVALID' })
+  }
+
+  const safeName = clamp(trimmedName, 200)
+  const safeEmail = trimmedEmail
+  const safeMessage = clamp(trimmedMessage, 4000)
+
+  const key = process.env.RESEND_API_KEY
+  const to = process.env.CONTACT_TO || 'hamoui.ammar3@gmail.com'
+
+  const html = `<!DOCTYPE html><html><body style="margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;line-height:1.5;">
+<p><strong>Name:</strong> ${esc(safeName)}</p>
+<p><strong>Email:</strong> ${esc(safeEmail)}</p>
+<p><strong>Message:</strong></p>
+<p style="white-space:pre-wrap;">${esc(safeMessage)}</p>
+</body></html>`
+  const text = `Name: ${safeName}\nEmail: ${safeEmail}\n\nMessage:\n${safeMessage}`
+
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Vigil <brief@thevigilroom.com>',
+        to: [to],
+        reply_to: safeEmail,
+        subject: 'Vigil contact: ' + safeName,
+        html,
+        text,
+      }),
+      signal: AbortSignal.timeout(30000),
+    })
+
+    if (!resp.ok) {
+      const errText = await resp.text()
+      console.error('[jobs] contact resend non-2xx', resp.status, errText.slice(0, 300))
+      return res.status(502).json({ error: 'SEND_FAILED' })
+    }
+
+    return res.status(200).json({ ok: true })
+  } catch (err) {
+    console.error('[jobs] contact resend send failed', err?.message)
+    return res.status(502).json({ error: 'SEND_FAILED' })
+  }
+}
+
 async function cleanupStaleRows() {
   if (!supabase) return
 
@@ -1807,6 +1874,8 @@ export default async function handler(req, res) {
       return handleDeleteAccount(req, res)
     case 'email-signup':
       return handleEmailSignup(req, res)
+    case 'contact':
+      return handleContact(req, res)
     case 'suggest-sources':
       return handleSuggestSources(req, res)
     case 'telegram-link-start':
