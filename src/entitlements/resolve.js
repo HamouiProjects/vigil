@@ -1,17 +1,16 @@
 const PLAN_BASE = {
   free: {
-    limits: { workspaces: 1, widgetsPerWorkspace: 12, alertRules: 0, briefsPerMonth: 15 },
-    capabilities: [],
-    priceMode: 'delayed',
+    limits: { workspaces: 2, widgetsPerWorkspace: Infinity, alertRules: 0, briefsPerMonth: 15 },
+    capabilities: ['realtime_news', 'realtime_prices', 'full_widget_library'],
+    priceMode: 'realtime',
   },
   pro: {
-    // TODO pricing-refurb: final per-tier alert caps
-    limits: { workspaces: 3, widgetsPerWorkspace: Infinity, alertRules: 10, briefsPerMonth: 40 },
+    limits: { workspaces: 6, widgetsPerWorkspace: Infinity, alertRules: 10, briefsPerMonth: 100 },
     capabilities: ['realtime_news', 'realtime_prices', 'full_widget_library', 'alerts', 'scheduled_briefs'],
     priceMode: 'realtime',
   },
   team: {
-    limits: { workspaces: 10, widgetsPerWorkspace: Infinity, alertRules: 25, briefsPerMonth: 120 },
+    limits: { workspaces: 12, widgetsPerWorkspace: Infinity, alertRules: 25, briefsPerMonth: 300 },
     capabilities: ['realtime_news', 'realtime_prices', 'full_widget_library', 'white_label', 'alerts', 'alerts_webhook', 'scheduled_briefs'],
     priceMode: 'realtime',
   },
