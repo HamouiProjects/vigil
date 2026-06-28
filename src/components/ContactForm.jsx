@@ -75,7 +75,16 @@ export default function ContactForm({ showHeading = true }) {
         Questions about plans, seats, or early access? Send a note and we will reply by email.
       </p>
       {contactSuccess ? (
-        <p className="pricing-feedback pricing-feedback-ok">{contactSuccess}</p>
+        <>
+          <p className="pricing-feedback pricing-feedback-ok">{contactSuccess}</p>
+          <button
+            type="button"
+            className="pricing-btn"
+            onClick={() => { setContactSuccess(null); setContactError(null); }}
+          >
+            Send another message
+          </button>
+        </>
       ) : (
         <div className="pricing-contact-fields">
           <label className="pricing-label">
