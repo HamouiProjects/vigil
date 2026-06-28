@@ -4,16 +4,10 @@ const Impressum = () => (
 
     <h2>Operator (Diensteanbieter)</h2>
     <p>
-      [FULL LEGAL NAME]<br />
-      [STREET AND NUMBER]<br />
-      [POSTAL CODE] [CITY]<br />
-      Germany
-    </p>
-
-    <h2>Contact</h2>
-    <p>
-      Email: [CONTACT EMAIL]<br />
-      (Optional) Phone: [PHONE]
+      Full name: [FULL LEGAL NAME]<br />
+      Postal address: [STREET AND NUMBER], [POSTAL CODE] [CITY], Germany<br />
+      Contact email: [CONTACT EMAIL]<br />
+      USt-IdNr. (optional): [USt-IdNr]
     </p>
 
     <h2>Responsible for content pursuant to § 18 (2) MStV</h2>
@@ -68,34 +62,46 @@ const Privacy = () => (
       <li>Where we ask for your consent (for example an early-access signup): Art. 6 (1) (a) GDPR (consent), which you may withdraw at any time.</li>
     </ul>
 
-    <h2>4. Sub-processors</h2>
+    <h2>4. Third-party processing</h2>
+    <p>
+      AI briefs and source suggestions are generated using DeepSeek. Processing runs on infrastructure
+      outside the EU. We send only publicly available article data and the topics you choose. No personal
+      account data is sent to the AI provider.
+    </p>
+    <p>We also use the following processors to run the service:</p>
+    <ul>
+      <li><strong>Supabase</strong> (database and authentication, EU region): stores your account and room data.</li>
+      <li><strong>Resend</strong> (email): sends transactional email, alert digests, and briefs you request.</li>
+    </ul>
+
+    <h2>5. Sub-processors</h2>
     <p>We use the following providers to run the service. Each processes data only as needed to provide its function.</p>
     <ul>
       <li><strong>Supabase</strong> (authentication and database, hosted in the EU, eu-central-1): account, room configuration, alert rules.</li>
       <li><strong>Vercel</strong> (hosting and cookieless analytics): serves the application and measures aggregate usage.</li>
       <li><strong>Resend</strong> (email delivery): sends transactional email, alert digests, and briefs you request.</li>
       <li><strong>Stripe</strong> (payment processing): currently in TEST mode only. No real payments are processed and no card data is collected at this time.</li>
-      <li><strong>DeepSeek</strong> (the brief language model): when you generate a brief, the public titles, sources, and URLs of the items in your room are sent to generate a summary. No account data or other personal data is sent. See the transfer note in section 5.</li>
+      <li><strong>DeepSeek</strong> (the brief language model): when you generate a brief, the public titles, sources, and URLs of the items in your room are sent to generate a summary. No account data or other personal data is sent. See the transfer note in section 6.</li>
       <li><strong>MapTiler</strong> (map tiles): serves map imagery for the Atlas widget.</li>
       <li><strong>SerpApi</strong> (search-interest data): provides the relative search-interest figures shown in the Trends widget.</li>
       <li><strong>RSS2JSON</strong> (feed proxy): helps fetch and normalize the public RSS and social feeds you add.</li>
     </ul>
 
-    <h2>5. International transfers</h2>
+    <h2>6. International transfers</h2>
     <p>
       Most processing happens within the EU. One exception: the brief language model (DeepSeek) runs on
       infrastructure outside the EU, including in China. When you generate a brief, only the public titles,
       sources, and URLs of your room's items are sent to it. No account data or other personal data is included.
     </p>
 
-    <h2>6. How long we keep it</h2>
+    <h2>7. How long we keep it</h2>
     <p>
       We keep account and room data for as long as your account exists. If you delete your account, the
       associated data is removed. Early-access signup emails are kept until you ask us to remove them or until
       the early-access period ends. Operational logs are kept only as long as needed for security and reliability.
     </p>
 
-    <h2>7. Your rights</h2>
+    <h2>8. Your rights</h2>
     <p>
       Under the GDPR you have the right to access, rectify, erase, restrict, and port your personal data, and to
       object to certain processing. To exercise any of these, email [CONTACT EMAIL].
@@ -105,18 +111,18 @@ const Privacy = () => (
       Berlin is the Berliner Beauftragte für Datenschutz und Informationsfreiheit (BlnBDI).
     </p>
 
-    <h2>8. Cookies and analytics</h2>
+    <h2>9. Cookies and analytics</h2>
     <p>
       We do not use tracking or advertising cookies. We use only the storage strictly necessary to keep you
       signed in and to remember your settings. Usage analytics (Vercel) is cookieless and aggregate.
     </p>
 
-    <h2>9. Changes</h2>
+    <h2>10. Changes</h2>
     <p>
       We may update this policy as the service develops. The "last updated" date above reflects the current version.
     </p>
 
-    <h2>10. Contact</h2>
+    <h2>11. Contact</h2>
     <p>Questions about this policy or your data: [CONTACT EMAIL].</p>
   </>
 )
