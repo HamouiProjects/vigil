@@ -1,6 +1,7 @@
 .about {
   min-height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--color-bg);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
@@ -31,12 +32,13 @@
 
 .about-hero {
   position: relative;
-  min-height: 220px;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  min-height: clamp(380px, 46vw, 560px);
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin: 0 -24px 32px;
   overflow: hidden;
+  margin-bottom: 32px;
 }
 
 .about-hero-globe {
@@ -55,23 +57,45 @@
 .about-hero-veil {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-bg) 30%, transparent),
-    color-mix(in srgb, var(--color-bg) 75%, transparent)
-  );
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-bg) 88%, transparent) 0%,
+      color-mix(in srgb, var(--color-bg) 55%, transparent) 45%,
+      transparent 78%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-bg) 38%, transparent),
+      color-mix(in srgb, var(--color-bg) 60%, transparent)
+    );
   pointer-events: none;
 }
 
-.about-title {
+.about-hero-copy {
   position: relative;
   z-index: 1;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.about-title {
   font-family: var(--font-mono);
-  font-size: 22px;
+  font-size: clamp(22px, 3.4vw, 30px);
   font-weight: 600;
-  margin: 0;
+  margin: 0 0 14px;
   color: var(--color-text-primary);
-  text-align: center;
+  text-align: left;
+}
+
+.about-lede {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  max-width: 540px;
+  margin: 0;
 }
 
 .about-article h2 {

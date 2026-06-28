@@ -11,18 +11,27 @@ export default function AboutPage() {
       <main className="about-main">
         <section className="about-hero" aria-labelledby="about-title">
           <div className="about-hero-globe">
-            <IntroGlobe className="about-globe-canvas" centerX={0.5} />
+            <IntroGlobe className="about-globe-canvas" centerX={0.78} />
           </div>
           <div className="about-hero-veil" aria-hidden="true" />
-          <h1 id="about-title" className="about-title">About Vigil</h1>
+          <div className="about-hero-copy">
+            <h1 id="about-title" className="about-title">About Vigil</h1>
+            <p className="about-lede">
+              Most tools hand you an empty workspace and expect you to wire up feeds, maps, markets, and
+              social accounts yourself. Vigil starts you in a furnished room instead: a worked example,
+              arranged on one screen, running while you work and freezable on pause when you step away.
+              It is a starting point, not your finished setup. You make it yours.
+            </p>
+          </div>
         </section>
 
         <article className="about-article">
+          <h2>Make it yours</h2>
           <p>
-            Most tools hand you an empty workspace and expect you to wire up feeds, maps, markets, and
-            social accounts yourself. Vigil is different. You step into a furnished room: the sources you
-            actually watch, already arranged on one screen, running while you work and freezable on pause
-            when you step away.
+            The starting room is an example, not a guess at what you watch. Swap in your own sources, name
+            the keywords you want to track, and set when the brief lands. When you are not sure where to
+            start, Vigil suggests real, public sources for your topic and region, so you furnish the room
+            faster instead of from scratch.
           </p>
 
           <h2>The room</h2>
@@ -43,7 +52,7 @@ export default function AboutPage() {
           <p>
             Some things you cannot afford to miss. Name the places, people, and keywords that matter, and
             when something new matching them lands in your room, Vigil flags it in its daily digest, in
-            the app, by email, or straight into Slack for teams. A quiet, cited heads up.
+            the app, by email, by Telegram, or into your team webhook. A quiet, cited heads up.
           </p>
 
           <p>
