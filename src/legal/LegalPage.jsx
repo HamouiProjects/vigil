@@ -18,6 +18,7 @@ export default function LegalPage({ page }) {
           {entry.node}
         </article>
         <nav className="legal-foot">
+          <a href="/?p=pricing">Pricing</a>
           <a href="/?p=impressum">Impressum</a>
           <a href="/?p=privacy">Privacy</a>
           <a href="/?p=terms">Terms</a>

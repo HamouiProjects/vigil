@@ -134,6 +134,22 @@
   color: var(--color-text-muted);
 }
 
+.pricing-cat-title {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-info);
+  text-align: left;
+  padding: 18px 12px 6px;
+  border-top: 1px solid var(--color-border);
+}
+
+.pricing-cat-row:first-of-type .pricing-cat-title {
+  border-top: none;
+}
+
 .pricing-cta-cell {
   vertical-align: bottom;
 }

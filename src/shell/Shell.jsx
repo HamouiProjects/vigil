@@ -7,7 +7,6 @@ import { loadSubscription } from '../data/subscriptionRepo.js'
 import { resolveEntitlements } from '../entitlements/resolve.js'
 import Grid from './Grid.jsx'
 import EntitlementDebug from './EntitlementDebug.jsx'
-import UpgradeModal from './UpgradeModal.jsx'
 import WidgetPicker from './WidgetPicker.jsx'
 import BriefPanel from './BriefPanel.jsx'
 import SuggestSourcesPanel from './SuggestSourcesPanel.jsx'
@@ -122,7 +121,6 @@ export default function Shell() {
 
   const [upgradeNudge, setUpgradeNudge] = useState(null)
   const [shareNotice, setShareNotice] = useState(null)
-  const [showUpgrade, setShowUpgrade] = useState(false)
   const [roomCapOpen, setRoomCapOpen] = useState(false)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
   const [showBrief, setShowBrief] = useState(false)
@@ -305,6 +303,8 @@ export default function Shell() {
     setUpgradeNudge(message)
   }
 
+  const goToPricing = () => { window.location.href = '/?p=pricing' }
+
   function handleAddWorkspace() {
     const ok = addWorkspace()
     if (!ok) setRoomCapOpen(true)
@@ -393,7 +393,7 @@ export default function Shell() {
       <UpgradeNudge
         message={upgradeNudge}
         onDismiss={() => setUpgradeNudge(null)}
-        onUpgrade={() => { setUpgradeNudge(null); setShowUpgrade(true) }}
+        onUpgrade={() => { setUpgradeNudge(null); goToPricing() }}
       />
       {roomCapOpen && (
         <div className="modal-overlay" onClick={() => setRoomCapOpen(false)}>
@@ -428,7 +428,7 @@ export default function Shell() {
                 onClick={() => {
                   setRoomCapOpen(false)
                   if (account?.isAnon !== false) { setAuthView('signup'); setShowAuth(true) }
-                  else { setShowUpgrade(true) }
+                  else { goToPricing() }
                 }}
               >
                 {account?.isAnon !== false ? 'Sign up' : 'Upgrade'}
@@ -632,6 +632,7 @@ export default function Shell() {
         <nav className="bottom-bar-links">
           <a href="/?p=about">About</a>
           <a href="/?p=faq">FAQ</a>
+          <a href="/?p=pricing">Pricing</a>
           <a href="/?p=impressum">Impressum</a>
           <a href="/?p=privacy">Privacy</a>
           <a href="/?p=terms">Terms</a>
@@ -646,7 +647,7 @@ export default function Shell() {
       {showBrief && (
         <BriefPanel
           onClose={() => setShowBrief(false)}
-          onUpgrade={() => setShowUpgrade(true)}
+          onUpgrade={goToPricing}
         />
       )}
       {showSuggest && (
@@ -660,7 +661,7 @@ export default function Shell() {
           open={showWelcome}
           onClose={() => setShowWelcome(false)}
           onDone={markOnboardingSeen}
-          onUpgrade={() => setShowUpgrade(true)}
+          onUpgrade={goToPricing}
         />
       )}
       <AlertsDrawer
@@ -668,10 +669,9 @@ export default function Shell() {
         initialKeyword={alertPreset?.keyword}
         onClose={() => { setShowAlerts(false); setAlertPreset(null) }}
         entitlements={entitlements}
-        onUpgrade={() => setShowUpgrade(true)}
+        onUpgrade={goToPricing}
         onActivityRead={() => setUnreadAlerts(0)}
       />
-      {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
       {settingsOpen && (
         <Suspense fallback={null}>
           <SettingsModal
@@ -679,7 +679,7 @@ export default function Shell() {
             plan={plan}
             themePref={themePref}
             onSetTheme={setTheme}
-            onUpgrade={() => setShowUpgrade(true)}
+            onUpgrade={goToPricing}
             onSignOut={async () => { await supabase.auth.signOut(); window.location.reload() }}
             onClose={() => setSettingsOpen(false)}
             onAuth={(view) => { setSettingsOpen(false); setAuthView(view); setShowAuth(true) }}

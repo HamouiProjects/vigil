@@ -190,6 +190,9 @@ export default function PricingPage() {
               </tr>
             </thead>
             <tbody>
+              <tr className="pricing-cat-row">
+                <th colSpan={4} scope="colgroup" className="pricing-cat-title">Rooms & workspace</th>
+              </tr>
               <tr>
                 <th scope="row">Rooms</th>
                 <td data-plan="Free"><span className="pricing-num">2</span></td>
@@ -202,17 +205,38 @@ export default function PricingPage() {
                 <td data-plan="Pro">Full</td>
                 <td data-plan="Team">Full</td>
               </tr>
+            </tbody>
+            <tbody>
+              <tr className="pricing-cat-row">
+                <th colSpan={4} scope="colgroup" className="pricing-cat-title">Live data</th>
+              </tr>
               <tr>
                 <th scope="row">Real-time news and prices</th>
                 <td data-plan="Free">Included</td>
                 <td data-plan="Pro">Included</td>
                 <td data-plan="Team">Included</td>
               </tr>
+            </tbody>
+            <tbody>
+              <tr className="pricing-cat-row">
+                <th colSpan={4} scope="colgroup" className="pricing-cat-title">Briefs</th>
+              </tr>
               <tr>
                 <th scope="row">Briefs per month</th>
                 <td data-plan="Free"><span className="pricing-num">15</span></td>
                 <td data-plan="Pro"><span className="pricing-num">100</span></td>
                 <td data-plan="Team"><span className="pricing-num">300</span></td>
+              </tr>
+              <tr>
+                <th scope="row">Scheduled briefs</th>
+                <td data-plan="Free"><span className="pricing-muted">None</span></td>
+                <td data-plan="Pro">Daily and weekly</td>
+                <td data-plan="Team">Daily and weekly</td>
+              </tr>
+            </tbody>
+            <tbody>
+              <tr className="pricing-cat-row">
+                <th colSpan={4} scope="colgroup" className="pricing-cat-title">Alerts</th>
               </tr>
               <tr>
                 <th scope="row">Alerts</th>
@@ -224,11 +248,10 @@ export default function PricingPage() {
                   <span className="pricing-num">25</span> rules, all channels, plus webhook
                 </td>
               </tr>
-              <tr>
-                <th scope="row">Scheduled briefs</th>
-                <td data-plan="Free"><span className="pricing-muted">None</span></td>
-                <td data-plan="Pro">Daily and weekly</td>
-                <td data-plan="Team">Daily and weekly</td>
+            </tbody>
+            <tbody>
+              <tr className="pricing-cat-row">
+                <th colSpan={4} scope="colgroup" className="pricing-cat-title">Team</th>
               </tr>
               <tr>
                 <th scope="row">White-label</th>
@@ -236,6 +259,8 @@ export default function PricingPage() {
                 <td data-plan="Pro"><span className="pricing-muted">None</span></td>
                 <td data-plan="Team">Included</td>
               </tr>
+            </tbody>
+            <tbody>
               <tr>
                 <th scope="row">Get started</th>
                 <td className="pricing-cta-cell" data-plan="Free">
