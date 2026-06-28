@@ -1,12 +1,7 @@
 import '../legal/legal.css'
-import { INFO_PAGES } from './infoContent.jsx'
+import ContactForm from '../components/ContactForm.jsx'
 
-export default function InfoPage({ page }) {
-  const entry = INFO_PAGES[page]
-  if (!entry) {
-    if (typeof window !== 'undefined') window.location.replace('/')
-    return null
-  }
+export default function ContactPage() {
   return (
     <div className="legal">
       <header className="legal-chrome">
@@ -14,14 +9,13 @@ export default function InfoPage({ page }) {
       </header>
       <main className="legal-main">
         <article className="legal-article">
-          <h1 className="legal-title">{entry.title}</h1>
-          {entry.node}
+          <h1 className="legal-title">Contact</h1>
+          <ContactForm showHeading={false} />
         </article>
         <nav className="legal-foot">
           <a href="/?p=about">About</a>
           <a href="/?p=faq">FAQ</a>
           <a href="/?p=pricing">Pricing</a>
-          <a href="/?p=contact">Contact</a>
           <a href="/?p=privacy">Privacy</a>
           <a href="/?p=terms">Terms</a>
           <a href="/">Back to Vigil</a>

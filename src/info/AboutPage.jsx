@@ -17,10 +17,10 @@ export default function AboutPage() {
           <div className="about-hero-copy">
             <h1 id="about-title" className="about-title">About Vigil</h1>
             <p className="about-lede">
-              Most tools hand you an empty workspace and expect you to wire up feeds, maps, markets, and
-              social accounts yourself. Vigil starts you in a furnished room instead: a worked example,
-              arranged on one screen, running while you work and freezable on pause when you step away.
-              It is a starting point, not your finished setup. You make it yours.
+              Watching the world for a living usually means twenty open tabs, a wall of alarms, and the
+              quiet worry that the one thing you needed scrolled past while you were looking elsewhere.
+              Vigil gives you one calm screen instead: your sources, your map, your markets, and a short
+              cited brief, in a room that keeps running while you work and holds still when you step away.
             </p>
           </div>
         </section>
@@ -28,10 +28,11 @@ export default function AboutPage() {
         <article className="about-article">
           <h2>Make it yours</h2>
           <p>
-            The starting room is an example, not a guess at what you watch. Swap in your own sources, name
-            the keywords you want to track, and set when the brief lands. When you are not sure where to
-            start, Vigil suggests real, public sources for your topic and region, so you furnish the room
-            faster instead of from scratch.
+            Vigil starts you in a furnished room rather than an empty workspace: a worked example, already
+            arranged and running while you work. It is a starting point, not your finished setup. Swap in
+            your own sources, name the keywords you want to track, and set when the brief lands. When you
+            are not sure where to start, Vigil suggests real, public sources for your topic and region, so
+            you furnish the room faster instead of from scratch.
           </p>
 
           <h2>The room</h2>
@@ -76,6 +77,7 @@ export default function AboutPage() {
           <a href="/?p=about">About</a>
           <a href="/?p=faq">FAQ</a>
           <a href="/?p=pricing">Pricing</a>
+          <a href="/?p=contact">Contact</a>
           <a href="/?p=impressum">Impressum</a>
           <a href="/?p=privacy">Privacy</a>
           <a href="/?p=terms">Terms</a>

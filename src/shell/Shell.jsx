@@ -633,6 +633,7 @@ export default function Shell() {
           <a href="/?p=about">About</a>
           <a href="/?p=faq">FAQ</a>
           <a href="/?p=pricing">Pricing</a>
+          <a href="/?p=contact">Contact</a>
           <a href="/?p=impressum">Impressum</a>
           <a href="/?p=privacy">Privacy</a>
           <a href="/?p=terms">Terms</a>
