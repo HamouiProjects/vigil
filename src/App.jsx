@@ -10,6 +10,7 @@ const Landing = lazy(() => import('./landing/Landing.jsx'))
 const AuthScreen = lazy(() => import('./components/layout/AuthScreen.jsx'))
 const LegalPage = lazy(() => import('./legal/LegalPage.jsx'))
 const InfoPage = lazy(() => import('./info/InfoPage.jsx'))
+const PricingPage = lazy(() => import('./pricing/PricingPage.jsx'))
 
 function AppSplash() {
   return (
@@ -129,11 +130,12 @@ export default function App() {
   const legalPage = params.get('p')
   const isLegal = ['impressum', 'privacy', 'terms'].includes(legalPage)
   const isInfo = ['about', 'faq'].includes(legalPage)
+  const isPricing = legalPage === 'pricing'
   const [sessionState, setSessionState] = useState('pending')
   const [anonSession, setAnonSession] = useState(false)
 
   useEffect(() => {
-    if (slug || isLegal || isInfo) return
+    if (slug || isLegal || isInfo || isPricing) return
 
     let cancelled = false
 
@@ -153,7 +155,7 @@ export default function App() {
       cancelled = true
       subscription?.unsubscribe()
     }
-  }, [slug, isLegal, isInfo])
+  }, [slug, isLegal, isInfo, isPricing])
 
   if (isLegal) {
     return (
@@ -170,6 +172,16 @@ export default function App() {
       <Suspense fallback={<AppSplash />}>
         <AppErrorBoundary>
           <InfoPage page={legalPage} />
+        </AppErrorBoundary>
+      </Suspense>
+    )
+  }
+
+  if (isPricing) {
+    return (
+      <Suspense fallback={<AppSplash />}>
+        <AppErrorBoundary>
+          <PricingPage />
         </AppErrorBoundary>
       </Suspense>
     )
