@@ -4,7 +4,7 @@ import { resolveEntitlements } from '../entitlements/resolve.js'
 import { devOverride } from '../entitlements/devOverride.js'
 import { ensureSession } from './session.js'
 import { cloneRoom, loadWorkspaces, saveWorkspaces } from './workspacesRepo.js'
-import { BL10_TEMPLATE } from './seedTemplate.js'
+import { UKRAINE_TEMPLATE } from './seedTemplate.js'
 import { loadSubscription } from './subscriptionRepo.js'
 import { listSources } from './sourcesRepo.js'
 
@@ -26,7 +26,7 @@ export function useShellPersistence() {
 
         let [wss, srcs] = await Promise.all([loadWorkspaces(uid), listSources(uid)])
         if (!wss.length) {
-          await cloneRoom(uid, BL10_TEMPLATE)
+          await cloneRoom(uid, UKRAINE_TEMPLATE)
           ;[wss, srcs] = await Promise.all([loadWorkspaces(uid), listSources(uid)])
         }
 

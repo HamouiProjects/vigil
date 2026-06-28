@@ -49,3 +49,58 @@ export const BL10_TEMPLATE = {
     { id: 'b5fc0af7-2873-43ba-a808-c3b0db9fbdc4', type: 'rss', identifier: 'https://merics.org/en/rss', label: 'MERICS', meta: { color: '#a29bfe' } },
   ],
 }
+
+export const UKRAINE_TEMPLATE = {
+  name: 'Ukraine Russia war',
+  widgets: [
+    { id: 'w-mqjs24t1-vfe99', type: 'feed', config: { tabs: [
+      { id: 'tab-1781893360385', keyword: 'Russian invasion Ukraine' },
+      { id: 'tab-1781893361227', keyword: 'Ukraine peace talks' },
+      { id: 'tab-1781893371631', keyword: 'Ukraine NATO' },
+      { id: 'tab-1781893376045', keyword: 'Kyiv' },
+    ], sidebarOpen: false } },
+    { id: 'w-mqjs2e9x-413kh', type: 'rss', config: { feeds: [
+      { enabled: true, sourceId: '615d33f0-d2cf-4f47-b50e-b184685c58f8' },
+      { enabled: true, sourceId: '40f76902-b477-4691-aaf1-dccd1d06ca42' },
+      { enabled: true, sourceId: '4ad9c7c9-5ef3-4597-aec9-52d7e98eebd9' },
+      { enabled: true, sourceId: 'd998b2f7-ef88-4de4-a8aa-226b670036f6' },
+      { enabled: true, sourceId: '181429b1-e490-4878-a9bf-d233d63cd895' },
+      { enabled: true, sourceId: 'dee732cd-c1f0-462b-a19d-0d29b1d3bc63' },
+    ], sidebarOpen: false, savedFilters: [], filtersCollapsed: true } },
+    { id: 'w-mqjs2lo8-tov04', type: 'social', config: { accounts: [
+      { id: 'acc-1781893408016', value: 'ukraine', enabled: true, platform: 'reddit' },
+      { id: 'acc-1781893409410', value: 'ukraineconflict', enabled: true, platform: 'reddit' },
+      { id: 'acc-1781893411177', value: 'ukrainewar', enabled: true, platform: 'reddit' },
+      { id: 'acc-1781893412169', value: 'kyivpost.bsky.social', enabled: true, platform: 'bluesky' },
+    ], sidebarOpen: false } },
+    { id: 'w-mqjs2shd-82lg8', type: 'prices', config: { symbols: [
+      { display: 'WEAT', tvSymbol: 'AMEX:WEAT', description: 'Teucrium Wheat Fund ETV' },
+      { display: 'CORN', tvSymbol: 'AMEX:CORN', description: 'Teucrium Corn Fund ETV' },
+      { display: 'UAHUSD', tvSymbol: 'FX_IDC:UAHUSD', description: 'UKRAINIAN HRYVNIA / U.S. DOLLAR' },
+      { display: 'USDRUB', tvSymbol: 'FX_IDC:USDRUB', description: 'U.S. DOLLAR / RUSSIAN RUBLE' },
+      { display: 'ZW', tvSymbol: 'CBOT:ZW', description: 'Chicago SRW Wheat Futures' },
+    ], sidebarOpen: false } },
+    { id: 'w-mqjs31bg-gyuhp', type: 'trends', config: { keywords: ['Ukraine peace talks', 'Ukraine aid', 'Ukraine counteroffensive'] } },
+    { id: 'w-mqjtwa8i-84iy5', type: 'chart', config: { symbol: 'BATS_DLY:WEAT' } },
+    { id: 'w-mqxqy636-w35gw', type: 'map', config: { aoi: { zoom: 4.2, center: [31, 49] }, layers: { storms: true, aircraft: true, conflict: true, wildfires: true, earthquakes: true } } },
+    { id: 'w-mqxqyaf8-3051u', type: 'map', config: { aoi: { zoom: 4.2, center: [31, 49] }, mapMode: 'conflict' } },
+  ],
+  layout: [
+    { h: 8, i: 'w-mqjs24t1-vfe99', w: 8, x: 8, y: 0, moved: false, static: false },
+    { h: 8, i: 'w-mqjs2e9x-413kh', w: 8, x: 16, y: 8, moved: false, static: false },
+    { h: 8, i: 'w-mqjs2lo8-tov04', w: 8, x: 16, y: 0, moved: false, static: false },
+    { h: 8, i: 'w-mqjs2shd-82lg8', w: 8, x: 8, y: 8, moved: false, static: false },
+    { h: 8, i: 'w-mqjs31bg-gyuhp', w: 8, x: 0, y: 8, moved: false, static: false },
+    { h: 8, i: 'w-mqjtwa8i-84iy5', w: 8, x: 0, y: 0, moved: false, static: false },
+    { h: 15, i: 'w-mqxqy636-w35gw', w: 16, x: 0, y: 16, moved: false, static: false },
+    { h: 15, i: 'w-mqxqyaf8-3051u', w: 8, x: 16, y: 16, moved: false, static: false },
+  ],
+  sources: [
+    { id: '615d33f0-d2cf-4f47-b50e-b184685c58f8', type: 'rss', identifier: 'https://www.aljazeera.com/xml/rss/all.xml', label: 'aljazeera.com', meta: { suggested: true } },
+    { id: '40f76902-b477-4691-aaf1-dccd1d06ca42', type: 'rss', identifier: 'https://news.google.com/rss/search?q=Russia%20Ukraine%20war&hl=en-US&gl=US&ceid=US%3Aen', label: 'Google News: Russia Ukraine war', meta: { suggested: true } },
+    { id: '4ad9c7c9-5ef3-4597-aec9-52d7e98eebd9', type: 'rss', identifier: 'https://www.france24.com/en/rss', label: 'france24.com', meta: { suggested: true } },
+    { id: 'd998b2f7-ef88-4de4-a8aa-226b670036f6', type: 'rss', identifier: 'https://news.google.com/rss/search?q=site%3Abbc.com%20Russia%20Ukraine%20war&hl=en-US&gl=US&ceid=US%3Aen', label: 'bbc.com (via Google News)', meta: { suggested: true } },
+    { id: '181429b1-e490-4878-a9bf-d233d63cd895', type: 'rss', identifier: 'https://news.google.com/rss/search?q=site%3Aapnews.com%20Russia%20Ukraine%20war&hl=en-US&gl=US&ceid=US%3Aen', label: 'apnews.com (via Google News)', meta: { suggested: true } },
+    { id: 'dee732cd-c1f0-462b-a19d-0d29b1d3bc63', type: 'rss', identifier: 'https://news.google.com/rss/search?q=site%3Areuters.com%20Russia%20Ukraine%20war&hl=en-US&gl=US&ceid=US%3Aen', label: 'reuters.com (via Google News)', meta: { suggested: true } },
+  ],
+}
