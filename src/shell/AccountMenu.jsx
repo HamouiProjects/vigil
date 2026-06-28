@@ -41,6 +41,14 @@ export default function AccountMenu({ account, plan, onOpenSettings, onAuth, onS
             Settings
           </button>
 
+          <a className="account-menu-item" href="/?p=about" onClick={() => setOpen(false)}>
+            About
+          </a>
+
+          <a className="account-menu-item" href="/?p=pricing" onClick={() => setOpen(false)}>
+            Pricing
+          </a>
+
           <div className="account-menu-divider" />
 
           {isReal ? (

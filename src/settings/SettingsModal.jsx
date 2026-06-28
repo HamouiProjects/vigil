@@ -338,12 +338,14 @@ function AppearanceSection({ themePref, onSetTheme, savedFlash }) {
         </button>
       ))}
       <p className="settings-microcopy">Follows your device by default.</p>
+
+      <h2 className="settings-section-title" style={{ marginTop: 20 }}>Onboarding</h2>
       <button
         type="button"
-        className="settings-option-row"
+        className="settings-btn"
         onClick={() => window.dispatchEvent(new CustomEvent('vigil:start-tour'))}
       >
-        <span>Replay welcome tour</span>
+        Replay welcome tour
       </button>
     </>
   )
@@ -355,31 +357,14 @@ function SubscriptionSection({ plan, isPaid, onUpgrade }) {
       <h2 className="settings-section-title">Subscription</h2>
       <p className="settings-plan-name">{planLabel(plan)}</p>
       <p className="settings-plan-caps">{formatPlanCaps(plan)}</p>
-
-      <div className="account-menu-sub-row">
-        <span>Paid plan</span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={isPaid}
-          aria-label="Paid plan"
-          className={`account-switch${isPaid ? ' on' : ''}`}
-          onClick={() => { if (!isPaid) onUpgrade() }}
-          title={isPaid ? 'Active during early access.' : 'Off. Only you can turn this on.'}
-        >
-          <span className="account-switch-knob" />
-        </button>
-      </div>
       <p className="account-menu-note">
         {isPaid
-          ? 'Active for early access. Only you control this toggle. Vigil never turns it on or off for you, and nothing is charged during early access.'
-          : 'Only you control this toggle. Vigil never turns it on or off for you. Nothing is charged during early access.'}
+          ? 'This access was granted for early access. Nothing is charged.'
+          : 'Vigil is in early access. Nothing is charged.'}
       </p>
-      {!isPaid && (
-        <button type="button" className="settings-btn" style={{ marginTop: 8 }} onClick={onUpgrade}>
-          See upgrade options
-        </button>
-      )}
+      <button type="button" className="settings-btn" style={{ marginTop: 8 }} onClick={onUpgrade}>
+        See plans and pricing
+      </button>
     </>
   )
 }
