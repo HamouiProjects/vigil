@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import usePageVisibility from '../hooks/usePageVisibility'
 import { SkeletonFeedItems } from '../components/shared/SkeletonLoader'
 import { InfoTooltip } from '../components/shared/WHeader'
-import { GN_SEARCH_URL, nsExtractSource, nsCleanTitle, KF_DEFAULT_TABS } from '../lib/feedSources.js'
+import { GN_SEARCH_URL, nsExtractSource, nsCleanTitle, KF_DEFAULT_TABS } from '../../shared/feedSources.js'
 
 export { GN_SEARCH_URL, nsExtractSource, nsCleanTitle, KF_DEFAULT_TABS }
 

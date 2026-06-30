@@ -1,5 +1,5 @@
 import { useShellStore } from '../state/shellStore.js'
-import { resolveEntitlements } from '../entitlements/resolve.js'
+import { resolveEntitlements } from '../../shared/resolve.js'
 import { PLANS, ADDONS } from '../domain/types.js'
 
 const box = {

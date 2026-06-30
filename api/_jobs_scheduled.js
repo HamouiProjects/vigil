@@ -2,7 +2,7 @@
 import supabase from './_supabase.js'
 import { gatherRoomFeedGroups } from './_brief_gather.js'
 import { buildFeedBrief, normalizeWidgetGroups } from './_brief_core.js'
-import { resolveEntitlements } from '../src/entitlements/resolve.js'
+import { resolveEntitlements } from '../shared/resolve.js'
 import { clamp } from './_jobs_util.js'
 import { sanitizeBrief, renderEmailHtml, renderEmailText } from './_jobs_email.js'
 

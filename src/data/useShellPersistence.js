@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useShellStore } from '../state/shellStore.js'
-import { resolveEntitlements } from '../entitlements/resolve.js'
+import { resolveEntitlements } from '../../shared/resolve.js'
 import { devOverride } from '../entitlements/devOverride.js'
 import { ensureSession } from './session.js'
 import { cloneRoom, loadWorkspaces, saveWorkspaces } from './workspacesRepo.js'

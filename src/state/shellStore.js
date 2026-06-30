@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { resolveEntitlements } from '../entitlements/resolve.js'
+import { resolveEntitlements } from '../../shared/resolve.js'
 import { devOverride } from '../entitlements/devOverride.js'
 import { withinLimit } from '../entitlements/index.js'
 import { widgetRegistry } from '../shell/widgetRegistry.js'

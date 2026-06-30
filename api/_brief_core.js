@@ -1,4 +1,7 @@
 import { fetchBriefLLM, BriefLLMNotConfiguredError } from './_brief_llm.js'
+import { isHttpUrl } from './_jobs_util.js'
+
+export { isHttpUrl }
 
 export class BriefParseError extends Error {
   constructor() {
@@ -12,11 +15,6 @@ const SYSTEM_PROMPT = 'You write a calm operational news brief headline. Summari
 const BRIEF_PARSE_FALLBACK = {
   headline: 'Brief unavailable',
   sections: [{ index: 0, summary: '' }],
-}
-
-export function isHttpUrl(u) {
-  if (typeof u !== 'string') return false
-  try { const p = new URL(u); return p.protocol === 'http:' || p.protocol === 'https:' } catch { return false }
 }
 
 function normalizeItems(items) {

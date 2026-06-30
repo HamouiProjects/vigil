@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Bell } from 'lucide-react'
 import AtlasWorldGlobe, { LAYER_COLORS, LAYER_ORDER, LAYER_SWATCH_CSS, formatRelativeTime } from './AtlasWorldGlobe'
-import { GN_SEARCH_URL, nsExtractSource, nsCleanTitle } from '../lib/feedSources.js'
+import { GN_SEARCH_URL, nsExtractSource, nsCleanTitle } from '../../shared/feedSources.js'
 
 const INDICATOR_LAYER_LABELS = {
   conflict: 'Conflict',

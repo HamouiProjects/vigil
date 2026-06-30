@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import usePageVisibility from '../hooks/usePageVisibility'
 import { usePolling } from '../hooks/usePolling'
 import { SkeletonFeedItems } from '../components/shared/SkeletonLoader'
-import { SUGGESTIONS } from '../lib/feedSources.js'
+import { SUGGESTIONS } from '../../shared/feedSources.js'
 
 export { SUGGESTIONS }
 

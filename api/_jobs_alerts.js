@@ -2,7 +2,7 @@
 import supabase from './_supabase.js'
 import { safeFetch } from './_ssrf.js'
 import { gatherRoomFeedGroups } from './_brief_gather.js'
-import { resolveEntitlements } from '../src/entitlements/resolve.js'
+import { resolveEntitlements } from '../shared/resolve.js'
 import crypto from 'node:crypto'
 import { isHttpUrl, esc, safeEqual } from './_jobs_util.js'
 import { dispatchScheduledBriefs, cleanupStaleRows } from './_jobs_scheduled.js'

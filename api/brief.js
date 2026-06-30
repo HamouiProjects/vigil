@@ -3,7 +3,7 @@ import { rateLimit } from './_ratelimit.js'
 import { applyCors } from './_cors.js'
 import { BriefLLMNotConfiguredError } from './_brief_llm.js'
 import { normalizeWidgetGroups, isHttpUrl, buildFeedBrief, BriefParseError } from './_brief_core.js'
-import { resolveEntitlements } from '../src/entitlements/resolve.js'
+import { resolveEntitlements } from '../shared/resolve.js'
 import { getQuotes } from './_yahoo.js'
 
 function readBody(req) {

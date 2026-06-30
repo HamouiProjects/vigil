@@ -4,7 +4,7 @@ import { useShellStore } from '../state/shellStore.js'
 import { supabase } from '../lib/supabase.js'
 import { gatherRoomItems, gatherMarketSymbols, gatherTrendsRequest, gatherWeather } from '../lib/gatherRoomItems.js'
 import { useFocusTrap } from '../hooks/useFocusTrap.js'
-import { relativeTime, cleanExcerpt } from '../lib/briefFormat.js'
+import { relativeTime, cleanExcerpt } from '../../shared/briefFormat.js'
 import GlobeGlyph from '../brand/GlobeGlyph.jsx'
 import { TrendsChart, TrendsLegend, COLORS } from '../widgets/TrendsChart.jsx'
 

@@ -1,7 +1,7 @@
 // api/_brief_gather.js — server-side room feed gather for scheduled briefs (T5a.3).
 // Mirrors the feed/rss/browser branches of src/lib/gatherRoomItems.js but server-side:
 // absolute rss proxy URL, no React. Markets/trends are intentionally excluded.
-import { GN_SEARCH_URL, KF_DEFAULT_TABS, nsExtractSource, nsCleanTitle, SUGGESTIONS } from '../src/lib/feedSources.js'
+import { GN_SEARCH_URL, KF_DEFAULT_TABS, nsExtractSource, nsCleanTitle, SUGGESTIONS } from '../shared/feedSources.js'
 
 const RSS_BASE = 'https://thevigilroom.com'
 const MAX_ITEMS_PER_WIDGET = 40

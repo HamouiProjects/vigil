@@ -1,7 +1,7 @@
 // On-demand brief email render + the email-brief action (split out of jobs.js, no behavior change).
 import supabase from './_supabase.js'
 import { rateLimit } from './_ratelimit.js'
-import { relativeTime, cleanExcerpt } from '../src/lib/briefFormat.js'
+import { relativeTime, cleanExcerpt } from '../shared/briefFormat.js'
 import { clamp, isHttpUrl, esc, hostnameOf, readBody } from './_jobs_util.js'
 
 function sanitizeBriefItem(it) {

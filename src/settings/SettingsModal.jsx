@@ -1,7 +1,7 @@
 // src/settings/SettingsModal.jsx — centered settings modal with left section rail
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { X, Check, ChevronLeft } from 'lucide-react'
-import { resolveEntitlements } from '../entitlements/resolve.js'
+import { resolveEntitlements } from '../../shared/resolve.js'
 import { validatePassword } from '../lib/validatePassword.js'
 import { supabase } from '../lib/supabase.js'
 import { useFocusTrap } from '../hooks/useFocusTrap.js'

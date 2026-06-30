@@ -1,5 +1,4 @@
-import { GN_SEARCH_URL, KF_DEFAULT_TABS, nsExtractSource, nsCleanTitle } from '../widgets/NewsSearchWidget.jsx'
-import { SUGGESTIONS } from '../widgets/RssFeedWidget.jsx'
+import { GN_SEARCH_URL, KF_DEFAULT_TABS, nsExtractSource, nsCleanTitle, SUGGESTIONS } from '../../shared/feedSources.js'
 import { PLATFORMS } from '../widgets/SocialFeedWidget.jsx'
 
 async function fetchSourceParts(sources, perSource) {
