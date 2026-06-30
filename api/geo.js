@@ -417,10 +417,6 @@ async function handleConflict() {
   }
 }
 
-function normPlace(value) {
-  return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim()
-}
-
 async function handleDebugPassthrough(req, res, source) {
   const upstreamUrl = getUpstreamUrl(source)
   if (!upstreamUrl) {

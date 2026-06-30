@@ -7,24 +7,7 @@ export function getSettings() {
   catch { return { ...DEFAULTS } }
 }
 
-export function saveSettings(partial) {
-  const next = { ...getSettings(), ...partial }
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(next)) } catch {}
-  listeners.forEach(fn => fn(next))
-  return next
-}
-
 export function subscribeSettings(callback) {
   listeners.push(callback)
   return () => { listeners = listeners.filter(fn => fn !== callback) }
-}
-
-export function isWorkspacePaused(wsId) {
-  return getSettings().pausedWorkspaces.includes(wsId)
-}
-
-export function toggleWorkspacePause(wsId) {
-  const s = getSettings()
-  const paused = s.pausedWorkspaces.includes(wsId)
-  return saveSettings({ pausedWorkspaces: paused ? s.pausedWorkspaces.filter(id => id !== wsId) : [...s.pausedWorkspaces, wsId] })
 }
