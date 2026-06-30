@@ -262,7 +262,7 @@ button.status-dot:hover { opacity: 0.8; }
   z-index: 200;
 }
 
-/* ── Resize handles — muted ↘ on SE corner only, reveal on corner hover (F.10) ── */
+/* ── Resize handles - muted ↘ on SE corner only, reveal on corner hover (F.10) ── */
 .react-resizable-handle { background:none; border:none; width:14px; height:14px; opacity:0; transition:opacity 120ms ease; }
 .react-resizable-handle::after { content:''; background:none; border:none; }
 .react-resizable-handle-n, .react-resizable-handle-s { cursor:ns-resize !important; }
@@ -274,7 +274,7 @@ button.status-dot:hover { opacity: 0.8; }
 [data-theme="light"] .react-grid-item > .react-resizable-handle.react-resizable-handle-se::after { color:var(--color-border-strong); }
 [data-theme="light"] .react-grid-item > .react-resizable-handle.react-resizable-handle-se:hover::after { color:var(--color-border-strong); }
 
-/* ── Widget hover / drag — active-card cue is the header border-top → brand; no neon card outline ── */
+/* ── Widget hover / drag - active-card cue is the header border-top → brand; no neon card outline ── */
 .react-grid-item:hover { outline:none; }
 .react-grid-item.react-draggable-dragging { outline:1px solid var(--color-brand); box-shadow:0 8px 32px rgba(0,0,0,0.5); z-index:100; }
 
@@ -339,111 +339,6 @@ button.status-dot:hover { opacity: 0.8; }
   border-color: var(--color-brand);
 }
 .widget-header:active { cursor: grabbing; }
-
-/* ── Atlas layer / tab bar ── */
-.cmap-layer-bar {
-  display: flex; align-items: center; gap: 4px;
-  padding: 0 8px; height: 32px; flex-shrink: 0;
-  background: var(--bg); border-bottom: 1px solid var(--border);
-  overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
-  flex-wrap: nowrap;
-}
-.cmap-layer-bar::-webkit-scrollbar { display: none; }
-.cmap-layer-btn {
-  font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
-  text-transform: uppercase; font-family: 'JetBrains Mono', monospace;
-  color: var(--text-secondary); background: transparent;
-  border: 1px solid var(--border); border-radius: 2px;
-  padding: 0 8px; height: 22px; cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
-  white-space: nowrap;
-}
-.cmap-layer-btn.active {
-  color: var(--accent); background: var(--accent-dim);
-  border-color: var(--color-brand);
-}
-.cmap-layer-btn:hover { color: var(--text-primary); }
-.cmap-update-btn {
-  margin-left: auto;
-  font-size: 9px; font-weight: 700; letter-spacing: 0.06em; font-family: 'JetBrains Mono', monospace;
-  color: var(--accent); background: var(--accent-dim);
-  border: 1px solid var(--color-brand); border-radius: 2px;
-  padding: 0 8px; height: 22px; cursor: pointer; white-space: nowrap;
-}
-.cmap-update-btn:hover { background: var(--color-brand-tint); }
-
-/* ── Conflict Map (Leaflet) ── */
-.cmap-dot {
-  border-radius: 50%;
-  border: 1.5px solid rgba(255,255,255,0.25);
-  box-shadow: 0 0 5px rgba(0,0,0,0.6);
-}
-@keyframes cmap-pulse-anim {
-  0%   { box-shadow: 0 0 0 0 rgba(232,41,74,0.7); }
-  70%  { box-shadow: 0 0 0 9px rgba(232,41,74,0); }
-  100% { box-shadow: 0 0 0 0 rgba(232,41,74,0); }
-}
-.cmap-pulse { animation: cmap-pulse-anim 1.6s ease-out infinite; }
-
-.cmap-overlay {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  background: rgba(10,12,16,0.6); font-size: 11px; color: var(--text-secondary);
-  pointer-events: none; z-index: 500;
-}
-.cmap-badge {
-  position: absolute; bottom: 28px; left: 8px; z-index: 500;
-  font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--text-secondary); background: rgba(10,12,16,0.8); border: 1px solid var(--border);
-  border-radius: 2px; padding: 2px 6px; pointer-events: none;
-}
-
-/* Leaflet popup dark theme */
-.cmap-popup-wrap .leaflet-popup-content-wrapper {
-  background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 0;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.6); color: var(--text-primary); padding: 0;
-}
-.cmap-popup-wrap .leaflet-popup-tip { background: var(--surface-elevated); }
-.cmap-popup-wrap .leaflet-popup-close-button { color: var(--text-secondary) !important; top: 6px !important; right: 8px !important; }
-.cmap-popup { padding: 10px 12px; }
-.cmap-popup-name { font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; font-family: 'JetBrains Mono', monospace; }
-.cmap-popup-row  { font-size: 10px; color: var(--text-secondary); margin-bottom: 6px; }
-.cmap-int-high   { color: var(--red); font-weight: 700; }
-.cmap-int-medium { color: var(--amber); font-weight: 700; }
-.cmap-int-low    { color: var(--amber); font-weight: 700; }
-.cmap-status-alert   { color: var(--red); font-weight: 700; }
-.cmap-status-ongoing { color: var(--amber); font-weight: 700; }
-.cmap-status-past    { color: var(--text-secondary); font-weight: 600; }
-.cmap-popup-link {
-  display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
-  color: var(--accent); text-decoration: none;
-}
-.cmap-popup-link:hover { text-decoration: underline; }
-.cmap-badge-live { color: var(--green) !important; border-color: color-mix(in srgb, var(--color-success) 32%, transparent) !important; }
-
-/* Piracy zone tooltip */
-.cmap-tooltip {
-  background: var(--surface-elevated) !important; border: 1px solid var(--border) !important;
-  color: var(--text-primary) !important; font-size: 10px !important; font-weight: 600 !important;
-  letter-spacing: 0.05em !important; padding: 3px 8px !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;
-}
-.cmap-tooltip::before { display: none !important; }
-
-/* Leaflet dark theme */
-.leaflet-container {
-  background: #0a0e1a !important;
-}
-.leaflet-control-zoom a {
-  background: var(--surface-elevated) !important; color: var(--text-secondary) !important;
-  border-color: var(--border) !important;
-}
-.leaflet-control-zoom a:hover { background: var(--surface-hover) !important; color: var(--text-primary) !important; }
-/* Leaflet attribution */
-.leaflet-control-attribution {
-  background: rgba(10,12,16,0.8) !important; color: var(--text-muted) !important; font-size: 9px !important;
-}
-.leaflet-control-attribution a { color: var(--text-muted) !important; }
 
 .widget-title-group { display: flex; align-items: center; gap: 8px; }
 .widget-subtitle {
@@ -557,7 +452,7 @@ button.status-dot:hover { opacity: 0.8; }
 }
 .info-tip-wrap:hover .info-tip-box { opacity: 1; }
 
-/* ── News Search — keyword tabs ── */
+/* ── News Search - keyword tabs ── */
 .kf-tab { padding-right: 20px !important; position: relative; }
 .kf-tab-close {
   position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
@@ -578,7 +473,7 @@ button.status-dot:hover { opacity: 0.8; }
 }
 .kf-add-input::placeholder { color: var(--text-muted); }
 
-/* ── News Search — sidebar layout ── */
+/* ── News Search - sidebar layout ── */
 @keyframes ns-spin { to { transform: rotate(360deg); } }
 
 .ns-body {
@@ -760,7 +655,7 @@ button.status-dot:hover { opacity: 0.8; }
 .feed-loading { color: var(--text-muted); }
 .feed-error   { color: var(--red); }
 
-/* ── Price Tracker — watchlist layout ── */
+/* ── Price Tracker - watchlist layout ── */
 .pt-input {
   width: 100%; background: transparent; border: none; outline: none;
   color: var(--text-secondary); font-size: 10px; padding: 0;
@@ -995,7 +890,7 @@ button.status-dot:hover { opacity: 0.8; }
 }
 .rss-go-btn:hover { background: var(--color-brand-tint); }
 
-/* ── RSS Feed — new two-panel layout ── */
+/* ── RSS Feed - new two-panel layout ── */
 .rss-body {
   display: flex; flex-direction: row; flex: 1; min-height: 0; overflow: hidden;
 }
@@ -1226,7 +1121,7 @@ button.status-dot:hover { opacity: 0.8; }
   font-family: 'JetBrains Mono', monospace;
 }
 
-/* ── RSS Feed — sidebar add-form autocomplete ── */
+/* ── RSS Feed - sidebar add-form autocomplete ── */
 .rss-add-name-wrap { position: relative; }
 .rss-sug-dropdown {
   position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
@@ -1479,7 +1374,7 @@ button.status-dot:hover { opacity: 0.8; }
   display: flex; flex-shrink: 0; border-bottom: 1px solid var(--border);
 }
 .stream-iframe {
-  flex: 1; width: 100%; border: none; display: block; background: #000;
+  flex: 1; width: 100%; border: none; display: block; background: var(--bg);
 }
 .stream-body {
   flex: 1;
@@ -1524,17 +1419,17 @@ button.status-dot:hover { opacity: 0.8; }
 .nav-add-btn:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
 .nav-add-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-/* primary — the single primary action (Upgrade) */
+/* primary - the single primary action (Upgrade) */
 .btn-primary  { background: var(--color-brand); color: var(--color-on-brand); border-color: var(--color-brand); }
 .btn-primary:hover  { background: var(--color-brand-hover); border-color: var(--color-brand-hover); }
 .btn-primary:active { background: var(--color-brand-active); border-color: var(--color-brand-active); transform: scale(0.98); }
 
-/* secondary — Share, + Add Widget, Log in */
+/* secondary - Share, + Add Widget, Log in */
 .btn-secondary  { color: var(--color-brand); border-color: var(--color-brand); }
 .btn-secondary:hover  { background: var(--color-brand-tint); }
 .btn-secondary:active { color: var(--color-brand-active); border-color: var(--color-brand-active); transform: scale(0.98); }
 
-/* ghost — Sign out, theme toggle (low emphasis) */
+/* ghost - Sign out, theme toggle (low emphasis) */
 .btn-ghost  { color: var(--color-text-secondary); }
 .btn-ghost:hover  { background: var(--color-brand-tint); color: var(--color-text-primary); }
 .btn-ghost:active { transform: scale(0.98); }
@@ -2828,7 +2723,7 @@ button.status-dot:hover { opacity: 0.8; }
 .tour-spotlight {
   position: fixed;
   z-index: 1190;
-  border-radius: 5px;
+  border-radius: 4px;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
   pointer-events: none;
   animation: modal-overlay-in 160ms ease;
