@@ -9,6 +9,10 @@ import { fetchBriefLLM } from './_brief_llm.js'
 import { searchSymbols } from './symbol-search.js'
 import { relativeTime, cleanExcerpt } from '../src/lib/briefFormat.js'
 import crypto from 'node:crypto'
+import Stripe from 'stripe'
+
+const stripeForDelete = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null
+
 function safeEqual(a, b) {
   const ah = crypto.createHash('sha256').update(String(a)).digest()
   const bh = crypto.createHash('sha256').update(String(b)).digest()
@@ -654,6 +658,7 @@ async function runAlertMatch() {
     .from('alerts')
     .select('id, user_id, keyword, region, channels, webhook_url, severity, snoozed_until')
     .eq('active', true)
+    .order('id', { ascending: true })
     .limit(40)
   if (rulesErr) return { error: 'DB_ERROR', status: 500 }
 
@@ -968,6 +973,16 @@ async function handleDeleteAccount(req, res) {
     }
   }
 
+  try {
+    await supabase
+      .from('feed_cache')
+      .delete()
+      .like('feed_url', 'tglink:%')
+      .eq('items->>user_id', uid)
+  } catch (e) {
+    console.error('[delete-account] tglink purge failed', e?.message)
+  }
+
   if (user.email) {
     const { error: esErr } = await supabase
       .from('email_signups')
@@ -979,8 +994,12 @@ async function handleDeleteAccount(req, res) {
     }
   }
 
-  if (stripeCustomerId) {
-    console.log('[delete-account] stripe customer for manual cleanup', stripeCustomerId)
+  if (stripeCustomerId && stripeForDelete) {
+    try {
+      await stripeForDelete.customers.del(stripeCustomerId)
+    } catch (e) {
+      console.error('[delete-account] stripe customer delete failed', e?.message)
+    }
   }
 
   const { error: authDelErr } = await supabase.auth.admin.deleteUser(uid)
@@ -1067,7 +1086,11 @@ async function handleContact(req, res) {
   const safeMessage = clamp(trimmedMessage, 4000)
 
   const key = process.env.RESEND_API_KEY
-  const to = process.env.CONTACT_TO || 'hamoui.ammar3@gmail.com'
+  const to = process.env.CONTACT_TO
+  if (!key || !to) {
+    console.error('[jobs] contact misconfigured: RESEND_API_KEY or CONTACT_TO unset')
+    return res.status(500).json({ error: 'CONTACT_UNAVAILABLE' })
+  }
 
   const html = `<!DOCTYPE html><html><body style="margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;line-height:1.5;">
 <p><strong>Name:</strong> ${esc(safeName)}</p>
@@ -1279,7 +1302,6 @@ const DISCOVERY_MAINSTREAM_ATTEMPT = 7
 const DISCOVERY_LOCAL_ATTEMPT = 4
 const DISCOVERY_OUTLET_CONCURRENCY = 3
 const DISCOVERY_HOMEPAGE_TIMEOUT_MS = 8000
-const DISCOVERY_PROBE_TIMEOUT_MS = 6000
 const DISCOVERY_HTML_CAP_BYTES = 524288
 const DISCOVERY_LLM_DOMAINS = 6
 const DISCOVERY_LLM_GLOBAL_MAX = 60
