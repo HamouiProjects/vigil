@@ -36,7 +36,7 @@ const Impressum = () => (
 
 const Privacy = () => (
   <>
-    <p className="legal-updated">Last updated: [DATE]</p>
+    <p className="legal-updated">Last updated: June 30, 2026</p>
 
     <h2>1. Who is responsible</h2>
     <p>The controller for the processing of your personal data is:</p>
@@ -129,7 +129,7 @@ const Privacy = () => (
 
 const Terms = () => (
   <>
-    <p className="legal-updated">Last updated: [DATE]</p>
+    <p className="legal-updated">Last updated: June 30, 2026</p>
 
     <h2>1. About these terms</h2>
     <p>

@@ -106,6 +106,39 @@ function UpgradeNudge({ message, onDismiss, onUpgrade }) {
   )
 }
 
+function ShareNotice({ message, onDismiss }) {
+  const ref = useRef(null)
+  useFocusTrap(ref)
+  return (
+    <div className="modal-overlay" onClick={onDismiss}>
+      <div
+        ref={ref}
+        role="status"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--color-surface-2)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius)',
+          padding: '20px 24px',
+          maxWidth: 'min(360px, calc(100vw - 40px))',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 14,
+          textAlign: 'center',
+        }}
+      >
+        <span style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 11, lineHeight: 1.5, color: 'var(--color-text-primary)' }}>
+          {message}
+        </span>
+        <button type="button" className="nav-add-btn btn-secondary" onClick={onDismiss}>
+          Done
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function RoomCapModal({ onClose, account, goToPricing, setAuthView, setShowAuth }) {
   const modalRef = useRef(null)
   useFocusTrap(modalRef)
@@ -459,31 +492,7 @@ export default function Shell() {
       )}
 
       {shareNotice && (
-        <div className="modal-overlay" onClick={() => setShareNotice(null)}>
-          <div
-            role="status"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'var(--color-surface-2)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius)',
-              padding: '20px 24px',
-              maxWidth: 'min(360px, calc(100vw - 40px))',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 14,
-              textAlign: 'center',
-            }}
-          >
-            <span style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 11, lineHeight: 1.5, color: 'var(--color-text-primary)' }}>
-              {shareNotice}
-            </span>
-            <button type="button" className="nav-add-btn btn-secondary" onClick={() => setShareNotice(null)}>
-              Done
-            </button>
-          </div>
-        </div>
+        <ShareNotice message={shareNotice} onDismiss={() => setShareNotice(null)} />
       )}
 
       {navCollapsed

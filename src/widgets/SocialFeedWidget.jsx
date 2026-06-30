@@ -71,13 +71,6 @@ function buildYouTubeFeedUrl(v) {
   return ''
 }
 
-const TEASERS = [
-  { platform: 'x', label: 'X' },
-  { platform: 'threads', label: 'Threads' },
-  { platform: 'instagram', label: 'Instagram' },
-  { platform: 'facebook', label: 'Facebook' },
-]
-
 function PlatformIcon({ platform, size = 14 }) {
   const inner = {
     reddit: (<>
@@ -466,31 +459,6 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
                 <div className="rss-add-source-actions">
                   <button type="button" className="rss-add-source-add" onClick={addAccount}>ADD</button>
                   <button type="button" className="rss-add-source-cancel" onClick={closeAddForm}>Cancel</button>
-                </div>
-                <div style={{ borderTop: '1px solid var(--color-border)', marginTop: 8, paddingTop: 8 }}>
-                  <div style={{ fontSize: 8, letterSpacing: '0.1em', color: 'var(--color-text-muted)', marginBottom: 6 }}>
-                    SOON
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {TEASERS.map(t => (
-                      <span
-                        key={t.platform}
-                        title="Coming with the premium layer"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          fontSize: 10,
-                          color: 'var(--color-text-muted)',
-                          opacity: 0.5,
-                          cursor: 'default',
-                        }}
-                      >
-                        <PlatformIcon platform={t.platform} size={16} />
-                        {t.label}
-                      </span>
-                    ))}
-                  </div>
                 </div>
               </div>
             )}

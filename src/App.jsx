@@ -1,6 +1,7 @@
-import { useEffect, useState, lazy, Suspense } from 'react'
+import { useEffect, useState, useRef, lazy, Suspense } from 'react'
 import './App.css'
 import { supabase } from './lib/supabase.js'
+import { useFocusTrap } from './hooks/useFocusTrap.js'
 import { applyRouteHead } from './lib/routeHead.js'
 import AppErrorBoundary from './shell/AppErrorBoundary.jsx'
 import GlobeMark from './brand/GlobeMark.jsx'
@@ -28,6 +29,44 @@ function AppSplash() {
 
 function hasSeenOnboarding() {
   try { return localStorage.getItem('vigil_seen_onboarding') === '1' } catch { return false }
+}
+
+function KeepRoomDialog({ onSave, onDismiss }) {
+  const ref = useRef(null)
+  useFocusTrap(ref)
+  return (
+    <div className="modal-overlay" onClick={onDismiss}>
+      <div
+        ref={ref}
+        role="status"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--color-surface-2)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius)',
+          padding: '20px 24px',
+          maxWidth: 'min(360px, calc(100vw - 40px))',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 14,
+          textAlign: 'center',
+        }}
+      >
+        <span style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 11, lineHeight: 1.5, color: 'var(--color-text-primary)' }}>
+          You are not signed in. Sign up to keep this room across devices.
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="nav-add-btn btn-primary" onClick={onSave}>
+            Save / sign up
+          </button>
+          <button type="button" className="nav-add-btn btn-secondary" onClick={onDismiss}>
+            Not now
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // Anon clone sessions are browser-bound: edits persist locally but are lost on
@@ -70,44 +109,10 @@ function AnonKeepRoomNudge() {
   return (
     <>
       {!tourPending && !dismissed && !showAuth && (
-        <div className="modal-overlay" onClick={() => setDismissed(true)}>
-          <div
-            role="status"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'var(--color-surface-2)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius)',
-              padding: '20px 24px',
-              maxWidth: 'min(360px, calc(100vw - 40px))',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 14,
-              textAlign: 'center',
-            }}
-          >
-            <span style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 11, lineHeight: 1.5, color: 'var(--color-text-primary)' }}>
-              You are not signed in. Sign up to keep this room across devices.
-            </span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                type="button"
-                className="nav-add-btn btn-primary"
-                onClick={() => { setAuthView('signup'); setShowAuth(true) }}
-              >
-                Save / sign up
-              </button>
-              <button
-                type="button"
-                className="nav-add-btn btn-secondary"
-                onClick={() => setDismissed(true)}
-              >
-                Not now
-              </button>
-            </div>
-          </div>
-        </div>
+        <KeepRoomDialog
+          onSave={() => { setAuthView('signup'); setShowAuth(true) }}
+          onDismiss={() => setDismissed(true)}
+        />
       )}
 
       {showAuth && (
