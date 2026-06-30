@@ -16,7 +16,7 @@ const CARDS = [
   },
   {
     title: 'The alerts',
-    body: 'Some things you cannot afford to miss. Name the places, people, and keywords that matter, and when something new matching them lands in your room, Vigil flags it in its daily digest, in the app, by email, or straight into Slack for teams. A quiet, cited heads up.',
+    body: 'Some things you cannot afford to miss. Name the places, people, and keywords that matter, and Vigil watches your room for them, flagging matches in a once daily digest. Alerts are part of the paid plans, reaching you in the app, by email, by Telegram, or into a team webhook. A quiet, cited heads up.',
   },
 ]
 
@@ -215,10 +215,10 @@ export default function Landing() {
               matters.
             </p>
             <p className="lp-sub">
-              Then Vigil does the watching with you. Ask for a brief whenever you need one, or have it arrive on a schedule: a short, cited
-              summary of what your own room is saying, sent to your screen or your inbox. Set alerts on the
-              places, people, and keywords you cannot afford to miss, and Vigil flags what landed, in the app,
-              by email, or in Slack.
+              Then Vigil does the watching with you. Ask for a brief whenever you need one, a short, cited
+              summary of what your own room is saying, sent to your screen or your inbox. On a paid plan you can
+              have it arrive on a schedule, and set alerts on the places, people, and keywords you cannot afford
+              to miss, delivered in the app, by email, by Telegram, or into a team webhook.
             </p>
           </div>
         </div>

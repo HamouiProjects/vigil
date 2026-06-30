@@ -23,7 +23,7 @@ const WALK_STEPS = [
 const UNLOCK_FEATURES = [
   'Alerts',
   'Scheduled and cadence briefs',
-  'More rooms and widgets',
+  'More rooms',
   'Team seats',
 ]
 

@@ -264,7 +264,7 @@ export default function Shell() {
           const sub = await loadSubscription(uid)
           if (sub?.plan === 'pro') {
             useShellStore.getState().setEntitlements(resolveEntitlements('pro', sub.addOns ?? [], sub?.status))
-            setUpgradeNudge('Welcome to Individual. Real-time data unlocked.')
+            setUpgradeNudge('Welcome to Pro.')
             return
           }
         } catch {}
@@ -273,7 +273,6 @@ export default function Shell() {
       poll()
       window.history.replaceState({}, '', window.location.pathname)
     } else if (params.get('upgrade') === 'cancelled') {
-      setUpgradeNudge('Checkout cancelled')
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [uid])
@@ -312,9 +311,8 @@ export default function Shell() {
 
   function handleAddWidget(type) {
     const wsId = useShellStore.getState().activeWs
-    const ok = addWidget(wsId, type)
+    addWidget(wsId, type)
     setShowWidgetPicker(false)
-    if (!ok) nudgeUpgrade('Free includes 12 widgets per room. Upgrade for unlimited.')
   }
 
   async function handleShare() {
@@ -416,7 +414,7 @@ export default function Shell() {
             }}
           >
             <span id="roomcap-title" style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-              Free includes one room.
+              Free includes 2 rooms.
             </span>
             <span style={{ fontFamily: 'var(--font-sans, Geist Sans, sans-serif)', fontSize: 13, lineHeight: 1.5, color: 'var(--color-text-secondary)' }}>
               Upgrade to open more rooms.

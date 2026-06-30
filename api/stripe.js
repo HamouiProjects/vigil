@@ -15,6 +15,10 @@ export const OPTIONS = methodNotAllowed
 export const HEAD = methodNotAllowed
 
 export async function POST(request) {
+  if (process.env.STRIPE_LIVE_ENABLED !== '1') {
+    return new Response('Not found', { status: 404 })
+  }
+
   const action = new URL(request.url).searchParams.get('action')
 
   if (action === 'checkout') {

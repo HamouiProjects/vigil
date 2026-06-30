@@ -51,9 +51,10 @@ export default function AboutPage() {
 
           <h2>The alerts</h2>
           <p>
-            Some things you cannot afford to miss. Name the places, people, and keywords that matter, and
-            when something new matching them lands in your room, Vigil flags it in its daily digest, in
-            the app, by email, by Telegram, or into your team webhook. A quiet, cited heads up.
+            Some things you cannot afford to miss. Name the places, people, and keywords that matter. Alerts
+            are part of the paid plans: when something new matching them lands in your room, Vigil flags it in
+            its daily digest, in the app, by email, by Telegram, or into your team webhook. A quiet, cited
+            heads up.
           </p>
 
           <p>

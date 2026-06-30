@@ -21,7 +21,7 @@ const THEMES = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]
 
 function planLabel(plan) {
   if (!plan || plan === 'free') return 'Free'
-  if (plan === 'pro') return 'Individual'
+  if (plan === 'pro') return 'Pro'
   if (plan === 'team') return 'Team'
   return plan
 }
