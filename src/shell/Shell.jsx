@@ -9,15 +9,15 @@ import { resolveEntitlements } from '../entitlements/resolve.js'
 import Grid from './Grid.jsx'
 import EntitlementDebug from './EntitlementDebug.jsx'
 import WidgetPicker from './WidgetPicker.jsx'
-import BriefPanel from './BriefPanel.jsx'
-import SuggestSourcesPanel from './SuggestSourcesPanel.jsx'
-import WelcomeTour from './WelcomeTour.jsx'
-import AlertsDrawer from './AlertsDrawer.jsx'
 import { Bell } from 'lucide-react'
 import AccountMenu from './AccountMenu.jsx'
 import GlobeGlyph from '../brand/GlobeGlyph.jsx'
 
 const SettingsModal = lazy(() => import('../settings/SettingsModal.jsx'))
+const BriefPanel = lazy(() => import('./BriefPanel.jsx'))
+const SuggestSourcesPanel = lazy(() => import('./SuggestSourcesPanel.jsx'))
+const WelcomeTour = lazy(() => import('./WelcomeTour.jsx'))
+const AlertsDrawer = lazy(() => import('./AlertsDrawer.jsx'))
 import { supabase } from '../lib/supabase.js'
 import AuthScreen from '../components/layout/AuthScreen.jsx'
 import LatestTicker from './LatestTicker.jsx'
@@ -675,33 +675,41 @@ export default function Shell() {
         <WidgetPicker onPick={handleAddWidget} onClose={() => setShowWidgetPicker(false)} />
       )}
       {showBrief && (
-        <BriefPanel
-          onClose={() => setShowBrief(false)}
-          onUpgrade={goToPricing}
-        />
+        <Suspense fallback={null}>
+          <BriefPanel
+            onClose={() => setShowBrief(false)}
+            onUpgrade={goToPricing}
+          />
+        </Suspense>
       )}
       {showSuggest && (
-        <SuggestSourcesPanel
-          initialTopics={suggestPreset?.topics}
-          onClose={() => { setShowSuggest(false); setSuggestPreset(null) }}
-        />
+        <Suspense fallback={null}>
+          <SuggestSourcesPanel
+            initialTopics={suggestPreset?.topics}
+            onClose={() => { setShowSuggest(false); setSuggestPreset(null) }}
+          />
+        </Suspense>
       )}
       {showWelcome && (
-        <WelcomeTour
-          open={showWelcome}
-          onClose={() => setShowWelcome(false)}
-          onDone={markOnboardingSeen}
-          onUpgrade={goToPricing}
-        />
+        <Suspense fallback={null}>
+          <WelcomeTour
+            open={showWelcome}
+            onClose={() => setShowWelcome(false)}
+            onDone={markOnboardingSeen}
+            onUpgrade={goToPricing}
+          />
+        </Suspense>
       )}
-      <AlertsDrawer
-        open={showAlerts}
-        initialKeyword={alertPreset?.keyword}
-        onClose={() => { setShowAlerts(false); setAlertPreset(null) }}
-        entitlements={entitlements}
-        onUpgrade={goToPricing}
-        onActivityRead={() => setUnreadAlerts(0)}
-      />
+      <Suspense fallback={null}>
+        <AlertsDrawer
+          open={showAlerts}
+          initialKeyword={alertPreset?.keyword}
+          onClose={() => { setShowAlerts(false); setAlertPreset(null) }}
+          entitlements={entitlements}
+          onUpgrade={goToPricing}
+          onActivityRead={() => setUnreadAlerts(0)}
+        />
+      </Suspense>
       {settingsOpen && (
         <Suspense fallback={null}>
           <SettingsModal

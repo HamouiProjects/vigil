@@ -90,4 +90,15 @@ function articleApiPlugin() {
 export default defineConfig({
   plugins: [react(), articleApiPlugin()],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/maplibre-gl')) return 'maplibre'
+          if (id.includes('node_modules/react-grid-layout')) return 'grid-layout'
+          if (id.includes('node_modules/jspdf')) return 'jspdf'
+        },
+      },
+    },
+  },
 })
