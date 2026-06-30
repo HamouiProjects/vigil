@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import './alerts.css'
 import { supabase } from '../lib/supabase.js'
 import { useFocusTrap } from '../hooks/useFocusTrap.js'
 

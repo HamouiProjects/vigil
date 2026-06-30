@@ -1,0 +1,186 @@
+/* welcomeTour styles. Split out of App.css by tools/split_appcss.mjs. */
+/* Welcome tour */
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: color-mix(in srgb, var(--color-bg) 35%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: modal-overlay-in 160ms ease;
+}
+.welcome-card {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 24px;
+  max-width: min(400px, calc(100vw - 40px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.welcome-card-heading {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--color-text-primary);
+}
+.welcome-card-body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+.welcome-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.welcome-card-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+  text-align: center;
+}
+.tour-spotlight {
+  position: fixed;
+  z-index: 1190;
+  border-radius: 4px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  animation: modal-overlay-in 160ms ease;
+}
+.tour-tooltip {
+  position: fixed;
+  z-index: 1200;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  box-shadow: none;
+  animation: welcome-tour-in 140ms ease;
+}
+.tour-tooltip-inner {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(300px, calc(100vw - 24px));
+}
+.tour-tooltip-heading {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-primary);
+}
+.tour-tooltip-body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+.tour-tooltip--below::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: var(--tour-caret-x, 24px);
+  width: 10px;
+  height: 10px;
+  background: var(--color-surface-2);
+  border-left: 1px solid var(--color-border-strong);
+  border-top: 1px solid var(--color-border-strong);
+  transform: rotate(45deg);
+}
+.tour-tooltip--above::before {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: var(--tour-caret-x, 24px);
+  width: 10px;
+  height: 10px;
+  background: var(--color-surface-2);
+  border-right: 1px solid var(--color-border-strong);
+  border-bottom: 1px solid var(--color-border-strong);
+  transform: rotate(45deg);
+}
+.tour-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.tour-skip {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  padding: 4px 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  align-self: flex-start;
+}
+.tour-skip:hover {
+  color: var(--color-text-secondary);
+}
+.tour-actions .tour-skip {
+  margin-left: auto;
+}
+.welcome-unlock-card {
+  gap: 10px;
+}
+.welcome-unlock-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.welcome-unlock-note {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+.welcome-unlock-list {
+  margin: 0;
+  padding: 0 0 0 18px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+.welcome-unlock-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+@keyframes welcome-tour-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.welcome-tour--instant,
+.welcome-tour--instant.welcome-overlay,
+.welcome-tour--instant.tour-tooltip,
+.welcome-tour--instant.tour-spotlight {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .welcome-overlay,
+  .tour-tooltip,
+  .tour-spotlight {
+    animation: none;
+  }
+}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Suspense } from 'react'
+import '../widgets/widgets.css'
 import { widgetRegistry, widgetRegistryMeta, SOURCE_BACKED_TYPES } from './widgetRegistry.js'
 import WidgetErrorBoundary from './WidgetErrorBoundary.jsx'
 

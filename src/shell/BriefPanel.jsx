@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import './brief.css'
 import { useShellStore } from '../state/shellStore.js'
 import { supabase } from '../lib/supabase.js'
 import { gatherRoomItems, gatherMarketSymbols, gatherTrendsRequest, gatherWeather } from '../lib/gatherRoomItems.js'

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import '../shell/brief.css'
 
 export const COLORS = [
   'var(--color-brand)',

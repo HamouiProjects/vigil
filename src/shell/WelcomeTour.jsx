@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import './welcomeTour.css'
 import { useFocusTrap } from '../hooks/useFocusTrap.js'
 
 const PHASE_WELCOME = 0
