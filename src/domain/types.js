@@ -28,15 +28,6 @@
  * @property {Object} meta
  */
 
-export const WIDGET_TYPES = [
-  'map', 'feed', 'rss', 'stream', 'weather', 'chart', 'browser',
-  'heatmap', 'prices', 'social',
-]
-
-export const SOURCE_TYPES = [
-  'rss', 'x', 'telegram', 'news_keyword', 'price_symbol', 'reddit',
-]
-
 export const PLANS = ['free', 'pro', 'team']
 
 export const ADDONS = ['brokerage', 'licensed_data', 'ai_reports', 'premium_layers']

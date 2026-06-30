@@ -954,48 +954,6 @@ function buildWildfirePopupHtml(props, prov) {
   })
 }
 
-// Dead after stripping the conflict popup sources list, removal plus the api/geo.js conflict-detail branch is a separate tidy.
-async function fetchConflictArticles(place, kind) {
-  // Server-proxied through api/geo.js (source=conflict-detail) so this fetch is same-origin (no CORS).
-  // Returns an array of articles (possibly empty) on success, or null on error.
-  const p = (place || '').trim()
-  if (!p) return []
-  const url = `/api/geo?source=conflict-detail&place=${encodeURIComponent(place)}&kind=${encodeURIComponent(kind || '')}`
-  try {
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const json = await res.json()
-    if (json?.error) return null
-    return Array.isArray(json?.articles) ? json.articles : []
-  } catch {
-    return null
-  }
-}
-
-function conflictArticlesHtml(articles, state) {
-  if (state === 'loading') {
-    return `<div style="font-size:11px;color:var(--color-text-muted);">Loading sources...</div>`
-  }
-  if (state === 'error') {
-    return `<div style="font-size:11px;color:var(--color-text-muted);">Could not load sources.</div>`
-  }
-  if (!articles || !articles.length) {
-    return `<div style="font-size:11px;color:var(--color-text-muted);">No sources found for this location.</div>`
-  }
-  const items = articles.map((a) => {
-    const showDomain = a.domain && a.domain !== a.title
-    const domain = showDomain
-      ? `<span style="color:var(--color-text-muted);font-size:10px;"> ${escapeHtml(a.domain)}</span>`
-      : ''
-    return `<div style="margin-bottom:6px;line-height:1.35;">
-      <a href="${escapeAttr(a.url)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--color-brand);text-decoration:none;">${escapeHtml(a.title)} ↗</a>${domain}
-    </div>`
-  }).join('')
-  const label = `<div style="font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-text-muted);margin-bottom:2px;">Recent sources</div>`
-  const caption = `<div style="font-size:10px;color:var(--color-text-muted);margin-bottom:6px;">Outlets reporting conflict at this place, not this exact event.</div>`
-  return `${label}${caption}${items}`
-}
-
 function buildConflictPopupHtml(props, prov) {
   const kind = props.kind || 'Conflict event'
   const place = (props.place || '').trim()
@@ -1054,19 +1012,6 @@ function filterTcStorms(geojson) {
   )
   return { type: 'FeatureCollection', features }
 }
-
-/** Stub for later country-click phase — not wired yet. */
-function flyToStub(map, lng, lat, zoom = 4) {
-  map?.flyTo({ center: [lng, lat], zoom, duration: 1200 })
-}
-
-/** Stub for later country-click phase — not wired yet. */
-function fitBoundsStub(map, bounds, padding = 40) {
-  map?.fitBounds(bounds, { padding, duration: 1200 })
-}
-
-void flyToStub
-void fitBoundsStub
 
 const AtlasWorldGlobe = forwardRef(function AtlasWorldGlobe({ paused, layers, refreshNonce = 0, aoi = null, onAoiChange, homeNonce = 0, onProvenance, onCountrySelect }, ref) {
   const wrapRef = useRef(null)

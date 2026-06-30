@@ -417,85 +417,8 @@ async function handleConflict() {
   }
 }
 
-// --- Conflict detail (T2): cluster the SOURCEURLs that the conflict markers already carry. ---
-// The GDELT DOC API (api.gdeltproject.org) is blocked from Vercel's datacenter IP (confirmed live),
-// so the popup cannot get topic-matched coverage. Instead we reuse the SOURCEURL values already
-// parsed from the GDELT EXPORT rows for the conflict markers (the warm conflict cache), matched to
-// the clicked place. No outbound fetch to a blocked host, no CORS, reliably reachable.
-const CONFLICT_DETAIL_MAX_LINKS = 5
-const CONFLICT_DETAIL_TTL_MS = 600_000 // 10 min, so repeated clicks on the same place reuse the result
-
-function httpUrlOrNull(value) {
-  try {
-    const parsed = new URL(String(value))
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href
-  } catch { /* not a usable url */ }
-  return null
-}
-
 function normPlace(value) {
   return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim()
-}
-
-function domainOf(href) {
-  try {
-    return new URL(href).hostname.replace(/^www\./, '')
-  } catch {
-    return ''
-  }
-}
-
-// Match an event place against the clicked place: exact, or one contains the other, so a click on
-// "Iran" clusters "Tehran, Iran" and vice versa. Place-only, no topic matching.
-function conflictPlaceMatches(eventPlace, clickedPlace) {
-  const a = normPlace(eventPlace)
-  const b = normPlace(clickedPlace)
-  if (!a || !b) return false
-  return a === b || a.includes(b) || b.includes(a)
-}
-
-async function conflictSourceLinks(place) {
-  if (!normPlace(place)) return []
-  // Prefer the warm conflict cache (the user just clicked a marker, so the layer was fetched and
-  // cached server-side). Gather only if it is cold.
-  const cachedBody = getFreshCache(cacheKey('conflict', {}), SOURCE_TTL_MS.conflict)
-  let events
-  if (cachedBody && Array.isArray(cachedBody.features)) {
-    events = cachedBody.features.map((f) => f.properties || {})
-  } else {
-    events = [...(await gatherConflictEvents()).values()]
-  }
-  const seenDomain = new Set()
-  const out = []
-  for (const e of events) {
-    if (!conflictPlaceMatches(e.place, place)) continue
-    const href = httpUrlOrNull(e.url)
-    if (!href) continue
-    const dom = domainOf(href)
-    if (!dom || seenDomain.has(dom)) continue
-    seenDomain.add(dom)
-    out.push({ title: dom, domain: dom, url: href })
-    if (out.length >= CONFLICT_DETAIL_MAX_LINKS) break
-  }
-  return out
-}
-
-async function handleConflictDetail(req) {
-  const place = String(req.query.place || '')
-  const kind = String(req.query.kind || '')
-  if (!normPlace(place)) return { articles: [] }
-  const key = cacheKey('conflict-detail', { place, kind })
-  const fresh = getFreshCache(key, CONFLICT_DETAIL_TTL_MS)
-  if (fresh) return { articles: fresh.articles }
-  try {
-    const articles = await conflictSourceLinks(place)
-    setCache(key, { articles })
-    return { articles }
-  } catch {
-    const stale = getStaleCache(key)
-    if (stale) return { articles: stale.articles }
-    return { error: true }
-  }
 }
 
 async function handleDebugPassthrough(req, res, source) {
@@ -540,7 +463,7 @@ export default async function handler(req, res) {
 
   const source = (req.query.source || '').toLowerCase()
 
-  if (source !== 'aircraft' && source !== 'firms' && source !== 'conflict' && source !== 'conflict-detail') {
+  if (source !== 'aircraft' && source !== 'firms' && source !== 'conflict') {
     return res.status(400).json({ error: 'invalid source' })
   }
 
@@ -548,13 +471,6 @@ export default async function handler(req, res) {
   if (!rl.allowed) {
     res.setHeader('Retry-After', String(rl.retryAfter))
     return res.status(429).json({ error: 'rate_limited' })
-  }
-
-  // Conflict detail returns an articles array, not a FeatureCollection, so it short-circuits here.
-  if (source === 'conflict-detail') {
-    const result = await handleConflictDetail(req)
-    setGeoHeaders(res)
-    return res.status(200).json(result.error ? { articles: [], error: true } : { articles: result.articles })
   }
 
   if (req.query.debug === '1' && debugAllowed()) {
