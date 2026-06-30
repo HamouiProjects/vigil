@@ -110,9 +110,12 @@
   color: var(--text-primary); background: var(--accent-dim);
   border-bottom-color: var(--accent);
 }
-.ws-tab:focus-visible,
 .ws-tab.drag-over {
-  outline: none;
+  background: var(--accent-dim); color: var(--text-primary); border-bottom-color: var(--accent);
+}
+.ws-tab:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
   background: var(--accent-dim); color: var(--text-primary); border-bottom-color: var(--accent);
 }
 .ws-name-input {
@@ -519,6 +522,7 @@ button.status-dot:hover { opacity: 0.8; }
 }
 .widget-btn svg { width: 14px; height: 14px; }
 .widget-btn:hover { color: var(--text-primary); background: rgba(230, 237, 243, 0.08); }
+.widget-btn:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
 .widget-btn-close:hover { color: var(--red); background: rgba(248, 81, 73, 0.12); }
 
 .widget-body {
@@ -1499,6 +1503,13 @@ button.status-dot:hover { opacity: 0.8; }
 .stream-live-badge::before {
   content: ''; width: 5px; height: 5px; border-radius: 50%;
   background: var(--red); animation: pulse 1s infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-dot::before,
+  .badge-dot,
+  .stream-live-badge::before {
+    animation: none;
+  }
 }
 
 /* ── Nav button: shape only; color comes from the tier modifier ── */

@@ -14,12 +14,24 @@ export default function AccountMenu({ account, plan, onOpenSettings, onAuth, onS
     return () => document.removeEventListener('mousedown', onDoc)
   }, [open])
 
+  useEffect(() => {
+    if (!open) return undefined
+    function onKey(e) {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        avatarRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open])
+
   const isReal = account && account.isAnon === false
   const email = account?.email || ''
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button ref={avatarRef} type="button" className="account-avatar" onClick={() => setOpen(v => !v)} title="Account" aria-label="Account menu">
+      <button ref={avatarRef} type="button" className="account-avatar" onClick={() => setOpen(v => !v)} title="Account" aria-label="Account menu" aria-expanded={open} aria-haspopup="menu">
         {username
           ? username[0].toUpperCase()
           : (isReal && email

@@ -1,5 +1,6 @@
 /* global __APP_VERSION__ */
 import { useEffect, useState, useRef, lazy, Suspense } from 'react'
+import { useFocusTrap } from '../hooks/useFocusTrap.js'
 import { useShellStore, isWorkspacePaused } from '../state/shellStore.js'
 import { useShellPersistence } from '../data/useShellPersistence.js'
 import { publishWorkspace } from '../data/workspacesRepo.js'
@@ -68,6 +69,8 @@ function UpgradeNudge({ message, onDismiss, onUpgrade }) {
   if (!message) return null
   return (
     <div
+      role="status"
+      aria-live="polite"
       style={{
         position: 'fixed',
         top: 80,
@@ -98,7 +101,59 @@ function UpgradeNudge({ message, onDismiss, onUpgrade }) {
           Upgrade
         </button>
       )}
-      <button type="button" className="widget-btn" onClick={onDismiss} title="Dismiss">✕</button>
+      <button type="button" className="widget-btn" onClick={onDismiss} title="Dismiss" aria-label="Dismiss">✕</button>
+    </div>
+  )
+}
+
+function RoomCapModal({ onClose, account, goToPricing, setAuthView, setShowAuth }) {
+  const modalRef = useRef(null)
+  useFocusTrap(modalRef)
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="roomcap-title"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--color-surface-2)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius)',
+          padding: '20px 24px',
+          maxWidth: 'min(360px, calc(100vw - 40px))',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 14,
+          textAlign: 'center',
+        }}
+      >
+        <span id="roomcap-title" style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+          Free includes 2 rooms.
+        </span>
+        <span style={{ fontFamily: 'var(--font-sans, Geist Sans, sans-serif)', fontSize: 13, lineHeight: 1.5, color: 'var(--color-text-secondary)' }}>
+          Upgrade to open more rooms.
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            className="nav-add-btn btn-primary"
+            onClick={() => {
+              onClose()
+              if (account?.isAnon !== false) { setAuthView('signup'); setShowAuth(true) }
+              else { goToPricing() }
+            }}
+          >
+            {account?.isAnon !== false ? 'Sign up' : 'Upgrade'}
+          </button>
+          <button type="button" className="nav-add-btn btn-secondary" onClick={onClose}>
+            Maybe later
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -394,49 +449,13 @@ export default function Shell() {
         onUpgrade={() => { setUpgradeNudge(null); goToPricing() }}
       />
       {roomCapOpen && (
-        <div className="modal-overlay" onClick={() => setRoomCapOpen(false)}>
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="roomcap-title"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'var(--color-surface-2)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius)',
-              padding: '20px 24px',
-              maxWidth: 'min(360px, calc(100vw - 40px))',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 14,
-              textAlign: 'center',
-            }}
-          >
-            <span id="roomcap-title" style={{ fontFamily: 'var(--font-mono, JetBrains Mono, monospace)', fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-              Free includes 2 rooms.
-            </span>
-            <span style={{ fontFamily: 'var(--font-sans, Geist Sans, sans-serif)', fontSize: 13, lineHeight: 1.5, color: 'var(--color-text-secondary)' }}>
-              Upgrade to open more rooms.
-            </span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                type="button"
-                className="nav-add-btn btn-primary"
-                onClick={() => {
-                  setRoomCapOpen(false)
-                  if (account?.isAnon !== false) { setAuthView('signup'); setShowAuth(true) }
-                  else { goToPricing() }
-                }}
-              >
-                {account?.isAnon !== false ? 'Sign up' : 'Upgrade'}
-              </button>
-              <button type="button" className="nav-add-btn btn-secondary" onClick={() => setRoomCapOpen(false)}>
-                Maybe later
-              </button>
-            </div>
-          </div>
-        </div>
+        <RoomCapModal
+          onClose={() => setRoomCapOpen(false)}
+          account={account}
+          goToPricing={goToPricing}
+          setAuthView={setAuthView}
+          setShowAuth={setShowAuth}
+        />
       )}
 
       {shareNotice && (
@@ -468,7 +487,20 @@ export default function Shell() {
       )}
 
       {navCollapsed
-        ? <div className="nav-reveal-handle" onClick={() => setNavCollapsedPersisted(false)} title="Show toolbar" aria-label="Show toolbar">
+        ? <div
+            className="nav-reveal-handle"
+            role="button"
+            tabIndex={0}
+            onClick={() => setNavCollapsedPersisted(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                if (e.key === ' ') e.preventDefault()
+                setNavCollapsedPersisted(false)
+              }
+            }}
+            title="Show toolbar"
+            aria-label="Show toolbar"
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
         : (<nav className="navbar">

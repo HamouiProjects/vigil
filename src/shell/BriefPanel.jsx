@@ -850,7 +850,14 @@ export default function BriefPanel({ onClose, onUpgrade }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div ref={modalRef} className="modal brief-panel-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Brief"
+        className="modal brief-panel-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <span className="modal-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <GlobeGlyph size={20} />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
+import { useFocusTrap } from '../hooks/useFocusTrap.js'
 
 const SEVERITIES = ['low', 'normal', 'high']
 
@@ -33,6 +34,23 @@ function buildChannels(emailOn, webhookOn, telegramOn, canWebhook) {
   if (telegramOn) ch.push('telegram')
   if (canWebhook && webhookOn) ch.push('webhook')
   return ch
+}
+
+function FocusTrappedAside({ className, ariaLabel, onKeyDown, children }) {
+  const ref = useRef(null)
+  useFocusTrap(ref)
+  return (
+    <aside
+      ref={ref}
+      className={className}
+      role="dialog"
+      aria-modal="true"
+      aria-label={ariaLabel}
+      onKeyDown={onKeyDown}
+    >
+      {children}
+    </aside>
+  )
 }
 
 export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, onActivityRead, initialKeyword }) {
@@ -239,21 +257,27 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
 
   if (!open) return null
 
+  function handleDrawerKeyDown(e) {
+    if (e.key === 'Escape') onClose()
+  }
+
   return (
     <>
       <div className="alerts-drawer-backdrop" onClick={onClose} aria-hidden />
-      <aside className="alerts-drawer" role="dialog" aria-label="Alerts">
+      <FocusTrappedAside className="alerts-drawer" ariaLabel="Alerts" onKeyDown={handleDrawerKeyDown}>
         <header className="alerts-drawer-header">
           <span className="alerts-drawer-title">Alerts</span>
-          <button type="button" className="widget-btn" onClick={onClose} title="Close">
+          <button type="button" className="widget-btn" onClick={onClose} title="Close" aria-label="Close">
             ✕
           </button>
         </header>
         <div className="alerts-drawer-tabs" role="tablist">
           <button
             type="button"
+            id="alerts-tab-rules"
             role="tab"
             aria-selected={section === 'rules'}
+            aria-controls="alerts-panel-rules"
             className={`alerts-drawer-tab${section === 'rules' ? ' is-active' : ''}`}
             onClick={() => setSection('rules')}
           >
@@ -261,8 +285,10 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
           </button>
           <button
             type="button"
+            id="alerts-tab-activity"
             role="tab"
             aria-selected={section === 'activity'}
+            aria-controls="alerts-panel-activity"
             className={`alerts-drawer-tab${section === 'activity' ? ' is-active' : ''}`}
             onClick={() => setSection('activity')}
           >
@@ -270,8 +296,13 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
           </button>
         </div>
         <div className="alerts-drawer-body">
-          {section === 'rules' && (
-            <div className="alerts-rules">
+          <div
+            role="tabpanel"
+            id="alerts-panel-rules"
+            aria-labelledby="alerts-tab-rules"
+            hidden={section !== 'rules'}
+            className="alerts-rules"
+          >
               {!canAlert && (
                 <p className="alerts-nudge">
                   Alerts are a paid feature. Upgrade to start a near-real-time keyword watch.
@@ -491,10 +522,14 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
                   </ul>
                 )}
               </div>
-            </div>
-          )}
-          {section === 'activity' && (
-            <div className="alerts-activity">
+          </div>
+          <div
+            role="tabpanel"
+            id="alerts-panel-activity"
+            aria-labelledby="alerts-tab-activity"
+            hidden={section !== 'activity'}
+            className="alerts-activity"
+          >
               {eventsLoading && events.length === 0 && (
                 <p className="alerts-drawer-empty">Loading...</p>
               )}
@@ -538,10 +573,9 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
                   })}
                 </ul>
               )}
-            </div>
-          )}
+          </div>
         </div>
-      </aside>
+      </FocusTrappedAside>
     </>
   )
 }

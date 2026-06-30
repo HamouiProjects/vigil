@@ -1,7 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { widgetRegistryMeta, WIDGET_CATEGORIES } from './widgetRegistry.js'
+import { useFocusTrap } from '../hooks/useFocusTrap.js'
 
 export default function WidgetPicker({ onPick, onClose }) {
+  const modalRef = useRef(null)
+  useFocusTrap(modalRef)
+
   useEffect(() => {
     function onKey(e) {
       if (e.key === 'Escape') onClose()
@@ -10,9 +14,21 @@ export default function WidgetPicker({ onPick, onClose }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  function handleModalKeyDown(e) {
+    if (e.key === 'Escape') onClose()
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal widget-picker-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add widget"
+        className="modal widget-picker-modal"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleModalKeyDown}
+      >
         <div className="modal-header">
           <span className="modal-title">Add Widget</span>
           <button type="button" className="widget-btn" onClick={onClose} title="Close">

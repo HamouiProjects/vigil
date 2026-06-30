@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import { useFocusTrap } from '../hooks/useFocusTrap.js'
 import { useShellStore } from '../state/shellStore.js'
 import { useSources } from '../data/useSources.js'
 import { supabase } from '../lib/supabase.js'
@@ -27,6 +28,21 @@ const socialAccountsOf = (w) =>
     : SOCIAL_DEFAULT_ACCOUNTS)
 
 export default function SuggestSourcesPanel({ onClose, initialTopics, initialRegions }) {
+  const modalRef = useRef(null)
+  useFocusTrap(modalRef)
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  function handleModalKeyDown(e) {
+    if (e.key === 'Escape') onClose()
+  }
+
   const activeWs = useShellStore(s => s.activeWs)
   const workspaces = useShellStore(s => s.workspaces)
   const updateWidgetConfig = useShellStore(s => s.updateWidgetConfig)
@@ -176,7 +192,15 @@ export default function SuggestSourcesPanel({ onClose, initialTopics, initialReg
 
   return (
     <div className="suggest-overlay" onClick={onClose}>
-      <div className="suggest-panel" onClick={e => e.stopPropagation()}>
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Suggest sources"
+        className="suggest-panel"
+        onClick={e => e.stopPropagation()}
+        onKeyDown={handleModalKeyDown}
+      >
         <div className="suggest-head">
           <h2 className="suggest-heading">Suggest sources</h2>
           <button type="button" className="widget-btn" onClick={onClose} title="Close">x</button>
