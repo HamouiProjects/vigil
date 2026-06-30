@@ -135,6 +135,33 @@ export default function App() {
   const isAbout = legalPage === 'about'
   const isPricing = legalPage === 'pricing'
   const isContact = legalPage === 'contact'
+
+  useEffect(() => {
+    const ROUTE_LABELS = {
+      pricing: 'Pricing',
+      contact: 'Contact',
+      about: 'About',
+      faq: 'FAQ',
+      privacy: 'Privacy',
+      terms: 'Terms',
+      impressum: 'Impressum',
+    }
+    const label = ROUTE_LABELS[legalPage] || null
+    const title = label ? `${label} | Vigil` : 'Vigil'
+    const url = label
+      ? `https://thevigilroom.com/?p=${legalPage}`
+      : 'https://thevigilroom.com/'
+    document.title = title
+    const setMeta = (selector, attr, value) => {
+      const el = document.head.querySelector(selector)
+      if (el) el.setAttribute(attr, value)
+    }
+    setMeta('meta[property="og:title"]', 'content', title)
+    setMeta('meta[name="twitter:title"]', 'content', title)
+    setMeta('meta[property="og:url"]', 'content', url)
+    setMeta('link[rel="canonical"]', 'href', url)
+  }, [legalPage])
+
   const [sessionState, setSessionState] = useState('pending')
   const [anonSession, setAnonSession] = useState(false)
 
