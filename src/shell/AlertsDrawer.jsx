@@ -17,9 +17,9 @@ function severityColor(severity) {
   return 'var(--color-warning)'
 }
 
-function timeAgo(ts) {
+function timeAgo(ts, now = Date.now()) {
   if (!ts) return ''
-  const s = Math.max(0, Math.floor((Date.now() - new Date(ts).getTime()) / 1000))
+  const s = Math.max(0, Math.floor((now - new Date(ts).getTime()) / 1000))
   if (s < 60) return 'just now'
   const m = Math.floor(s / 60)
   if (m < 60) return `${m}m ago`
@@ -79,7 +79,8 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
   const cap = entitlements.limits.alertRules ?? 0
   const atCap = canAlert && rules.length >= cap
 
-  const isSnoozed = (rule) => Boolean(rule.snoozed_until && new Date(rule.snoozed_until).getTime() > Date.now())
+  const now = Date.now()
+  const isSnoozed = (rule) => Boolean(rule.snoozed_until && new Date(rule.snoozed_until).getTime() > now)
 
   const keywordByAlertId = useMemo(
     () => Object.fromEntries(rules.map((r) => [r.id, r.keyword])),
@@ -558,7 +559,7 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
                             />
                             {kw && <span className="alerts-activity-tag">{kw}</span>}
                             {ev.source && <span className="alerts-activity-source">{ev.source}</span>}
-                            <span className="alerts-activity-time">{timeAgo(ev.matched_at)}</span>
+                            <span className="alerts-activity-time">{timeAgo(ev.matched_at, now)}</span>
                           </div>
                           <a
                             className="alerts-activity-title"
