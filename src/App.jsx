@@ -1,6 +1,7 @@
 import { useEffect, useState, lazy, Suspense } from 'react'
 import './App.css'
 import { supabase } from './lib/supabase.js'
+import { applyRouteHead } from './lib/routeHead.js'
 import AppErrorBoundary from './shell/AppErrorBoundary.jsx'
 import GlobeMark from './brand/GlobeMark.jsx'
 
@@ -164,6 +165,10 @@ export default function App() {
 
   const [sessionState, setSessionState] = useState('pending')
   const [anonSession, setAnonSession] = useState(false)
+
+  useEffect(() => {
+    applyRouteHead(legalPage, slug)
+  }, [legalPage, slug])
 
   useEffect(() => {
     if (slug || isLegal || isInfo || isAbout || isPricing || isContact) return
