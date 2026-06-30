@@ -1,0 +1,598 @@
+// Suggest Sources pipeline + the suggest-sources action (split out of jobs.js, no behavior change).
+import supabase from './_supabase.js'
+import { rateLimit } from './_ratelimit.js'
+import { fetchBriefLLM } from './_brief_llm.js'
+import { safeFetch, readTextCapped } from './_ssrf.js'
+import { searchSymbols } from './symbol-search.js'
+import crypto from 'node:crypto'
+import { readBody } from './_jobs_util.js'
+
+// --- Suggest Sources (slice 1a: RSS Google News floor) ---
+const SUGGEST_CACHE_TTL_MS = 86_400_000 // 24h
+const SUGGEST_MAX_REGIONS = 6
+const SUGGEST_MAX_RSS = 8
+const SUGGEST_MAX_SYMBOLS = 8
+const SUGGEST_MAX_SOCIAL = 8
+const SUGGEST_DISCLAIMER = 'These are suggestions of publicly available sources, not verified or endorsed by Vigil, and not a substitute for your own due diligence.'
+const DISCOVERY_MAX_OUTBOUND = 36
+const DISCOVERY_MAINSTREAM_ATTEMPT = 7
+const DISCOVERY_LOCAL_ATTEMPT = 4
+const DISCOVERY_OUTLET_CONCURRENCY = 3
+const DISCOVERY_HOMEPAGE_TIMEOUT_MS = 8000
+const DISCOVERY_HTML_CAP_BYTES = 524288
+const DISCOVERY_LLM_DOMAINS = 6
+const DISCOVERY_LLM_GLOBAL_MAX = 60
+// Run-deadline guard. jobs.js maxDuration is 60s. Soft: discovery stops launching new
+// outbound at this elapsed time so the function never hard-times-out. Hard: past this, the
+// floor returns its Google News rows without validating, to guarantee a never-empty result.
+const SUGGEST_RUN_BUDGET_MS = 42000
+const SUGGEST_FLOOR_DEADLINE_MS = 52000
+const COMMON_FEED_PATHS = ['/feed', '/feed/', '/rss', '/rss.xml', '/atom.xml', '/feed.xml', '/feeds/posts/default']
+
+// Region to (Google News hl language, gl country). Localized floor only where we have a confident pair.
+// EU/Europe and any unmapped region fall through to the English umbrella feed below. Promote to feedSources.js when a second consumer needs it.
+const REGION_MAP = {
+  'congo': { hl: 'fr', gl: 'CD' }, 'drc': { hl: 'fr', gl: 'CD' }, 'dr congo': { hl: 'fr', gl: 'CD' },
+  'eastern congo': { hl: 'fr', gl: 'CD' }, 'goma': { hl: 'fr', gl: 'CD' }, 'kivu': { hl: 'fr', gl: 'CD' }, 'm23': { hl: 'fr', gl: 'CD' },
+  'mali': { hl: 'fr', gl: 'ML' }, 'burkina faso': { hl: 'fr', gl: 'BF' }, 'niger': { hl: 'fr', gl: 'NE' }, 'sahel': { hl: 'fr', gl: 'ML' },
+  'taiwan': { hl: 'zh-TW', gl: 'TW' }, 'taiwan strait': { hl: 'zh-TW', gl: 'TW' }, 'china': { hl: 'zh-CN', gl: 'CN' },
+  'ukraine': { hl: 'uk', gl: 'UA' }, 'russia': { hl: 'ru', gl: 'RU' }, 'germany': { hl: 'de', gl: 'DE' }, 'france': { hl: 'fr', gl: 'FR' },
+}
+
+// starter seeds, swap for spec Appendix B
+const SEED_MAINSTREAM = ['reuters.com', 'apnews.com', 'bbc.com', 'aljazeera.com', 'theguardian.com', 'france24.com', 'dw.com']
+const SEED_LOCAL_CONGO = ['actualite.cd', 'radiookapi.net', 'rfi.fr', 'jeuneafrique.com']
+const SEED_LOCAL_SAHEL = ['rfi.fr', 'jeuneafrique.com', 'africanews.com']
+const SEED_LOCAL_TAIWAN = ['taipeitimes.com', 'focustaiwan.tw', 'taiwannews.com.tw']
+const SEED_LOCAL_CHINA = ['scmp.com', 'caixinglobal.com', 'chinadaily.com.cn']
+const SEED_LOCAL_UKRAINE = ['kyivindependent.com', 'pravda.com.ua']
+const SEED_LOCAL_GERMANY = ['dw.com', 'spiegel.de']
+const SEED_LOCAL_FRANCE = ['lemonde.fr', 'france24.com']
+const SEED_LOCAL = {
+  'congo': SEED_LOCAL_CONGO, 'drc': SEED_LOCAL_CONGO, 'dr congo': SEED_LOCAL_CONGO,
+  'eastern congo': SEED_LOCAL_CONGO, 'goma': SEED_LOCAL_CONGO, 'kivu': SEED_LOCAL_CONGO, 'm23': SEED_LOCAL_CONGO,
+  'mali': SEED_LOCAL_SAHEL, 'burkina faso': SEED_LOCAL_SAHEL, 'niger': SEED_LOCAL_SAHEL, 'sahel': SEED_LOCAL_SAHEL,
+  'taiwan': SEED_LOCAL_TAIWAN, 'taiwan strait': SEED_LOCAL_TAIWAN,
+  'china': SEED_LOCAL_CHINA,
+  'ukraine': SEED_LOCAL_UKRAINE,
+  'germany': SEED_LOCAL_GERMANY,
+  'france': SEED_LOCAL_FRANCE,
+}
+
+function gnCeid(hl, gl) { return gl + ':' + hl.split('-')[0] }
+function gnRssUrl(q, hl, gl) {
+  return 'https://news.google.com/rss/search?q=' + encodeURIComponent(q) + '&hl=' + hl + '&gl=' + gl + '&ceid=' + encodeURIComponent(gnCeid(hl, gl))
+}
+function gnHtmlUrl(q, hl, gl) {
+  return 'https://news.google.com/search?q=' + encodeURIComponent(q) + '&hl=' + hl + '&gl=' + gl + '&ceid=' + encodeURIComponent(gnCeid(hl, gl))
+}
+
+function suggestCacheKey(topics, regions, widgetTypes) {
+  const norm = arr => [...new Set((arr || []).map(s => String(s).trim().toLowerCase()).filter(Boolean))].sort()
+  const payload = JSON.stringify({ t: norm(topics), r: norm(regions), w: norm(widgetTypes) })
+  return 'suggest:' + crypto.createHash('sha256').update(payload).digest('hex').slice(0, 40)
+}
+async function suggestCacheRead(key) {
+  if (!supabase) return null
+  try {
+    const { data } = await supabase.from('feed_cache').select('*').eq('feed_url', key).maybeSingle()
+    if (!data) return null
+    const age = Date.now() - new Date(data.updated_at).getTime()
+    if (age >= 0 && age < SUGGEST_CACHE_TTL_MS) return data.items
+    return null
+  } catch { return null }
+}
+async function suggestCacheWrite(key, payload) {
+  if (!supabase) return
+  try {
+    await supabase.from('feed_cache').upsert(
+      { feed_url: key, title: 'suggest-sources', items: payload, updated_at: new Date().toISOString() },
+      { onConflict: 'feed_url' },
+    )
+  } catch { /* best-effort */ }
+}
+
+// Validate a feed through our own rss proxy (the same path the live widgets use), so validate-time matches run-time.
+async function suggestFeedHasItems(feedUrl) {
+  try {
+    const res = await fetch('https://thevigilroom.com/api/rss?url=' + encodeURIComponent(feedUrl), { signal: AbortSignal.timeout(12000) })
+    if (!res.ok) return false
+    const data = await res.json()
+    return Array.isArray(data?.items) && data.items.length > 0
+  } catch { return false }
+}
+
+const DOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/
+
+function sanitizeDomain(raw) {
+  if (raw == null) return null
+  let s = String(raw).trim().toLowerCase()
+  if (!s) return null
+  s = s.replace(/^https?:\/\//, '')
+  const slash = s.indexOf('/')
+  if (slash >= 0) s = s.slice(0, slash)
+  const q = s.indexOf('?')
+  if (q >= 0) s = s.slice(0, q)
+  const hash = s.indexOf('#')
+  if (hash >= 0) s = s.slice(0, hash)
+  s = s.trim()
+  if (!s || s.includes(' ')) return null
+  return DOMAIN_RE.test(s) ? s : null
+}
+
+function dedupDomains(domains) {
+  const seen = new Set()
+  const out = []
+  for (const d of domains) {
+    if (!d || seen.has(d)) continue
+    seen.add(d)
+    out.push(d)
+  }
+  return out
+}
+
+async function budgetedFeedCheck(feedUrl, budget) {
+  if (budget.deadlineAt && Date.now() >= budget.deadlineAt) return false
+  if (budget.left <= 0) return false
+  budget.left -= 1
+  return suggestFeedHasItems(feedUrl)
+}
+
+function extractFeedLinkCandidates(html, homepage) {
+  const headMatch = html.match(/<head[\s\S]*?<\/head>/i)
+  const searchIn = headMatch ? headMatch[0] : html
+  const candidates = []
+  const linkRe = /<link\b[^>]*>/gi
+  let m
+  while ((m = linkRe.exec(searchIn)) !== null) {
+    const tag = m[0]
+    const relMatch = tag.match(/\brel\s*=\s*["']([^"']+)["']/i)
+    const typeMatch = tag.match(/\btype\s*=\s*["']([^"']+)["']/i)
+    const hrefMatch = tag.match(/\bhref\s*=\s*["']([^"']+)["']/i)
+    if (!hrefMatch) continue
+    const rel = (relMatch?.[1] || '').toLowerCase()
+    const type = (typeMatch?.[1] || '').toLowerCase()
+    const isFeed = rel.includes('feed')
+      || (rel.includes('alternate') && (type.includes('rss') || type.includes('atom')))
+    if (!isFeed) continue
+    try {
+      candidates.push(new URL(hrefMatch[1], homepage).href)
+    } catch { /* skip invalid href */ }
+    if (candidates.length >= 3) break
+  }
+  return candidates
+}
+
+async function discoverOutletFeed(domain, budget) {
+  const homepage = 'https://' + domain + '/'
+  try {
+    if (budget.left > 0 && !(budget.deadlineAt && Date.now() >= budget.deadlineAt)) {
+      budget.left -= 1
+      const res = await safeFetch(homepage, { signal: AbortSignal.timeout(DISCOVERY_HOMEPAGE_TIMEOUT_MS) })
+      const html = await readTextCapped(res, DISCOVERY_HTML_CAP_BYTES)
+      const candidates = extractFeedLinkCandidates(html, homepage)
+      for (const feedUrl of candidates) {
+        if (await budgetedFeedCheck(feedUrl, budget)) return feedUrl
+      }
+    }
+  } catch { /* homepage fetch failure, continue to path probes */ }
+
+  for (const path of COMMON_FEED_PATHS) {
+    if (budget.left <= 0) break
+    if (budget.deadlineAt && Date.now() >= budget.deadlineAt) break
+    const feedUrl = 'https://' + domain + path
+    if (await budgetedFeedCheck(feedUrl, budget)) return feedUrl
+  }
+  return null
+}
+
+async function mapWithConcurrency(items, concurrency, fn) {
+  const results = new Array(items.length)
+  let next = 0
+  async function worker() {
+    while (next < items.length) {
+      const idx = next++
+      results[idx] = await fn(items[idx], idx)
+    }
+  }
+  const n = Math.min(concurrency, items.length)
+  if (n > 0) await Promise.all(Array.from({ length: n }, () => worker()))
+  return results
+}
+
+function collectMatchedRegionKeys(regions) {
+  const regionList = (regions || []).map(s => String(s).trim()).filter(Boolean)
+  const matched = []
+  for (const region of regionList.slice(0, SUGGEST_MAX_REGIONS)) {
+    const key = region.toLowerCase()
+    if (REGION_MAP[key] && !matched.includes(key)) matched.push(key)
+  }
+  return matched
+}
+
+async function buildRssDiscovery(topics, regions, req, softDeadlineAt) {
+  const topicQ = (topics || []).map(s => String(s).trim()).filter(Boolean).join(' ')
+  const matchedKeys = collectMatchedRegionKeys(regions)
+  const budget = { left: DISCOVERY_MAX_OUTBOUND, deadlineAt: softDeadlineAt }
+
+  let llmMainstream = []
+  let llmLocal = []
+  const llm = await rateLimit(req, 'suggest-llm', DISCOVERY_LLM_GLOBAL_MAX, 3600, 'global')
+  if (llm.allowed) {
+    try {
+      const topicStr = (topics || []).map(s => String(s).trim()).filter(Boolean).join(', ')
+      const regionStr = (regions || []).map(s => String(s).trim()).filter(Boolean).join(', ')
+      const raw = await fetchBriefLLM({
+        system: 'You suggest news outlet domains for risk monitoring. Given topics and regions, return well-known international mainstream outlet domains and credible local or regional outlet domains. Return STRICT JSON exactly {"mainstream":["domain.tld",...],"local":["domain.tld",...]}. Bare domains only, no protocol, no paths, no prose, no markdown.',
+        user: 'Topics: ' + topicStr + '\nRegions: ' + regionStr,
+      })
+      const parsed = JSON.parse(raw)
+      llmMainstream = Array.isArray(parsed?.mainstream) ? parsed.mainstream : []
+      llmLocal = Array.isArray(parsed?.local) ? parsed.local : []
+    } catch {
+      llmMainstream = []
+      llmLocal = []
+    }
+  }
+
+  const llmMainSan = llmMainstream.map(sanitizeDomain).filter(Boolean)
+  const llmLocSan = llmLocal.map(sanitizeDomain).filter(Boolean)
+  let llmSlots = DISCOVERY_LLM_DOMAINS
+  const llmMainTaken = llmMainSan.slice(0, llmSlots)
+  llmSlots -= llmMainTaken.length
+  const llmLocTaken = llmLocSan.slice(0, llmSlots)
+
+  const mainstreamDomains = dedupDomains([
+    ...SEED_MAINSTREAM.map(sanitizeDomain).filter(Boolean),
+    ...llmMainTaken,
+  ]).slice(0, DISCOVERY_MAINSTREAM_ATTEMPT)
+
+  const localSeedDomains = []
+  for (const key of matchedKeys) {
+    const seeds = SEED_LOCAL[key]
+    if (seeds) localSeedDomains.push(...seeds)
+  }
+  const localDomains = dedupDomains([
+    ...localSeedDomains.map(sanitizeDomain).filter(Boolean),
+    ...llmLocTaken,
+  ]).slice(0, DISCOVERY_LOCAL_ATTEMPT)
+
+  const firstMatched = matchedKeys[0]
+  const gnLoc = firstMatched ? REGION_MAP[firstMatched] : null
+  const gnHl = gnLoc?.hl ?? 'en-US'
+  const gnGl = gnLoc?.gl ?? 'US'
+
+  const mainstreamRows = []
+  const mainstreamResults = await mapWithConcurrency(mainstreamDomains, DISCOVERY_OUTLET_CONCURRENCY, async (domain) => {
+    const feedUrl = await discoverOutletFeed(domain, budget)
+    if (feedUrl) {
+      return {
+        widgetType: 'rss', tier: 'mainstream', verificationBasis: 'none',
+        label: domain, value: feedUrl, sourceLink: 'https://' + domain + '/',
+      }
+    }
+    if (budget.left <= 0) return null
+    const q = 'site:' + domain + (topicQ ? ' ' + topicQ : '')
+    const gnFeed = gnRssUrl(q, gnHl, gnGl)
+    if (await budgetedFeedCheck(gnFeed, budget)) {
+      return {
+        widgetType: 'rss', tier: 'manufactured', verificationBasis: 'none',
+        label: domain, value: gnFeed, sourceLink: gnHtmlUrl(q, gnHl, gnGl),
+      }
+    }
+    return null
+  })
+  for (const row of mainstreamResults) {
+    if (row) mainstreamRows.push(row)
+  }
+
+  const localNativeRows = []
+  const localManufacturedRows = []
+  const localResults = await mapWithConcurrency(localDomains, DISCOVERY_OUTLET_CONCURRENCY, async (domain) => {
+    const feedUrl = await discoverOutletFeed(domain, budget)
+    if (feedUrl) {
+      return {
+        kind: 'native',
+        row: {
+          widgetType: 'rss', tier: 'local', verificationBasis: 'none',
+          label: domain, value: feedUrl, sourceLink: 'https://' + domain + '/',
+        },
+      }
+    }
+    if (budget.left <= 0) return null
+    const q = 'site:' + domain + (topicQ ? ' ' + topicQ : '')
+    const gnFeed = gnRssUrl(q, gnHl, gnGl)
+    if (await budgetedFeedCheck(gnFeed, budget)) {
+      return {
+        kind: 'manufactured',
+        row: {
+          widgetType: 'rss', tier: 'manufactured', verificationBasis: 'none',
+          label: domain, value: gnFeed, sourceLink: gnHtmlUrl(q, gnHl, gnGl),
+        },
+      }
+    }
+    return null
+  })
+  for (const result of localResults) {
+    if (!result) continue
+    if (result.kind === 'native') localNativeRows.push(result.row)
+    else if (result.kind === 'manufactured') localManufacturedRows.push(result.row)
+  }
+
+  return [...mainstreamRows, ...localNativeRows, ...localManufacturedRows]
+}
+
+async function proposeSymbols(topics, req, deadlines, max = SUGGEST_MAX_SYMBOLS) {
+  let proposedQueries = []
+  const llm = await rateLimit(req, 'suggest-llm', DISCOVERY_LLM_GLOBAL_MAX, 3600, 'global')
+  if (llm.allowed) {
+    try {
+      const topicStr = (topics || []).map(s => String(s).trim()).filter(Boolean).join(', ')
+      const raw = await fetchBriefLLM({
+        system: 'You suggest tradable instruments for MONITORING a specific topic, not for general market exposure. Given topics, return only instruments with a clear, specific link to the topic: a commodity the topic is a major producer or consumer of, a company or asset materially exposed to it, the single most relevant FX pair, or a narrowly scoped sector ETF tied to it. Do NOT return broad market proxies (the S&P 500, total market or country index funds, a generic volatility index, or gold as a generic safe haven) unless the topic itself is that market or asset. Prefer fewer well justified instruments over a long list, and an empty list is acceptable when nothing has a clear specific link. Return STRICT JSON exactly {"symbols":["..."]} of up to 8 short query strings, each a ticker or a company or asset name. No prose, no markdown.',
+        user: 'Topics: ' + topicStr,
+      })
+      const parsed = JSON.parse(raw)
+      proposedQueries = Array.isArray(parsed?.symbols) ? parsed.symbols : []
+    } catch {
+      proposedQueries = []
+    }
+  }
+
+  const validated = await mapWithConcurrency(proposedQueries, DISCOVERY_OUTLET_CONCURRENCY, async (qy) => {
+    if (Date.now() > deadlines.soft) return null
+    const r = (await searchSymbols(qy))[0]
+    return r ? { tvSymbol: r.tvSymbol, display: r.display, description: r.description } : null
+  })
+
+  const seen = new Set()
+  const resolved = []
+  for (const r of validated) {
+    if (!r || seen.has(r.tvSymbol)) continue
+    seen.add(r.tvSymbol)
+    resolved.push(r)
+    if (resolved.length >= max) break
+  }
+  return resolved
+}
+
+function buildPricesGroup(resolved) {
+  return resolved.map(r => ({
+    widgetType: 'prices', tier: '', verificationBasis: 'none',
+    label: (r.description || r.display), value: r.tvSymbol, sourceLink: '',
+    display: r.display, description: r.description,
+  }))
+}
+
+function buildChartGroup(resolved) {
+  return resolved.map(r => ({
+    widgetType: 'chart', tier: '', verificationBasis: 'none',
+    label: (r.description || r.display), value: r.tvSymbol, sourceLink: '',
+    display: r.display, description: r.description,
+  }))
+}
+
+async function proposeKeywords(topics, req, max = 8) {
+  let keywords = []
+  const llm = await rateLimit(req, 'suggest-llm', DISCOVERY_LLM_GLOBAL_MAX, 3600, 'global')
+  if (llm.allowed) {
+    try {
+      const topicStr = (topics || []).map(s => String(s).trim()).filter(Boolean).join(', ')
+      const raw = await fetchBriefLLM({
+        system: 'You suggest search keywords for monitoring a topic in a news search tool. Given topics, return specific search phrases an analyst would track, favoring precise multi word phrases over single generic words. Return STRICT JSON exactly {"keywords":["..."]} of up to 8 short phrases. No prose, no markdown.',
+        user: 'Topics: ' + topicStr,
+      })
+      const parsed = JSON.parse(raw)
+      keywords = Array.isArray(parsed?.keywords) ? parsed.keywords : []
+    } catch {
+      keywords = []
+    }
+  }
+  const seen = new Set()
+  const out = []
+  for (const k of keywords) {
+    const kw = String(k || '').trim()
+    if (!kw) continue
+    const key = kw.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(kw)
+    if (out.length >= max) break
+  }
+  return out
+}
+
+function buildFeedGroup(keywords) {
+  return keywords.map(kw => ({
+    widgetType: 'feed', tier: '', verificationBasis: 'none',
+    label: kw, value: kw, sourceLink: '',
+  }))
+}
+
+function buildTrendsGroup(keywords) {
+  return keywords.map(kw => ({
+    widgetType: 'trends', tier: '', verificationBasis: 'none',
+    label: kw, value: kw, sourceLink: '',
+  }))
+}
+
+async function proposeSocial(topics, req) {
+  let subreddits = [], bluesky = []
+  const llm = await rateLimit(req, 'suggest-llm', DISCOVERY_LLM_GLOBAL_MAX, 3600, 'global')
+  if (llm.allowed) {
+    try {
+      const topicStr = (topics || []).map(s => String(s).trim()).filter(Boolean).join(', ')
+      const raw = await fetchBriefLLM({
+        system: 'You suggest social accounts to follow for monitoring a topic, on Reddit and Bluesky only. Given topics, return real, active subreddits (without the r/ prefix) and real Bluesky handles (like name.bsky.social) relevant to the topic. Return STRICT JSON exactly {"subreddits":["..."],"bluesky":["..."]}, up to 6 each. No prose, no markdown.',
+        user: 'Topics: ' + topicStr,
+      })
+      const parsed = JSON.parse(raw)
+      subreddits = Array.isArray(parsed?.subreddits) ? parsed.subreddits : []
+      bluesky = Array.isArray(parsed?.bluesky) ? parsed.bluesky : []
+    } catch { subreddits = []; bluesky = [] }
+  }
+  return { subreddits, bluesky }
+}
+
+function normReddit(x) {
+  const v = String(x || '').trim().replace(/^\/?(r\/)?/i, '').replace(/\/+$/, '')
+  return /^[a-z0-9_]{2,21}$/i.test(v) ? v : null
+}
+
+function normBluesky(x) {
+  const v = String(x || '').trim().replace(/^@/, '').replace(/^https?:\/\/bsky\.app\/profile\//i, '').replace(/\/.*$/, '').toLowerCase()
+  return (/^[a-z0-9.-]+\.[a-z0-9.-]+$/.test(v) && !v.includes(' ')) ? v : null
+}
+
+async function buildSocialGroup(topics, req, deadlines) {
+  const { subreddits, bluesky } = await proposeSocial(topics, req)
+  const candidates = []
+  for (const s of subreddits) {
+    const v = normReddit(s)
+    if (v) candidates.push({ platform: 'reddit', value: v, feedUrl: `https://www.reddit.com/r/${v}/.rss`, label: 'r/' + v })
+  }
+  for (const b of bluesky) {
+    const v = normBluesky(b)
+    if (v) candidates.push({ platform: 'bluesky', value: v, feedUrl: `https://bsky.app/profile/${v}/rss`, label: '@' + v })
+  }
+  const seenC = new Set()
+  const uniq = []
+  for (const c of candidates) {
+    const k = c.platform + ':' + c.value.toLowerCase()
+    if (seenC.has(k)) continue
+    seenC.add(k)
+    uniq.push(c)
+  }
+  const validated = await mapWithConcurrency(uniq, DISCOVERY_OUTLET_CONCURRENCY, async (c) => {
+    if (Date.now() > deadlines.soft) return null
+    return (await suggestFeedHasItems(c.feedUrl)) ? c : null
+  })
+  const out = []
+  for (const c of validated) {
+    if (!c) continue
+    out.push({ widgetType: 'social', tier: '', verificationBasis: 'none', label: c.label, value: c.value, platform: c.platform, sourceLink: '' })
+    if (out.length >= SUGGEST_MAX_SOCIAL) break
+  }
+  return out
+}
+
+async function buildRssGroup(topics, regions, req, deadlines) {
+  let discovered = []
+  try {
+    discovered = await buildRssDiscovery(topics, regions, req, deadlines?.soft)
+  } catch {
+    discovered = []
+  }
+  const floor = await buildRssFloor(topics, regions, deadlines?.hard)
+  const seen = new Set()
+  const out = []
+  for (const row of [...discovered, ...floor]) {
+    if (seen.has(row.value)) continue
+    seen.add(row.value)
+    out.push(row)
+    if (out.length >= SUGGEST_MAX_RSS) break
+  }
+  return out
+}
+
+async function buildRssFloor(topics, regions, hardDeadlineAt) {
+  const topicQ = (topics || []).map(s => String(s).trim()).filter(Boolean).join(' ')
+  const regionList = (regions || []).map(s => String(s).trim()).filter(Boolean)
+  const candidates = []
+  for (const region of regionList.slice(0, SUGGEST_MAX_REGIONS)) {
+    const loc = REGION_MAP[region.toLowerCase()]
+    if (!loc) continue
+    const q = [topicQ, region].filter(Boolean).join(' ')
+    candidates.push({
+      tier: 'manufactured', verificationBasis: 'none',
+      label: 'Google News: ' + q + ' (' + loc.hl + '/' + loc.gl + ')',
+      value: gnRssUrl(q, loc.hl, loc.gl), sourceLink: gnHtmlUrl(q, loc.hl, loc.gl),
+    })
+  }
+  const umbrellaQ = [topicQ, regionList.join(' ')].filter(Boolean).join(' ').trim()
+  if (umbrellaQ) {
+    candidates.push({
+      tier: 'manufactured', verificationBasis: 'none',
+      label: 'Google News: ' + umbrellaQ + ' (en/US)',
+      value: gnRssUrl(umbrellaQ, 'en-US', 'US'), sourceLink: gnHtmlUrl(umbrellaQ, 'en-US', 'US'),
+    })
+  }
+  let valid
+  if (hardDeadlineAt && Date.now() >= hardDeadlineAt) {
+    // Past the hard run deadline. Skip validation so the never-empty floor still returns
+    // before the function times out. These are manufactured Google News query feeds,
+    // already tier-labeled and disclaimed, and they reliably resolve.
+    valid = candidates
+  } else {
+    const checked = await Promise.allSettled(candidates.map(async c => (await suggestFeedHasItems(c.value)) ? c : null))
+    valid = checked.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
+  }
+  const seen = new Set()
+  const out = []
+  for (const c of valid) {
+    if (seen.has(c.value)) continue
+    seen.add(c.value)
+    out.push({ widgetType: 'rss', ...c })
+    if (out.length >= SUGGEST_MAX_RSS) break
+  }
+  return out
+}
+
+async function handleSuggestSources(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' })
+  if (!supabase) return res.status(503).json({ error: 'SUPABASE_UNAVAILABLE' })
+
+  const authHeader = req.headers.authorization || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
+  if (!token) return res.status(401).json({ error: 'UNAUTHORIZED' })
+  const { data: userData, error: userErr } = await supabase.auth.getUser(token)
+  const user = userData?.user
+  if (userErr || !user?.id) return res.status(401).json({ error: 'UNAUTHORIZED' })
+
+  const rl = await rateLimit(req, 'suggest-sources', 10, 60, user.id)
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', String(rl.retryAfter))
+    return res.status(429).json({ error: 'RATE_LIMITED' })
+  }
+  const body = readBody(req) || {}
+  const topics = Array.isArray(body.topics) ? body.topics : []
+  const regions = Array.isArray(body.regions) ? body.regions : []
+  const widgetTypes = Array.isArray(body.widgetTypes) ? body.widgetTypes : []
+  const key = suggestCacheKey(topics, regions, widgetTypes)
+  const cached = await suggestCacheRead(key)
+  if (cached) return res.status(200).json({ ...cached, cached: true })
+  const startedAt = Date.now()
+  const deadlines = {
+    soft: startedAt + SUGGEST_RUN_BUDGET_MS,
+    hard: startedAt + SUGGEST_FLOOR_DEADLINE_MS,
+  }
+  const suggestions = []
+  if (widgetTypes.includes('rss')) {
+    const rssGroup = await buildRssGroup(topics, regions, req, deadlines)
+    suggestions.push(...rssGroup)
+  }
+  const needSymbols = widgetTypes.includes('prices') || widgetTypes.includes('chart')
+  const resolvedSymbols = needSymbols ? await proposeSymbols(topics, req, deadlines, SUGGEST_MAX_SYMBOLS) : []
+  if (widgetTypes.includes('prices')) {
+    suggestions.push(...buildPricesGroup(resolvedSymbols))
+  }
+  if (widgetTypes.includes('chart')) {
+    suggestions.push(...buildChartGroup(resolvedSymbols.slice(0, 5)))
+  }
+  const needKeywords = widgetTypes.includes('feed') || widgetTypes.includes('trends')
+  const resolvedKeywords = needKeywords ? await proposeKeywords(topics, req) : []
+  if (widgetTypes.includes('feed')) {
+    suggestions.push(...buildFeedGroup(resolvedKeywords))
+  }
+  if (widgetTypes.includes('trends')) {
+    suggestions.push(...buildTrendsGroup(resolvedKeywords))
+  }
+  if (widgetTypes.includes('social')) {
+    suggestions.push(...await buildSocialGroup(topics, req, deadlines))
+  }
+  const result = { suggestions, disclaimer: SUGGEST_DISCLAIMER, terms: { topics, regions } }
+  await suggestCacheWrite(key, result)
+  return res.status(200).json({ ...result, cached: false })
+}
+
+export { handleSuggestSources }
