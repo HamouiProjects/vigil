@@ -8,6 +8,8 @@
 --   workspaces  free 2 / pro 6  / team 12
 --   alert rules free 0 / pro 10 / team 25
 -- Existing rows are grandfathered (INSERT-only trigger); no data is removed.
+-- Workspace saves upsert on (user_id, local_id); BEFORE INSERT also runs on the
+-- update path, so cap enforcement is skipped when local_id already exists.
 
 create or replace function public.enforce_row_cap()
 returns trigger
@@ -34,6 +36,12 @@ begin
   end if;
 
   if tg_table_name = 'workspaces' then
+    if exists (
+      select 1 from public.workspaces
+      where user_id = new.user_id and local_id = new.local_id
+    ) then
+      return new;
+    end if;
     v_cap := case v_plan when 'pro' then 6 when 'team' then 12 else 2 end;
     select count(*) into v_count from public.workspaces where user_id = new.user_id;
   elsif tg_table_name = 'alerts' then
