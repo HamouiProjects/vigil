@@ -1,6 +1,8 @@
 {
   "name": "Vigil",
   "short_name": "Vigil",
+  "lang": "en-US",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/icon-192.png",

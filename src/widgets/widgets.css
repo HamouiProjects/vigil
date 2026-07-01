@@ -561,7 +561,7 @@
 }
 .rss-filter-chip {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 6px 2px 8px; border-radius: 10px;
+  padding: 2px 6px 2px 8px; border-radius: 4px;
   background: var(--surface-2); border: 1px solid var(--border);
   font-size: 10px; color: var(--text-secondary);
   cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s;
@@ -576,7 +576,7 @@
 .rss-filter-chip-del:hover { opacity: 1; }
 .rss-filters-strip .rss-filter-add-btn {
   width: auto; padding: 2px 6px; font-size: 11px;
-  border: 1px dashed var(--border); border-radius: 10px;
+  border: 1px dashed var(--border); border-radius: 4px;
 }
 
 .rss-sidebar-footer {
