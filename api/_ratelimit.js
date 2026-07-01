@@ -1,7 +1,7 @@
 import supabase from './_supabase.js'
 
 const UNKNOWN_IP = 'unknown'
-const FAIL_CLOSED_BUCKETS = new Set(['suggest-llm'])
+const FAIL_CLOSED_BUCKETS = new Set(['suggest-llm', 'brief-llm'])
 
 function getClientIp(req) {
   const xff = req.headers['x-forwarded-for']

@@ -6,6 +6,11 @@ import { normalizeWidgetGroups, isHttpUrl, buildFeedBrief, BriefParseError } fro
 import { resolveEntitlements } from '../shared/resolve.js'
 import { getQuotes } from './_yahoo.js'
 
+// Global hourly ceiling on paid brief generation (LLM + SerpApi + Yahoo) across ALL users.
+// Caps a spike or an anon-session-farming abuser to bounded spend. Tunable in Vercel without a
+// redeploy via BRIEF_LLM_GLOBAL_MAX. Enforced fail-closed (see FAIL_CLOSED_BUCKETS in _ratelimit).
+const BRIEF_LLM_GLOBAL_MAX = Number(process.env.BRIEF_LLM_GLOBAL_MAX) || 120
+
 function readBody(req) {
   if (req.body && typeof req.body === 'object') return req.body
   if (typeof req.body === 'string') {
@@ -236,6 +241,13 @@ export default async function handler(req, res) {
       resetsAt: firstDayNextMonthISO(),
       message: `You have used all ${cap} briefs for this month. Your allowance resets on the 1st.`,
     })
+  }
+
+  // Global cost ceiling: after the per-user checks above, gate every paid call (LLM, SerpApi,
+  // Yahoo) behind an hourly budget shared across all users. Fail-closed. Mirrors suggest-llm.
+  const budget = await rateLimit(req, 'brief-llm', BRIEF_LLM_GLOBAL_MAX, 3600, 'global')
+  if (!budget.allowed) {
+    return res.status(429).json({ error: 'BRIEF_BUDGET_REACHED', retryAfter: budget.retryAfter })
   }
 
   const wantedSyms = mkReq
