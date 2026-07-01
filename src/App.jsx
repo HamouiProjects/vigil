@@ -27,6 +27,31 @@ function AppSplash() {
   )
 }
 
+// Every route below the session gate renders the same way: lazily, inside a
+// Suspense splash and the root error boundary. Boundaried captures that shape
+// once so the route table and the session branches stay declarative.
+function Boundaried({ children }) {
+  return (
+    <Suspense fallback={<AppSplash />}>
+      <AppErrorBoundary>{children}</AppErrorBoundary>
+    </Suspense>
+  )
+}
+
+// Static routes keyed by the `?p=` param. Each entry receives the raw param so
+// the legal and info pages can pass it through as their `page` prop. A `?r=`
+// share slug and the session-driven views (Shell / Landing) are handled
+// separately below because they do not key off `?p=`.
+const STATIC_ROUTES = {
+  impressum: (p) => <LegalPage page={p} />,
+  privacy: (p) => <LegalPage page={p} />,
+  terms: (p) => <LegalPage page={p} />,
+  faq: (p) => <InfoPage page={p} />,
+  pricing: () => <PricingPage />,
+  about: () => <AboutPage />,
+  contact: () => <ContactPage />,
+}
+
 function hasSeenOnboarding() {
   try { return localStorage.getItem('vigil_seen_onboarding') === '1' } catch { return false }
 }
@@ -136,11 +161,8 @@ export default function App() {
   const params = new URLSearchParams(window.location.search)
   const slug = params.get('r')
   const legalPage = params.get('p')
-  const isLegal = ['impressum', 'privacy', 'terms'].includes(legalPage)
-  const isInfo = legalPage === 'faq'
-  const isAbout = legalPage === 'about'
-  const isPricing = legalPage === 'pricing'
-  const isContact = legalPage === 'contact'
+  const staticRoute = STATIC_ROUTES[legalPage]
+  const onStaticRoute = !!slug || !!staticRoute
 
   const [sessionState, setSessionState] = useState('pending')
   const [anonSession, setAnonSession] = useState(false)
@@ -150,7 +172,7 @@ export default function App() {
   }, [legalPage, slug])
 
   useEffect(() => {
-    if (slug || isLegal || isInfo || isAbout || isPricing || isContact) return
+    if (onStaticRoute) return
 
     let cancelled = false
 
@@ -170,86 +192,30 @@ export default function App() {
       cancelled = true
       subscription?.unsubscribe()
     }
-  }, [slug, isLegal, isInfo, isAbout, isPricing, isContact])
+  }, [onStaticRoute])
 
-  if (isLegal) {
-    return (
-      <Suspense fallback={<AppSplash />}>
-        <AppErrorBoundary>
-          <LegalPage page={legalPage} />
-        </AppErrorBoundary>
-      </Suspense>
-    )
-  }
-
-  if (isInfo) {
-    return (
-      <Suspense fallback={<AppSplash />}>
-        <AppErrorBoundary>
-          <InfoPage page={legalPage} />
-        </AppErrorBoundary>
-      </Suspense>
-    )
-  }
-
-  if (isPricing) {
-    return (
-      <Suspense fallback={<AppSplash />}>
-        <AppErrorBoundary>
-          <PricingPage />
-        </AppErrorBoundary>
-      </Suspense>
-    )
-  }
-
-  if (isAbout) {
-    return (
-      <Suspense fallback={<AppSplash />}>
-        <AppErrorBoundary>
-          <AboutPage />
-        </AppErrorBoundary>
-      </Suspense>
-    )
-  }
-
-  if (isContact) {
-    return (
-      <Suspense fallback={<AppSplash />}>
-        <AppErrorBoundary>
-          <ContactPage />
-        </AppErrorBoundary>
-      </Suspense>
-    )
+  if (staticRoute) {
+    return <Boundaried>{staticRoute(legalPage)}</Boundaried>
   }
 
   if (slug) {
-    return (
-      <Suspense fallback={<AppSplash />}>
-        <AppErrorBoundary>
-          <PublicRoom slug={slug} />
-        </AppErrorBoundary>
-      </Suspense>
-    )
+    return <Boundaried><PublicRoom slug={slug} /></Boundaried>
   }
 
   if (sessionState === 'pending') return <AppSplash />
 
   if (sessionState === 'authenticated') {
     return (
-      <Suspense fallback={<AppSplash />}>
-        <AppErrorBoundary>
-          <Shell />
-          {anonSession && <AnonKeepRoomNudge />}
-        </AppErrorBoundary>
-      </Suspense>
+      <Boundaried>
+        <Shell />
+        {anonSession && <AnonKeepRoomNudge />}
+      </Boundaried>
     )
   }
 
   return (
-    <Suspense fallback={<AppSplash />}>
-      <AppErrorBoundary>
-        <Landing />
-      </AppErrorBoundary>
-    </Suspense>
+    <Boundaried>
+      <Landing />
+    </Boundaried>
   )
 }

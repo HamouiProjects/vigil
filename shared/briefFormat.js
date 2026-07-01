@@ -76,3 +76,35 @@ export function cleanExcerpt(raw, title) {
   cut = cut.replace(/[\s.,;:!?]+$/, '')
   return `${cut}…`
 }
+
+// Small shared brief formatters, isomorphic (used by the panel, the PDF export,
+// and the plaintext path). All pure, no DOM access.
+export const DEG = '\u00B0'
+
+export function fmtPct(p) {
+  const n = Number(p)
+  if (!Number.isFinite(n)) return ''
+  return (n > 0 ? '+' : '') + n.toFixed(2) + '%'
+}
+
+export function trendGlyph(dir) {
+  return dir === 'up' ? '↑' : dir === 'down' ? '↓' : '→'
+}
+
+export function isHttpUrl(u) {
+  if (typeof u !== 'string') return false
+  try {
+    const p = new URL(u)
+    return p.protocol === 'http:' || p.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+export function hostnameOf(u) {
+  try {
+    return new URL(u).hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}

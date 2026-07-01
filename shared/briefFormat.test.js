@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { relativeTime, cleanExcerpt } from './briefFormat.js'
+import { relativeTime, cleanExcerpt, fmtPct, trendGlyph, isHttpUrl, hostnameOf, DEG } from './briefFormat.js'
 
 const DAY = 86400000
 
@@ -55,5 +55,65 @@ describe('cleanExcerpt', () => {
     const out = cleanExcerpt(long, 'Other')
     expect(out.endsWith('…')).toBe(true)
     expect(out.length).toBeLessThan(long.length)
+  })
+})
+
+describe('fmtPct', () => {
+  it('returns empty string for non-finite input', () => {
+    expect(fmtPct(undefined)).toBe('')
+    expect(fmtPct('x')).toBe('')
+    expect(fmtPct(NaN)).toBe('')
+  })
+
+  it('coerces null to zero (Number(null) is 0)', () => {
+    expect(fmtPct(null)).toBe('0.00%')
+  })
+
+  it('signs and fixes to two decimals', () => {
+    expect(fmtPct(1.5)).toBe('+1.50%')
+    expect(fmtPct(-2)).toBe('-2.00%')
+    expect(fmtPct(0)).toBe('0.00%')
+  })
+})
+
+describe('trendGlyph', () => {
+  it('maps direction to an arrow', () => {
+    expect(trendGlyph('up')).toBe('↑')
+    expect(trendGlyph('down')).toBe('↓')
+    expect(trendGlyph('flat')).toBe('→')
+    expect(trendGlyph(undefined)).toBe('→')
+  })
+})
+
+describe('isHttpUrl', () => {
+  it('accepts http and https only', () => {
+    expect(isHttpUrl('https://example.com')).toBe(true)
+    expect(isHttpUrl('http://example.com/x')).toBe(true)
+  })
+
+  it('rejects non-http schemes and non-strings', () => {
+    expect(isHttpUrl('vigil:synthetic-id')).toBe(false)
+    expect(isHttpUrl('javascript:alert(1)')).toBe(false)
+    expect(isHttpUrl('not a url')).toBe(false)
+    expect(isHttpUrl(null)).toBe(false)
+    expect(isHttpUrl(42)).toBe(false)
+  })
+})
+
+describe('hostnameOf', () => {
+  it('strips a leading www', () => {
+    expect(hostnameOf('https://www.reuters.com/world')).toBe('reuters.com')
+    expect(hostnameOf('https://apnews.com/article')).toBe('apnews.com')
+  })
+
+  it('returns empty string on unparseable input', () => {
+    expect(hostnameOf('not a url')).toBe('')
+    expect(hostnameOf(null)).toBe('')
+  })
+})
+
+describe('DEG', () => {
+  it('is the degree sign', () => {
+    expect(DEG).toBe('\u00B0')
   })
 })
