@@ -3,6 +3,7 @@ import usePageVisibility from '../hooks/usePageVisibility'
 import { SkeletonFeedItems } from '../components/shared/SkeletonLoader'
 import { InfoTooltip } from '../components/shared/WHeader'
 import { GN_SEARCH_URL, nsExtractSource, nsCleanTitle, KF_DEFAULT_TABS } from '../../shared/feedSources.js'
+import { isHttpUrl } from '../../shared/briefFormat.js'
 
 export { GN_SEARCH_URL, nsExtractSource, nsCleanTitle, KF_DEFAULT_TABS }
 
@@ -200,14 +201,24 @@ export default function NewsSearchWidget({ paused, config, onSaveConfig, setActi
             {displayArticles.map((art, i) => {
               const src = nsExtractSource(art.title) || art.source
               const title = nsCleanTitle(art.title)
-              return (
-                <a key={i} className={`ns-result-item${showFallback ? ' ns-dim' : ''}`} href={art.link} target="_blank" rel="noopener noreferrer">
+              const itemClass = `ns-result-item${showFallback ? ' ns-dim' : ''}`
+              const itemChildren = (
+                <>
                   <div className="ns-result-title">{title}</div>
                   <div className="ns-result-meta">
                     {src && <span className="ns-result-source">{src}</span>}
                     <span className="ns-result-time">{relTime(art.pubDate)}</span>
                   </div>
+                </>
+              )
+              return isHttpUrl(art.link) ? (
+                <a key={i} className={itemClass} href={art.link} target="_blank" rel="noopener noreferrer">
+                  {itemChildren}
                 </a>
+              ) : (
+                <span key={i} className={itemClass}>
+                  {itemChildren}
+                </span>
               )
             })}
           </div>

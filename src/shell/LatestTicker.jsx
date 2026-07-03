@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useShellStore } from '../state/shellStore.js'
+import { isHttpUrl } from '../../shared/briefFormat.js'
 
 const SOURCES = [
   { label: 'BBC', url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
@@ -207,14 +208,20 @@ export default function LatestTicker({ collapsed, onSetCollapsed }) {
           >
             <span className="latest-ticker-source">{current.label}</span>
             <span className="latest-ticker-time">{relTime(current.pubDate)}</span>
-            <a
-              className="latest-ticker-headline"
-              href={current.link}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {current.title}
-            </a>
+            {isHttpUrl(current.link) ? (
+              <a
+                className="latest-ticker-headline"
+                href={current.link}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {current.title}
+              </a>
+            ) : (
+              <span className="latest-ticker-headline">
+                {current.title}
+              </span>
+            )}
             {!live && <span className="latest-ticker-paused">PAUSED</span>}
           </div>
         )}

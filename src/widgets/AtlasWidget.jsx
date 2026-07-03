@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Bell } from 'lucide-react'
 import AtlasWorldGlobe, { LAYER_COLORS, LAYER_ORDER, LAYER_SWATCH_CSS, formatRelativeTime } from './AtlasWorldGlobe'
 import { GN_SEARCH_URL, nsExtractSource, nsCleanTitle } from '../../shared/feedSources.js'
+import { isHttpUrl } from '../../shared/briefFormat.js'
 
 const INDICATOR_LAYER_LABELS = {
   conflict: 'Conflict',
@@ -633,10 +634,10 @@ export default function AtlasWidget({ id, paused, config, onSaveConfig, setActio
                         </p>
                       )}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, color: 'var(--color-text-muted)' }}>
-                        {src && item.link && (
+                        {src && item.link && isHttpUrl(item.link) && (
                           <a href={item.link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-brand)', textDecoration: 'none' }}>{src}</a>
                         )}
-                        {src && !item.link && (<span>{src}</span>)}
+                        {src && (!item.link || !isHttpUrl(item.link)) && (<span>{src}</span>)}
                         {date && <span>{date}</span>}
                       </div>
                     </div>

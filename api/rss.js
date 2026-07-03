@@ -3,6 +3,7 @@ import { safeFetch, readTextCapped } from './_ssrf.js'
 import { applyCors } from './_cors.js'
 import { rateLimit } from './_ratelimit.js'
 import { XMLParser } from 'fast-xml-parser'
+import { isHttpUrl } from '../shared/briefFormat.js'
 
 const FRESH_MS = 120_000
 const MAX_ITEMS = 30
@@ -275,8 +276,17 @@ async function fetchViaBlueskyApi(handle) {
 }
 
 // ---------- cache + response helpers ----------
+// H-1: blank any per-item link that is not http(s). Single choke point, every 200
+// response path (cache, telegram, bluesky, rss2json, direct parse) flows through okPayload,
+// so stale cached rows with hostile links are covered too. Exported for the vitest proof.
+export function sanitizeItemLinks(items) {
+  return (items || []).map(it => (
+    it && it.link && !isHttpUrl(it.link) ? { ...it, link: '' } : it
+  ))
+}
+
 function okPayload(url, title, items, image) {
-  return { status: 'ok', source: { title: title ?? '', url, image: image ?? '' }, items }
+  return { status: 'ok', source: { title: title ?? '', url, image: image ?? '' }, items: sanitizeItemLinks(items) }
 }
 
 async function cacheWrite(url, title, items) {

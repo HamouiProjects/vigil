@@ -1,0 +1,1005 @@
+diff --git a/shared/briefFormat.js b/shared/briefFormat.js
+index 7ebeb17..5ab7838 100644
+--- a/shared/briefFormat.js
++++ b/shared/briefFormat.js
+@@ -76,3 +76,35 @@ export function cleanExcerpt(raw, title) {
+   cut = cut.replace(/[\s.,;:!?]+$/, '')
+   return `${cut}…`
+ }
++
++// Small shared brief formatters, isomorphic (used by the panel, the PDF export,
++// and the plaintext path). All pure, no DOM access.
++export const DEG = '\u00B0'
++
++export function fmtPct(p) {
++  const n = Number(p)
++  if (!Number.isFinite(n)) return ''
++  return (n > 0 ? '+' : '') + n.toFixed(2) + '%'
++}
++
++export function trendGlyph(dir) {
++  return dir === 'up' ? '↑' : dir === 'down' ? '↓' : '→'
++}
++
++export function isHttpUrl(u) {
++  if (typeof u !== 'string') return false
++  try {
++    const p = new URL(u)
++    return p.protocol === 'http:' || p.protocol === 'https:'
++  } catch {
++    return false
++  }
++}
++
++export function hostnameOf(u) {
++  try {
++    return new URL(u).hostname.replace(/^www\./, '')
++  } catch {
++    return ''
++  }
++}
+diff --git a/shared/briefFormat.test.js b/shared/briefFormat.test.js
+index e6a564e..2939b8d 100644
+--- a/shared/briefFormat.test.js
++++ b/shared/briefFormat.test.js
+@@ -1,5 +1,5 @@
+ import { describe, it, expect } from 'vitest'
+-import { relativeTime, cleanExcerpt } from './briefFormat.js'
++import { relativeTime, cleanExcerpt, fmtPct, trendGlyph, isHttpUrl, hostnameOf, DEG } from './briefFormat.js'
+ 
+ const DAY = 86400000
+ 
+@@ -57,3 +57,63 @@ describe('cleanExcerpt', () => {
+     expect(out.length).toBeLessThan(long.length)
+   })
+ })
++
++describe('fmtPct', () => {
++  it('returns empty string for non-finite input', () => {
++    expect(fmtPct(undefined)).toBe('')
++    expect(fmtPct('x')).toBe('')
++    expect(fmtPct(NaN)).toBe('')
++  })
++
++  it('coerces null to zero (Number(null) is 0)', () => {
++    expect(fmtPct(null)).toBe('0.00%')
++  })
++
++  it('signs and fixes to two decimals', () => {
++    expect(fmtPct(1.5)).toBe('+1.50%')
++    expect(fmtPct(-2)).toBe('-2.00%')
++    expect(fmtPct(0)).toBe('0.00%')
++  })
++})
++
++describe('trendGlyph', () => {
++  it('maps direction to an arrow', () => {
++    expect(trendGlyph('up')).toBe('↑')
++    expect(trendGlyph('down')).toBe('↓')
++    expect(trendGlyph('flat')).toBe('→')
++    expect(trendGlyph(undefined)).toBe('→')
++  })
++})
++
++describe('isHttpUrl', () => {
++  it('accepts http and https only', () => {
++    expect(isHttpUrl('https://example.com')).toBe(true)
++    expect(isHttpUrl('http://example.com/x')).toBe(true)
++  })
++
++  it('rejects non-http schemes and non-strings', () => {
++    expect(isHttpUrl('vigil:synthetic-id')).toBe(false)
++    expect(isHttpUrl('javascript:alert(1)')).toBe(false)
++    expect(isHttpUrl('not a url')).toBe(false)
++    expect(isHttpUrl(null)).toBe(false)
++    expect(isHttpUrl(42)).toBe(false)
++  })
++})
++
++describe('hostnameOf', () => {
++  it('strips a leading www', () => {
++    expect(hostnameOf('https://www.reuters.com/world')).toBe('reuters.com')
++    expect(hostnameOf('https://apnews.com/article')).toBe('apnews.com')
++  })
++
++  it('returns empty string on unparseable input', () => {
++    expect(hostnameOf('not a url')).toBe('')
++    expect(hostnameOf(null)).toBe('')
++  })
++})
++
++describe('DEG', () => {
++  it('is the degree sign', () => {
++    expect(DEG).toBe('\u00B0')
++  })
++})
+diff --git a/src/App.jsx b/src/App.jsx
+index 294299f..3955a75 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -27,6 +27,31 @@ function AppSplash() {
+   )
+ }
+ 
++// Every route below the session gate renders the same way: lazily, inside a
++// Suspense splash and the root error boundary. Boundaried captures that shape
++// once so the route table and the session branches stay declarative.
++function Boundaried({ children }) {
++  return (
++    <Suspense fallback={<AppSplash />}>
++      <AppErrorBoundary>{children}</AppErrorBoundary>
++    </Suspense>
++  )
++}
++
++// Static routes keyed by the `?p=` param. Each entry receives the raw param so
++// the legal and info pages can pass it through as their `page` prop. A `?r=`
++// share slug and the session-driven views (Shell / Landing) are handled
++// separately below because they do not key off `?p=`.
++const STATIC_ROUTES = {
++  impressum: (p) => <LegalPage page={p} />,
++  privacy: (p) => <LegalPage page={p} />,
++  terms: (p) => <LegalPage page={p} />,
++  faq: (p) => <InfoPage page={p} />,
++  pricing: () => <PricingPage />,
++  about: () => <AboutPage />,
++  contact: () => <ContactPage />,
++}
++
+ function hasSeenOnboarding() {
+   try { return localStorage.getItem('vigil_seen_onboarding') === '1' } catch { return false }
+ }
+@@ -136,11 +161,8 @@ export default function App() {
+   const params = new URLSearchParams(window.location.search)
+   const slug = params.get('r')
+   const legalPage = params.get('p')
+-  const isLegal = ['impressum', 'privacy', 'terms'].includes(legalPage)
+-  const isInfo = legalPage === 'faq'
+-  const isAbout = legalPage === 'about'
+-  const isPricing = legalPage === 'pricing'
+-  const isContact = legalPage === 'contact'
++  const staticRoute = STATIC_ROUTES[legalPage]
++  const onStaticRoute = !!slug || !!staticRoute
+ 
+   const [sessionState, setSessionState] = useState('pending')
+   const [anonSession, setAnonSession] = useState(false)
+@@ -150,7 +172,7 @@ export default function App() {
+   }, [legalPage, slug])
+ 
+   useEffect(() => {
+-    if (slug || isLegal || isInfo || isAbout || isPricing || isContact) return
++    if (onStaticRoute) return
+ 
+     let cancelled = false
+ 
+@@ -170,86 +192,30 @@ export default function App() {
+       cancelled = true
+       subscription?.unsubscribe()
+     }
+-  }, [slug, isLegal, isInfo, isAbout, isPricing, isContact])
+-
+-  if (isLegal) {
+-    return (
+-      <Suspense fallback={<AppSplash />}>
+-        <AppErrorBoundary>
+-          <LegalPage page={legalPage} />
+-        </AppErrorBoundary>
+-      </Suspense>
+-    )
+-  }
+-
+-  if (isInfo) {
+-    return (
+-      <Suspense fallback={<AppSplash />}>
+-        <AppErrorBoundary>
+-          <InfoPage page={legalPage} />
+-        </AppErrorBoundary>
+-      </Suspense>
+-    )
+-  }
+-
+-  if (isPricing) {
+-    return (
+-      <Suspense fallback={<AppSplash />}>
+-        <AppErrorBoundary>
+-          <PricingPage />
+-        </AppErrorBoundary>
+-      </Suspense>
+-    )
+-  }
++  }, [onStaticRoute])
+ 
+-  if (isAbout) {
+-    return (
+-      <Suspense fallback={<AppSplash />}>
+-        <AppErrorBoundary>
+-          <AboutPage />
+-        </AppErrorBoundary>
+-      </Suspense>
+-    )
+-  }
+-
+-  if (isContact) {
+-    return (
+-      <Suspense fallback={<AppSplash />}>
+-        <AppErrorBoundary>
+-          <ContactPage />
+-        </AppErrorBoundary>
+-      </Suspense>
+-    )
++  if (staticRoute) {
++    return <Boundaried>{staticRoute(legalPage)}</Boundaried>
+   }
+ 
+   if (slug) {
+-    return (
+-      <Suspense fallback={<AppSplash />}>
+-        <AppErrorBoundary>
+-          <PublicRoom slug={slug} />
+-        </AppErrorBoundary>
+-      </Suspense>
+-    )
++    return <Boundaried><PublicRoom slug={slug} /></Boundaried>
+   }
+ 
+   if (sessionState === 'pending') return <AppSplash />
+ 
+   if (sessionState === 'authenticated') {
+     return (
+-      <Suspense fallback={<AppSplash />}>
+-        <AppErrorBoundary>
+-          <Shell />
+-          {anonSession && <AnonKeepRoomNudge />}
+-        </AppErrorBoundary>
+-      </Suspense>
++      <Boundaried>
++        <Shell />
++        {anonSession && <AnonKeepRoomNudge />}
++      </Boundaried>
+     )
+   }
+ 
+   return (
+-    <Suspense fallback={<AppSplash />}>
+-      <AppErrorBoundary>
+-        <Landing />
+-      </AppErrorBoundary>
+-    </Suspense>
++    <Boundaried>
++      <Landing />
++    </Boundaried>
+   )
+ }
+diff --git a/src/shell/BriefPanel.jsx b/src/shell/BriefPanel.jsx
+index e567ae5..04f5dfb 100644
+--- a/src/shell/BriefPanel.jsx
++++ b/src/shell/BriefPanel.jsx
+@@ -4,21 +4,11 @@ import { useShellStore } from '../state/shellStore.js'
+ import { supabase } from '../lib/supabase.js'
+ import { gatherRoomItems, gatherMarketSymbols, gatherTrendsRequest, gatherWeather } from '../lib/gatherRoomItems.js'
+ import { useFocusTrap } from '../hooks/useFocusTrap.js'
+-import { relativeTime, cleanExcerpt } from '../../shared/briefFormat.js'
++import { relativeTime, cleanExcerpt, fmtPct, trendGlyph, isHttpUrl, hostnameOf, DEG } from '../../shared/briefFormat.js'
++import { buildBriefPdf } from './briefPdf.js'
+ import GlobeGlyph from '../brand/GlobeGlyph.jsx'
+ import { TrendsChart, TrendsLegend, COLORS } from '../widgets/TrendsChart.jsx'
+ 
+-function fmtPct(p) { const n = Number(p); if (!Number.isFinite(n)) return ''; return (n > 0 ? '+' : '') + n.toFixed(2) + '%' }
+-function trendGlyph(dir) { return dir === 'up' ? '↑' : dir === 'down' ? '↓' : '→' }
+-const DEG = '\u00B0'
+-function isHttpUrl(u) {
+-  if (typeof u !== 'string') return false
+-  try { const p = new URL(u); return p.protocol === 'http:' || p.protocol === 'https:' } catch { return false }
+-}
+-function hostnameOf(u) {
+-  try { return new URL(u).hostname.replace(/^www\./, '') } catch { return '' }
+-}
+-
+ function countGroupItems(g) {
+   if (Array.isArray(g.parts)) return g.parts.reduce((n, p) => n + (p.items?.length ?? 0), 0)
+   return g.items?.length ?? 0
+@@ -93,118 +83,6 @@ function appendBriefSectionPlaintext(lines, section) {
+   lines.push('')
+ }
+ 
+-function writeBriefItemPdf(doc, item, margin, yRef, contentW, ensure) {
+-  const title = String(item.title || '').trim()
+-  if (title) {
+-    doc.setFont('helvetica', 'bold')
+-    doc.setFontSize(10.5)
+-    doc.setTextColor(33, 33, 33)
+-    for (const ln of doc.splitTextToSize(title, contentW)) {
+-      ensure(5)
+-      doc.text(ln, margin, yRef.y)
+-      yRef.y += 5
+-    }
+-    yRef.y += 0.5
+-  }
+-  const excerpt = cleanExcerpt(item.excerpt, item.title)
+-  if (excerpt) {
+-    doc.setFont('helvetica', 'normal')
+-    doc.setFontSize(9.5)
+-    doc.setTextColor(80, 80, 80)
+-    for (const ln of doc.splitTextToSize(excerpt, contentW)) {
+-      ensure(5)
+-      doc.text(ln, margin, yRef.y)
+-      yRef.y += 5
+-    }
+-    yRef.y += 0.5
+-  }
+-  const outlet = (item.source || '').trim() || hostnameOf(item.url)
+-  const date = relativeTime(item.publishedAt)
+-  ensure(5)
+-  doc.setFont('helvetica', 'normal')
+-  doc.setFontSize(9)
+-  let x = margin
+-  if (outlet) {
+-    if (isHttpUrl(item.url)) {
+-      doc.setTextColor(20, 90, 160)
+-      doc.textWithLink(outlet, x, yRef.y, { url: item.url })
+-    } else {
+-      doc.setTextColor(80, 80, 80)
+-      doc.text(outlet, x, yRef.y)
+-    }
+-    x += doc.getTextWidth(outlet) + 3
+-  }
+-  if (date) {
+-    doc.setTextColor(120, 120, 120)
+-    doc.text(date, x, yRef.y)
+-  }
+-  yRef.y += 6
+-}
+-
+-const TRENDS_CHART_W = 280
+-const TRENDS_CHART_H = 72
+-const TRENDS_PDF_STROKES = ['#0A6B61', '#155E86', '#6F4D08', '#AE2E27', '#0A6B43']
+-
+-function svgToPngDataUrl(svgEl, strokeOverrides) {
+-  return new Promise((resolve) => {
+-    try {
+-      const clone = svgEl.cloneNode(true)
+-      const origLines = svgEl.querySelectorAll('polyline')
+-      const cloneLines = clone.querySelectorAll('polyline')
+-      origLines.forEach((el, i) => {
+-        const stroke = strokeOverrides?.[i] || getComputedStyle(el).stroke
+-        if (stroke && cloneLines[i]) cloneLines[i].setAttribute('stroke', stroke)
+-      })
+-      svgEl.querySelectorAll('line').forEach((orig, i) => {
+-        const el = clone.querySelectorAll('line')[i]
+-        if (el) {
+-          const stroke = getComputedStyle(orig).stroke
+-          if (stroke) el.setAttribute('stroke', stroke)
+-        }
+-      })
+-      if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+-      const src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone))
+-      const img = new Image()
+-      img.onload = () => {
+-        try {
+-          const vb = svgEl.viewBox?.baseVal
+-          const w = (vb && vb.width) || Number(svgEl.getAttribute('width')) || TRENDS_CHART_W
+-          const h = (vb && vb.height) || Number(svgEl.getAttribute('height')) || TRENDS_CHART_H
+-          const canvas = document.createElement('canvas')
+-          canvas.width = w
+-          canvas.height = h
+-          canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+-          resolve({ dataUrl: canvas.toDataURL('image/png'), width: w, height: h })
+-        } catch { resolve(null) }
+-      }
+-      img.onerror = () => resolve(null)
+-      img.src = src
+-    } catch { resolve(null) }
+-  })
+-}
+-
+-// Load a same-origin PNG into a dataURL (with natural dimensions) for jsPDF.
+-// Resolves null on any failure so the PDF export can fall back gracefully.
+-function loadPngDataUrl(src) {
+-  return new Promise((resolve) => {
+-    try {
+-      const img = new Image()
+-      img.crossOrigin = 'anonymous'
+-      img.onload = () => {
+-        try {
+-          const canvas = document.createElement('canvas')
+-          canvas.width = img.naturalWidth
+-          canvas.height = img.naturalHeight
+-          canvas.getContext('2d').drawImage(img, 0, 0)
+-          resolve({ dataUrl: canvas.toDataURL('image/png'), width: img.naturalWidth, height: img.naturalHeight })
+-        } catch { resolve(null) }
+-      }
+-      img.onerror = () => resolve(null)
+-      img.src = src
+-    } catch { resolve(null) }
+-  })
+-}
+-
+ const ACCOUNT_MSG = 'Create a free account to generate briefs.'
+ const NO_ITEMS_MSG = 'Add a News Search or RSS widget to your room, then generate a brief.'
+ const UNAVAILABLE_MSG = 'Briefs are temporarily unavailable. Please try again shortly.'
+@@ -559,195 +437,14 @@ export default function BriefPanel({ onClose, onUpgrade }) {
+     if (!brief || pdfBusy) return
+     setPdfBusy(true)
+     try {
+-      const { jsPDF } = await import('jspdf')
+-      const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+-      const pageW = doc.internal.pageSize.getWidth()
+-      const pageH = doc.internal.pageSize.getHeight()
+-      const margin = 18
+-      const contentW = pageW - margin * 2
+-      let y = margin
+-      const ensure = (h) => { if (y + h > pageH - margin) { doc.addPage(); y = margin } }
+-      // White-surface mark at the top margin. On any load failure, fall back to
+-      // the title-only header (y stays at margin) and never break the export.
+-      try {
+-        const logo = await loadPngDataUrl('/email-logo-mark.png')
+-        if (logo && logo.width && logo.height) {
+-          const logoH = 14
+-          const logoW = logoH * (logo.width / logo.height)
+-          doc.addImage(logo.dataUrl, 'PNG', margin, y, logoW, logoH)
+-          y += logoH + 5
+-        }
+-      } catch { /* title-only header */ }
+-      const writeWrapped = (text, opts = {}) => {
+-        const { size = 10, style = 'normal', color = [33, 33, 33], gap = 1.5, lineH = 5 } = opts
+-        doc.setFont('helvetica', style)
+-        doc.setFontSize(size)
+-        doc.setTextColor(...color)
+-        for (const ln of doc.splitTextToSize(text, contentW)) {
+-          ensure(lineH)
+-          doc.text(ln, margin, y)
+-          y += lineH
+-        }
+-        y += gap
+-      }
+-      writeWrapped(ws?.name || 'Risk Room', { size: 14, style: 'bold', gap: 1 })
+-      const metaBits = []
+-      if (generatedAt) {
+-        metaBits.push('Generated ' + new Date(generatedAt).toLocaleString(undefined, {
+-          day: '2-digit',
+-          month: 'short',
+-          year: 'numeric',
+-          hour: '2-digit',
+-          minute: '2-digit',
+-        }))
+-      }
+-      if (sourceCount != null) {
+-        metaBits.push(sourceCount + (sourceCount === 1 ? ' source' : ' sources'))
+-      }
+-      if (metaBits.length) writeWrapped(metaBits.join('    '), { size: 9, color: [120, 120, 120], gap: 1 })
+-      if (preparedFor) writeWrapped('Prepared for ' + preparedFor, { size: 10, color: [80, 80, 80], gap: 2 })
+-      ensure(2)
+-      doc.setDrawColor(210, 210, 210)
+-      doc.line(margin, y, pageW - margin, y)
+-      y += 5
+-      writeWrapped(brief.headline, { size: 13, style: 'bold', gap: 3 })
+-      const partIndent = margin + 4
+-      const writePartLabel = (text) => {
+-        doc.setFont('helvetica', 'bold')
+-        doc.setFontSize(9.5)
+-        doc.setTextColor(80, 80, 80)
+-        for (const ln of doc.splitTextToSize(text, contentW - 4)) {
+-          ensure(4.5)
+-          doc.text(ln, partIndent, y)
+-          y += 4.5
+-        }
+-        y += 0.5
+-      }
+-      const writePartEmpty = () => {
+-        doc.setFont('helvetica', 'normal')
+-        doc.setFontSize(9)
+-        doc.setTextColor(120, 120, 120)
+-        ensure(4.5)
+-        doc.text('No update this round', partIndent, y)
+-        y += 5
+-      }
+-      for (const section of brief.sections ?? []) {
+-        const label = section.label?.trim() || 'Source'
+-        writeWrapped(label, { size: 11, style: 'bold', gap: 1 })
+-        if (section.parts?.length) {
+-          for (const part of section.parts) {
+-            writePartLabel(part.label)
+-            if (part.items?.length) {
+-              const yRef = { y }
+-              for (const item of part.items) {
+-                writeBriefItemPdf(doc, item, partIndent, yRef, contentW - 4, ensure)
+-              }
+-              y = yRef.y
+-            } else {
+-              writePartEmpty()
+-            }
+-          }
+-          y += 2
+-          continue
+-        }
+-        if (section.items?.length) {
+-          const yRef = { y }
+-          for (const item of section.items) {
+-            writeBriefItemPdf(doc, item, margin, yRef, contentW, ensure)
+-          }
+-          y = yRef.y + 2
+-          continue
+-        }
+-        if (section.status === 'no_update') {
+-          writeWrapped(`No update from ${label}`, { size: 10, gap: 1.5 })
+-        } else if (section.summary?.trim()) {
+-          writeWrapped(section.summary, { size: 10, gap: 1 })
+-        }
+-        const url = section.sourceUrl
+-        if (url && url.startsWith('http')) {
+-          ensure(5)
+-          doc.setFontSize(9)
+-          doc.setTextColor(20, 90, 160)
+-          doc.textWithLink(label, margin, y, { url })
+-          y += 6
+-        }
+-        y += 2
+-      }
+-      const mkp = brief.markets
+-      if (mkp && ((mkp.rows?.length) || (mkp.heatmaps?.length))) {
+-        writeWrapped('Markets', { size: 11, style: 'bold', gap: 1 })
+-        writeWrapped('as of last refresh', { size: 8, color: [120, 120, 120], gap: 1.5 })
+-        const green = [10, 107, 67], red = [174, 46, 39], grey = [120, 120, 120], neutral = [33, 33, 33]
+-        const pdfRow = (left, price, pct, dir) => {
+-          ensure(5)
+-          doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...neutral)
+-          doc.text(String(left), margin, y)
+-          if (price != null) doc.text(String(price), margin + 78, y)
+-          const col = dir === 'up' ? green : dir === 'down' ? red : grey
+-          doc.setTextColor(...col); doc.text(fmtPct(pct), margin + 108, y)
+-          y += 5
+-        }
+-        for (const r of (mkp.rows ?? [])) pdfRow(`${r.symbol}  ${r.name}`, r.currency ? `${r.price} ${r.currency}` : r.price, r.changePct, r.dir)
+-        for (const h of (mkp.heatmaps ?? [])) pdfRow(`${h.label} (${h.symbol})`, null, h.changePct, h.dir)
+-        y += 2
+-      }
+-      const trp = brief.trends
+-      if (trp && (trp.terms?.length)) {
+-        writeWrapped('Search Interest', { size: 11, style: 'bold', gap: 1 })
+-        writeWrapped(`relative search interest${trp.windowLabel ? ` over the last ${trp.windowLabel}` : ''}, not volume`, { size: 8, color: [120, 120, 120], gap: 1.5 })
+-        let trendsChartAdded = false
+-        try {
+-          const svgEl = trendsChartRef.current
+-          if (svgEl) {
+-            const strokeOverrides = []
+-            ;(trp.terms ?? []).forEach((t, i) => {
+-              if (Array.isArray(t.series) && t.series.length >= 2) {
+-                strokeOverrides.push(TRENDS_PDF_STROKES[i % TRENDS_PDF_STROKES.length])
+-              }
+-            })
+-            const chart = await svgToPngDataUrl(svgEl, strokeOverrides.length ? strokeOverrides : null)
+-            if (chart && chart.width && chart.height) {
+-              const chartH = 28
+-              const chartW = Math.min(contentW, chartH * (chart.width / chart.height))
+-              ensure(chartH + 2)
+-              doc.addImage(chart.dataUrl, 'PNG', margin, y, chartW, chartH)
+-              y += chartH + 3
+-              trendsChartAdded = true
+-            }
+-          }
+-        } catch { /* text rows fallback below */ }
+-        if (!trendsChartAdded) {
+-          for (const t of (trp.terms ?? [])) {
+-            ensure(5)
+-            doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(33, 33, 33)
+-            doc.text(String(t.term), margin, y)
+-            doc.text(String(t.value), margin + 78, y)
+-            doc.setTextColor(80, 80, 80); doc.text(trendGlyph(t.dir), margin + 108, y)
+-            y += 5
+-          }
+-        }
+-        if (isHttpUrl(trp.googleTrendsUrl)) {
+-          ensure(5)
+-          doc.setFontSize(9)
+-          doc.setTextColor(20, 90, 160)
+-          doc.textWithLink('Google Trends', margin, y, { url: trp.googleTrendsUrl })
+-          y += 6
+-        }
+-        y += 2
+-      }
+-      const wxp = brief.weather
+-      if (wxp && wxp.locations && wxp.locations.length) {
+-        writeWrapped('Weather', { size: 11, style: 'bold', gap: 1 })
+-        for (const l of wxp.locations) {
+-          writeWrapped(String(l.name), { size: 10, style: 'bold', gap: 1 })
+-          writeWrapped(`${l.tempC}${DEG}C, feels ${l.feelsC}${DEG}C, ${l.condition}. Wind ${l.windKph} km/h, humidity ${l.humidity}%.`, { size: 9, color: [60, 60, 60], gap: 1 })
+-          if (l.todayMaxC != null) writeWrapped(`Today ${l.todayMaxC}${DEG} / ${l.todayMinC}${DEG}. Tomorrow ${l.tomorrowMaxC}${DEG} / ${l.tomorrowMinC}${DEG}, ${l.tomorrowCondition}.`, { size: 8, color: [120, 120, 120], gap: 1.5 })
+-        }
+-        y += 2
+-      }
+-      ensure(8)
+-      writeWrapped("Summary of this room's own sources. Vigil tracks, it does not verify.", { size: 8, color: [120, 120, 120] })
+-      doc.save('brief.pdf')
++      await buildBriefPdf({
++        brief,
++        ws,
++        generatedAt,
++        sourceCount,
++        preparedFor,
++        trendsChartEl: trendsChartRef.current,
++      })
+     } catch {
+       // txt and Copy remain available on failure
+     } finally {
+diff --git a/src/shell/briefPdf.js b/src/shell/briefPdf.js
+new file mode 100644
+index 0000000..ee4f1b3
+--- /dev/null
++++ b/src/shell/briefPdf.js
+@@ -0,0 +1,312 @@
++// PDF export for the brief, extracted from BriefPanel so the jspdf-heavy logic
++// lives on its own. buildBriefPdf builds the document and triggers the download.
++// Behavior is unchanged from the previous inline handler: same white document
++// surface, same layout, same graceful fallbacks on any image or chart failure.
++import { relativeTime, cleanExcerpt, fmtPct, trendGlyph, isHttpUrl, hostnameOf, DEG } from '../../shared/briefFormat.js'
++
++function writeBriefItemPdf(doc, item, margin, yRef, contentW, ensure) {
++  const title = String(item.title || '').trim()
++  if (title) {
++    doc.setFont('helvetica', 'bold')
++    doc.setFontSize(10.5)
++    doc.setTextColor(33, 33, 33)
++    for (const ln of doc.splitTextToSize(title, contentW)) {
++      ensure(5)
++      doc.text(ln, margin, yRef.y)
++      yRef.y += 5
++    }
++    yRef.y += 0.5
++  }
++  const excerpt = cleanExcerpt(item.excerpt, item.title)
++  if (excerpt) {
++    doc.setFont('helvetica', 'normal')
++    doc.setFontSize(9.5)
++    doc.setTextColor(80, 80, 80)
++    for (const ln of doc.splitTextToSize(excerpt, contentW)) {
++      ensure(5)
++      doc.text(ln, margin, yRef.y)
++      yRef.y += 5
++    }
++    yRef.y += 0.5
++  }
++  const outlet = (item.source || '').trim() || hostnameOf(item.url)
++  const date = relativeTime(item.publishedAt)
++  ensure(5)
++  doc.setFont('helvetica', 'normal')
++  doc.setFontSize(9)
++  let x = margin
++  if (outlet) {
++    if (isHttpUrl(item.url)) {
++      doc.setTextColor(20, 90, 160)
++      doc.textWithLink(outlet, x, yRef.y, { url: item.url })
++    } else {
++      doc.setTextColor(80, 80, 80)
++      doc.text(outlet, x, yRef.y)
++    }
++    x += doc.getTextWidth(outlet) + 3
++  }
++  if (date) {
++    doc.setTextColor(120, 120, 120)
++    doc.text(date, x, yRef.y)
++  }
++  yRef.y += 6
++}
++
++const TRENDS_CHART_W = 280
++const TRENDS_CHART_H = 72
++const TRENDS_PDF_STROKES = ['#0A6B61', '#155E86', '#6F4D08', '#AE2E27', '#0A6B43']
++
++function svgToPngDataUrl(svgEl, strokeOverrides) {
++  return new Promise((resolve) => {
++    try {
++      const clone = svgEl.cloneNode(true)
++      const origLines = svgEl.querySelectorAll('polyline')
++      const cloneLines = clone.querySelectorAll('polyline')
++      origLines.forEach((el, i) => {
++        const stroke = strokeOverrides?.[i] || getComputedStyle(el).stroke
++        if (stroke && cloneLines[i]) cloneLines[i].setAttribute('stroke', stroke)
++      })
++      svgEl.querySelectorAll('line').forEach((orig, i) => {
++        const el = clone.querySelectorAll('line')[i]
++        if (el) {
++          const stroke = getComputedStyle(orig).stroke
++          if (stroke) el.setAttribute('stroke', stroke)
++        }
++      })
++      if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
++      const src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone))
++      const img = new Image()
++      img.onload = () => {
++        try {
++          const vb = svgEl.viewBox?.baseVal
++          const w = (vb && vb.width) || Number(svgEl.getAttribute('width')) || TRENDS_CHART_W
++          const h = (vb && vb.height) || Number(svgEl.getAttribute('height')) || TRENDS_CHART_H
++          const canvas = document.createElement('canvas')
++          canvas.width = w
++          canvas.height = h
++          canvas.getContext('2d').drawImage(img, 0, 0, w, h)
++          resolve({ dataUrl: canvas.toDataURL('image/png'), width: w, height: h })
++        } catch { resolve(null) }
++      }
++      img.onerror = () => resolve(null)
++      img.src = src
++    } catch { resolve(null) }
++  })
++}
++
++// Load a same-origin PNG into a dataURL (with natural dimensions) for jsPDF.
++// Resolves null on any failure so the PDF export can fall back gracefully.
++function loadPngDataUrl(src) {
++  return new Promise((resolve) => {
++    try {
++      const img = new Image()
++      img.crossOrigin = 'anonymous'
++      img.onload = () => {
++        try {
++          const canvas = document.createElement('canvas')
++          canvas.width = img.naturalWidth
++          canvas.height = img.naturalHeight
++          canvas.getContext('2d').drawImage(img, 0, 0)
++          resolve({ dataUrl: canvas.toDataURL('image/png'), width: img.naturalWidth, height: img.naturalHeight })
++        } catch { resolve(null) }
++      }
++      img.onerror = () => resolve(null)
++      img.src = src
++    } catch { resolve(null) }
++  })
++}
++
++// Build and download the brief PDF. trendsChartEl is the live Search Interest
++// SVG element (or null); the chart is rasterized when present, with a text-row
++// fallback otherwise. Throws are left to the caller to swallow.
++export async function buildBriefPdf({ brief, ws, generatedAt, sourceCount, preparedFor, trendsChartEl }) {
++  const { jsPDF } = await import('jspdf')
++  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
++  const pageW = doc.internal.pageSize.getWidth()
++  const pageH = doc.internal.pageSize.getHeight()
++  const margin = 18
++  const contentW = pageW - margin * 2
++  let y = margin
++  const ensure = (h) => { if (y + h > pageH - margin) { doc.addPage(); y = margin } }
++  // White-surface mark at the top margin. On any load failure, fall back to
++  // the title-only header (y stays at margin) and never break the export.
++  try {
++    const logo = await loadPngDataUrl('/email-logo-mark.png')
++    if (logo && logo.width && logo.height) {
++      const logoH = 14
++      const logoW = logoH * (logo.width / logo.height)
++      doc.addImage(logo.dataUrl, 'PNG', margin, y, logoW, logoH)
++      y += logoH + 5
++    }
++  } catch { /* title-only header */ }
++  const writeWrapped = (text, opts = {}) => {
++    const { size = 10, style = 'normal', color = [33, 33, 33], gap = 1.5, lineH = 5 } = opts
++    doc.setFont('helvetica', style)
++    doc.setFontSize(size)
++    doc.setTextColor(...color)
++    for (const ln of doc.splitTextToSize(text, contentW)) {
++      ensure(lineH)
++      doc.text(ln, margin, y)
++      y += lineH
++    }
++    y += gap
++  }
++  writeWrapped(ws?.name || 'Risk Room', { size: 14, style: 'bold', gap: 1 })
++  const metaBits = []
++  if (generatedAt) {
++    metaBits.push('Generated ' + new Date(generatedAt).toLocaleString(undefined, {
++      day: '2-digit',
++      month: 'short',
++      year: 'numeric',
++      hour: '2-digit',
++      minute: '2-digit',
++    }))
++  }
++  if (sourceCount != null) {
++    metaBits.push(sourceCount + (sourceCount === 1 ? ' source' : ' sources'))
++  }
++  if (metaBits.length) writeWrapped(metaBits.join('    '), { size: 9, color: [120, 120, 120], gap: 1 })
++  if (preparedFor) writeWrapped('Prepared for ' + preparedFor, { size: 10, color: [80, 80, 80], gap: 2 })
++  ensure(2)
++  doc.setDrawColor(210, 210, 210)
++  doc.line(margin, y, pageW - margin, y)
++  y += 5
++  writeWrapped(brief.headline, { size: 13, style: 'bold', gap: 3 })
++  const partIndent = margin + 4
++  const writePartLabel = (text) => {
++    doc.setFont('helvetica', 'bold')
++    doc.setFontSize(9.5)
++    doc.setTextColor(80, 80, 80)
++    for (const ln of doc.splitTextToSize(text, contentW - 4)) {
++      ensure(4.5)
++      doc.text(ln, partIndent, y)
++      y += 4.5
++    }
++    y += 0.5
++  }
++  const writePartEmpty = () => {
++    doc.setFont('helvetica', 'normal')
++    doc.setFontSize(9)
++    doc.setTextColor(120, 120, 120)
++    ensure(4.5)
++    doc.text('No update this round', partIndent, y)
++    y += 5
++  }
++  for (const section of brief.sections ?? []) {
++    const label = section.label?.trim() || 'Source'
++    writeWrapped(label, { size: 11, style: 'bold', gap: 1 })
++    if (section.parts?.length) {
++      for (const part of section.parts) {
++        writePartLabel(part.label)
++        if (part.items?.length) {
++          const yRef = { y }
++          for (const item of part.items) {
++            writeBriefItemPdf(doc, item, partIndent, yRef, contentW - 4, ensure)
++          }
++          y = yRef.y
++        } else {
++          writePartEmpty()
++        }
++      }
++      y += 2
++      continue
++    }
++    if (section.items?.length) {
++      const yRef = { y }
++      for (const item of section.items) {
++        writeBriefItemPdf(doc, item, margin, yRef, contentW, ensure)
++      }
++      y = yRef.y + 2
++      continue
++    }
++    if (section.status === 'no_update') {
++      writeWrapped(`No update from ${label}`, { size: 10, gap: 1.5 })
++    } else if (section.summary?.trim()) {
++      writeWrapped(section.summary, { size: 10, gap: 1 })
++    }
++    const url = section.sourceUrl
++    if (url && url.startsWith('http')) {
++      ensure(5)
++      doc.setFontSize(9)
++      doc.setTextColor(20, 90, 160)
++      doc.textWithLink(label, margin, y, { url })
++      y += 6
++    }
++    y += 2
++  }
++  const mkp = brief.markets
++  if (mkp && ((mkp.rows?.length) || (mkp.heatmaps?.length))) {
++    writeWrapped('Markets', { size: 11, style: 'bold', gap: 1 })
++    writeWrapped('as of last refresh', { size: 8, color: [120, 120, 120], gap: 1.5 })
++    const green = [10, 107, 67], red = [174, 46, 39], grey = [120, 120, 120], neutral = [33, 33, 33]
++    const pdfRow = (left, price, pct, dir) => {
++      ensure(5)
++      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...neutral)
++      doc.text(String(left), margin, y)
++      if (price != null) doc.text(String(price), margin + 78, y)
++      const col = dir === 'up' ? green : dir === 'down' ? red : grey
++      doc.setTextColor(...col); doc.text(fmtPct(pct), margin + 108, y)
++      y += 5
++    }
++    for (const r of (mkp.rows ?? [])) pdfRow(`${r.symbol}  ${r.name}`, r.currency ? `${r.price} ${r.currency}` : r.price, r.changePct, r.dir)
++    for (const h of (mkp.heatmaps ?? [])) pdfRow(`${h.label} (${h.symbol})`, null, h.changePct, h.dir)
++    y += 2
++  }
++  const trp = brief.trends
++  if (trp && (trp.terms?.length)) {
++    writeWrapped('Search Interest', { size: 11, style: 'bold', gap: 1 })
++    writeWrapped(`relative search interest${trp.windowLabel ? ` over the last ${trp.windowLabel}` : ''}, not volume`, { size: 8, color: [120, 120, 120], gap: 1.5 })
++    let trendsChartAdded = false
++    try {
++      const svgEl = trendsChartEl
++      if (svgEl) {
++        const strokeOverrides = []
++        ;(trp.terms ?? []).forEach((t, i) => {
++          if (Array.isArray(t.series) && t.series.length >= 2) {
++            strokeOverrides.push(TRENDS_PDF_STROKES[i % TRENDS_PDF_STROKES.length])
++          }
++        })
++        const chart = await svgToPngDataUrl(svgEl, strokeOverrides.length ? strokeOverrides : null)
++        if (chart && chart.width && chart.height) {
++          const chartH = 28
++          const chartW = Math.min(contentW, chartH * (chart.width / chart.height))
++          ensure(chartH + 2)
++          doc.addImage(chart.dataUrl, 'PNG', margin, y, chartW, chartH)
++          y += chartH + 3
++          trendsChartAdded = true
++        }
++      }
++    } catch { /* text rows fallback below */ }
++    if (!trendsChartAdded) {
++      for (const t of (trp.terms ?? [])) {
++        ensure(5)
++        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(33, 33, 33)
++        doc.text(String(t.term), margin, y)
++        doc.text(String(t.value), margin + 78, y)
++        doc.setTextColor(80, 80, 80); doc.text(trendGlyph(t.dir), margin + 108, y)
++        y += 5
++      }
++    }
++    if (isHttpUrl(trp.googleTrendsUrl)) {
++      ensure(5)
++      doc.setFontSize(9)
++      doc.setTextColor(20, 90, 160)
++      doc.textWithLink('Google Trends', margin, y, { url: trp.googleTrendsUrl })
++      y += 6
++    }
++    y += 2
++  }
++  const wxp = brief.weather
++  if (wxp && wxp.locations && wxp.locations.length) {
++    writeWrapped('Weather', { size: 11, style: 'bold', gap: 1 })
++    for (const l of wxp.locations) {
++      writeWrapped(String(l.name), { size: 10, style: 'bold', gap: 1 })
++      writeWrapped(`${l.tempC}${DEG}C, feels ${l.feelsC}${DEG}C, ${l.condition}. Wind ${l.windKph} km/h, humidity ${l.humidity}%.`, { size: 9, color: [60, 60, 60], gap: 1 })
++      if (l.todayMaxC != null) writeWrapped(`Today ${l.todayMaxC}${DEG} / ${l.todayMinC}${DEG}. Tomorrow ${l.tomorrowMaxC}${DEG} / ${l.tomorrowMinC}${DEG}, ${l.tomorrowCondition}.`, { size: 8, color: [120, 120, 120], gap: 1.5 })
++    }
++    y += 2
++  }
++  ensure(8)
++  writeWrapped("Summary of this room's own sources. Vigil tracks, it does not verify.", { size: 8, color: [120, 120, 120] })
++  doc.save('brief.pdf')
++}
+diff --git a/src/state/shellStore.js b/src/state/shellStore.js
+index 3cc95b9..491446b 100644
+--- a/src/state/shellStore.js
++++ b/src/state/shellStore.js
+@@ -4,45 +4,6 @@ import { devOverride } from '../entitlements/devOverride.js'
+ import { withinLimit } from '../entitlements/index.js'
+ import { widgetRegistry } from '../shell/widgetRegistry.js'
+ 
+-const DEMO_WS_ID = 'demo-ws'
+-
+-export const SEED_WORKSPACES = [
+-  {
+-    id: DEMO_WS_ID,
+-    name: 'EU & China',
+-    widgets: [
+-      { id: 'seed-feed', type: 'feed', config: { tabs: [
+-        { id: 'eu-china', keyword: 'EU China relations' },
+-        { id: 'china-economy', keyword: 'China economy' },
+-        { id: 'semiconductors', keyword: 'semiconductors' },
+-        { id: 'taiwan', keyword: 'Taiwan' },
+-        { id: 'tariffs', keyword: 'trade tariffs' },
+-        { id: 'sanctions', keyword: 'sanctions' },
+-        { id: 'supply-chain', keyword: 'supply chain' },
+-      ] } },
+-      { id: 'seed-map', type: 'map', config: {} },
+-      { id: 'seed-rss', type: 'rss', config: {} },
+-      { id: 'seed-social', type: 'social', config: { accounts: [
+-        { id: 'acc-0', platform: 'reddit', value: 'geopolitics', enabled: true },
+-        { id: 'acc-1', platform: 'reddit', value: 'china', enabled: true },
+-        { id: 'acc-2', platform: 'reddit', value: 'europe', enabled: true },
+-      ] } },
+-      { id: 'seed-trends', type: 'trends', config: { keywords: ['tariffs', 'semiconductors', 'rare earths'], time: 'today 12-m' } },
+-      { id: 'seed-heatmap', type: 'heatmap', config: {} },
+-      { id: 'seed-prices', type: 'prices', config: {} },
+-    ],
+-    layout: [
+-      { i: 'seed-feed',    x: 0,  y: 0,  w: 12, h: 10 },
+-      { i: 'seed-map',     x: 12, y: 0,  w: 12, h: 10 },
+-      { i: 'seed-rss',     x: 0,  y: 10, w: 12, h: 9 },
+-      { i: 'seed-social',  x: 12, y: 10, w: 12, h: 9 },
+-      { i: 'seed-trends',  x: 0,  y: 19, w: 12, h: 8 },
+-      { i: 'seed-heatmap', x: 12, y: 19, w: 12, h: 8 },
+-      { i: 'seed-prices',  x: 0,  y: 27, w: 12, h: 7 },
+-    ],
+-  },
+-]
+-
+ const DEFAULT_WIDGET_CONFIG = {
+   weather: { city: 'Berlin', latLon: null, locName: 'Berlin' },
+ }
+@@ -69,11 +30,11 @@ export const useShellStore = create((set, get) => ({
+   loaded: false,
+   uid: null,
+   globalLive: true,
+-  activeWs: DEMO_WS_ID,
++  activeWs: null,
+   pausedWorkspaces: [],
+   inactiveTabPause: true,
+   entitlements: initialEntitlements,
+-  workspaces: SEED_WORKSPACES,
++  workspaces: [],
+   sources: [],
+ 
+   hydrate: ({ uid, workspaces, activeWs, sources }) => set({

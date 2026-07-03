@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import usePageVisibility from '../hooks/usePageVisibility'
 import { usePolling } from '../hooks/usePolling'
 import { SkeletonFeedItems } from '../components/shared/SkeletonLoader'
+import { isHttpUrl } from '../../shared/briefFormat.js'
 
 const DEFAULT_ACCOUNTS = [
   { id: 'acc-0', platform: 'reddit', value: 'worldnews', enabled: true },
@@ -523,14 +524,8 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
           ) : (
             displayPosts.map((post, i) => {
               const bodyText = decodeEntities(post.title || post.description)
-              return (
-                <a
-                  key={`${post.link}-${i}`}
-                  className="rss-article rss-comfortable"
-                  href={post.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+              const postBody = (
+                <>
                   <div className="rss-art-body" style={{ flex: 1, minWidth: 0 }}>
                     <div
                       className="rss-art-meta"
@@ -556,7 +551,25 @@ export default function SocialFeedWidget({ paused, config, onSaveConfig, setActi
                     </div>
                   </div>
                   <span className="rss-art-ext">→</span>
+                </>
+              )
+              return isHttpUrl(post.link) ? (
+                <a
+                  key={`${post.link}-${i}`}
+                  className="rss-article rss-comfortable"
+                  href={post.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {postBody}
                 </a>
+              ) : (
+                <span
+                  key={`${post.link}-${i}`}
+                  className="rss-article rss-comfortable"
+                >
+                  {postBody}
+                </span>
               )
             })
           )}

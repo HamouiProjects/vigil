@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './alerts.css'
 import { supabase } from '../lib/supabase.js'
 import { useFocusTrap } from '../hooks/useFocusTrap.js'
+import { isHttpUrl } from '../../shared/briefFormat.js'
 
 const SEVERITIES = ['low', 'normal', 'high']
 
@@ -561,14 +562,20 @@ export default function AlertsDrawer({ open, onClose, entitlements, onUpgrade, o
                             {ev.source && <span className="alerts-activity-source">{ev.source}</span>}
                             <span className="alerts-activity-time">{timeAgo(ev.matched_at, now)}</span>
                           </div>
-                          <a
-                            className="alerts-activity-title"
-                            href={ev.item_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {ev.item_title || ev.item_url}
-                          </a>
+                          {isHttpUrl(ev.item_url) ? (
+                            <a
+                              className="alerts-activity-title"
+                              href={ev.item_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {ev.item_title || ev.item_url}
+                            </a>
+                          ) : (
+                            <span className="alerts-activity-title">
+                              {ev.item_title || ev.item_url}
+                            </span>
+                          )}
                         </div>
                       </li>
                     )

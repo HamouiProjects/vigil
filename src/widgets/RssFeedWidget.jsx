@@ -3,6 +3,7 @@ import usePageVisibility from '../hooks/usePageVisibility'
 import { usePolling } from '../hooks/usePolling'
 import { SkeletonFeedItems } from '../components/shared/SkeletonLoader'
 import { SUGGESTIONS } from '../../shared/feedSources.js'
+import { isHttpUrl } from '../../shared/briefFormat.js'
 
 export { SUGGESTIONS }
 
@@ -632,14 +633,8 @@ export default function RssFeedWidget({
             ) : (
               displayItems.map((item, i) => {
                 const desc = item.description?.slice(0, 150)
-                return (
-                  <a
-                    key={`${item.link}-${i}`}
-                    className="rss-article rss-comfortable"
-                    href={item.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                const rowBody = (
+                  <>
                     <div className="rss-art-body">
                       <div className="rss-art-meta">
                         <span
@@ -656,7 +651,25 @@ export default function RssFeedWidget({
                       )}
                     </div>
                     <span className="rss-art-ext">→</span>
+                  </>
+                )
+                return isHttpUrl(item.link) ? (
+                  <a
+                    key={`${item.link}-${i}`}
+                    className="rss-article rss-comfortable"
+                    href={item.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {rowBody}
                   </a>
+                ) : (
+                  <span
+                    key={`${item.link}-${i}`}
+                    className="rss-article rss-comfortable"
+                  >
+                    {rowBody}
+                  </span>
                 )
               })
             )}

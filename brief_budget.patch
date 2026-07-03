@@ -1,0 +1,43 @@
+diff --git a/api/_ratelimit.js b/api/_ratelimit.js
+index 259a31c..0bdbb9c 100644
+--- a/api/_ratelimit.js
++++ b/api/_ratelimit.js
+@@ -1,7 +1,7 @@
+ import supabase from './_supabase.js'
+ 
+ const UNKNOWN_IP = 'unknown'
+-const FAIL_CLOSED_BUCKETS = new Set(['suggest-llm'])
++const FAIL_CLOSED_BUCKETS = new Set(['suggest-llm', 'brief-llm'])
+ 
+ function getClientIp(req) {
+   const xff = req.headers['x-forwarded-for']
+diff --git a/api/brief.js b/api/brief.js
+index 561992e..287c4d5 100644
+--- a/api/brief.js
++++ b/api/brief.js
+@@ -6,6 +6,11 @@ import { normalizeWidgetGroups, isHttpUrl, buildFeedBrief, BriefParseError } fro
+ import { resolveEntitlements } from '../shared/resolve.js'
+ import { getQuotes } from './_yahoo.js'
+ 
++// Global hourly ceiling on paid brief generation (LLM + SerpApi + Yahoo) across ALL users.
++// Caps a spike or an anon-session-farming abuser to bounded spend. Tunable in Vercel without a
++// redeploy via BRIEF_LLM_GLOBAL_MAX. Enforced fail-closed (see FAIL_CLOSED_BUCKETS in _ratelimit).
++const BRIEF_LLM_GLOBAL_MAX = Number(process.env.BRIEF_LLM_GLOBAL_MAX) || 120
++
+ function readBody(req) {
+   if (req.body && typeof req.body === 'object') return req.body
+   if (typeof req.body === 'string') {
+@@ -238,6 +243,13 @@ export default async function handler(req, res) {
+     })
+   }
+ 
++  // Global cost ceiling: after the per-user checks above, gate every paid call (LLM, SerpApi,
++  // Yahoo) behind an hourly budget shared across all users. Fail-closed. Mirrors suggest-llm.
++  const budget = await rateLimit(req, 'brief-llm', BRIEF_LLM_GLOBAL_MAX, 3600, 'global')
++  if (!budget.allowed) {
++    return res.status(429).json({ error: 'BRIEF_BUDGET_REACHED', retryAfter: budget.retryAfter })
++  }
++
+   const wantedSyms = mkReq
+     ? [...new Set([...(mkReq.symbols || []), ...((mkReq.heatmaps || []).map((h) => h?.symbol))]
+         .map((s) => String(s || '').trim().toUpperCase()).filter(Boolean))]

@@ -1,6 +1,7 @@
 import { applyCors } from './_cors.js'
 import { rateLimit } from './_ratelimit.js'
 import zlib from 'node:zlib'
+import { isHttpUrl } from '../shared/briefFormat.js'
 
 const EMPTY_FC = { type: 'FeatureCollection', features: [] }
 const AIRCRAFT_UPSTREAM = 'https://api.adsb.lol/v2/mil'
@@ -208,7 +209,7 @@ async function collectExportEvents(url, events) {
         lon,
         articles,
         place: cols[COL_ACTION_NAME] || '',
-        url: cols[COL_SOURCEURL] || '',
+        url: isHttpUrl(cols[COL_SOURCEURL]) ? cols[COL_SOURCEURL] : '', // H-1 scheme filter
       })
     }
   } catch {
