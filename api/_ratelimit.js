@@ -4,6 +4,12 @@ const UNKNOWN_IP = 'unknown'
 const FAIL_CLOSED_BUCKETS = new Set(['suggest-llm', 'brief-llm'])
 
 function getClientIp(req) {
+  // M-1: prefer x-real-ip (set by Vercel from the TCP peer, not client-spoofable).
+  // Fall back to the leftmost x-forwarded-for hop only when x-real-ip is absent.
+  const realIp = req.headers['x-real-ip']
+  if (typeof realIp === 'string' && realIp.trim()) {
+    return realIp.trim()
+  }
   const xff = req.headers['x-forwarded-for']
   if (typeof xff === 'string' && xff.trim()) {
     return xff.split(',')[0].trim()
